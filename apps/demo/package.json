@@ -1,0 +1,29 @@
+{
+  "name": "letterlock-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Letterlock demo app: the postal-register design system, the five routes and the /kit gallery. Static example content until the SDK is wired in.",
+  "scripts": {
+    "dev": "next dev -p 3217",
+    "build": "next build",
+    "start": "next start -p 3217",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\"",
+    "qa": "node scripts/qa.mjs"
+  },
+  "dependencies": {
+    "letterlock": "workspace:*",
+    "next": "15.5.26",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "playwright": "^1.55.0",
+    "typescript": "^5.9.0"
+  }
+}

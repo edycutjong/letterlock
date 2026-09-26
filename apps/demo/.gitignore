@@ -1,0 +1,8 @@
+# build output and generated types
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# screenshots, axe reports and lint snapshots written by scripts/qa.mjs
+qa/
+test-results/
