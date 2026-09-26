@@ -1,0 +1,57 @@
+name: contracts
+
+on:
+  push:
+    paths:
+      - "contracts/**"
+      - "packages/letterlock/src/abi.ts"
+      - ".github/workflows/contracts.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "packages/letterlock/src/abi.ts"
+      - ".github/workflows/contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.3
+
+      - name: Format
+        run: forge fmt --check
+
+      - name: Build
+        run: forge build --sizes
+
+      # Unit, fuzz, invariant, deploy and gas tests, plus the Monad mainnet fork tests (they skip, with the RPC error,
+      # if rpc.monad.xyz is unreachable). --gas-snapshot-check compares every value in snapshots/Letterlock.json and
+      # fails on any change, instead of rewriting the file.
+      - name: Test
+        run: forge test -vvv --gas-snapshot-check true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: ABI exports match the contract
+        run: node script/export-abi.mjs --check
+
+      # A raw key on a command line is visible in the process list: documented commands use a keystore (--account).
+      - name: No private key on a documented command line
+        run: "! grep -rn -e '--private-key' README.md script src"
