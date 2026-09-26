@@ -138,6 +138,14 @@ try {
     report.checks[c.name].failures++;
     fail(`${c.name}: ${msg}`);
   };
+  // a check that throws (a selector that no longer matches, a timeout) fails itself, not the whole run
+  const guard = async (c, body) => {
+    try {
+      await body();
+    } catch (e) {
+      checkFail(c, `threw ${String(e?.message ?? e).split("\n")[0]}`);
+    }
+  };
 
   for (const route of full || pageChecks.length ? ROUTES : []) {
     const r = (report.routes[route] = { screenshots: [], overflow: [], axe: {}, colourLaw: [], fonts: null });
@@ -152,7 +160,7 @@ try {
       await page.waitForTimeout(250);
       await installHelpers(page);
 
-      for (const c of pageChecks) await c.page(page, { route, width: w, height: h, fail: (m) => checkFail(c, `${route} @${w}: ${m}`) });
+      for (const c of pageChecks) await guard(c, () => c.page(page, { route, width: w, height: h, fail: (m) => checkFail(c, `${route} @${w}: ${m}`) }));
       if (!full) {
         await context.close();
         continue;
@@ -196,7 +204,7 @@ try {
     if (full) console.log(`${route}: ${r.screenshots.length} screenshots · axe ${JSON.stringify(r.axe)} · overflow ${r.overflow.length} · colour law ${r.colourLaw.length}`);
   }
 
-  for (const c of CHECKS.filter((c) => c.run)) await c.run({ browser, base, routes: ROUTES, fail: (m) => checkFail(c, m) });
+  for (const c of CHECKS.filter((c) => c.run)) await guard(c, () => c.run({ browser, base, routes: ROUTES, fail: (m) => checkFail(c, m) }));
   for (const c of CHECKS) console.log(`check ${c.name}: ${report.checks[c.name].failures === 0 ? "pass" : `${report.checks[c.name].failures} failure(s)`}`);
 
   if (full && (!only || only === "/kit")) {
