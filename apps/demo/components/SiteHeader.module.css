@@ -26,7 +26,10 @@
   width: auto;
 }
 
+/* --nav-pad is each route's side padding; the two-row header pulls the nav out by the same amount, so the first and
+   last route line up with the double rule */
 .nav {
+  --nav-pad: 10px;
   grid-area: nav;
   justify-self: end;
 }
@@ -45,7 +48,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--tap);
-  padding: 0 10px;
+  padding: 0 var(--nav-pad);
   font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -56,8 +59,8 @@
 .nav a::after {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: var(--nav-pad);
+  right: var(--nav-pad);
   bottom: 9px;
   height: 1px;
   background: currentColor;
@@ -126,17 +129,15 @@
   .chain {
     display: none;
   }
-  .nav a {
-    padding: 0 8px;
-  }
-  .nav a::after {
-    left: 8px;
-    right: 8px;
+  .nav {
+    --nav-pad: 8px;
   }
 }
 
-/* phones and small tablets: letterhead on one line, the five routes on the next */
-@media (max-width: 759.98px) {
+/* phones and tablets held upright: the letterhead on one line, the five routes on the next. On one line the
+   wordmark (177 px), the routes (about 354) and the network chip (170) need about 790 px with the gutters, so
+   below 860 px they would crowd the chip past the double rule (scripts/checks/header-fit.mjs sweeps every width). */
+@media (max-width: 859.98px) {
   .bar {
     grid-template-columns: auto 1fr;
     grid-template-areas:
@@ -150,7 +151,7 @@
   }
   .nav {
     justify-self: stretch;
-    margin-inline: -10px;
+    margin-inline: calc(-1 * var(--nav-pad));
   }
   .nav ul {
     justify-content: space-between;
@@ -159,6 +160,9 @@
 }
 
 @media (max-width: 479.98px) {
+  .bar {
+    column-gap: 12px;
+  }
   .wordmark {
     height: 26px;
   }
@@ -167,20 +171,23 @@
     font-size: 0.6875rem;
     letter-spacing: 0.1em;
   }
-  .chain {
-    display: none;
-  }
-  .nav a {
-    padding: 0 9px;
+  .nav {
+    --nav-pad: 9px;
   }
 }
 
+/* the narrowest phones (320 px): wordmark and chip share 288 px */
 @media (max-width: 359.98px) {
+  .wordmark {
+    height: 24px;
+  }
   .frank {
     display: none;
   }
+  .nav {
+    --nav-pad: 7px;
+  }
   .nav a {
-    padding: 0 7px;
     font-size: 0.875rem;
   }
 }
