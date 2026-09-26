@@ -8,9 +8,9 @@ registry on chain 143 by default and refuses any other one there.
 
 ## Source changes since the testnet deployment (applied)
 
-The testnet deployment was built from commit `d15fe63`. Two changes to `src/Letterlock.sol` were held back from it,
-because they would have broken its Sourcify exact match. Both are in the source now, so this deploy ships them, and
-nothing else is held back:
+The testnet deployment was built from commit `d15fe63`. The changes to `src/Letterlock.sol` below came after it; none
+could go to that deployment without breaking its Sourcify exact match. All are in the source now, so this deploy
+ships them, and nothing else is held back:
 
 1. Registry-call rule (commit `f6f80fa`). `_ownerOf` reads only the registry's `ERC721NonexistentToken(uint256)`
    revert (selector `0x7e273289`, the one the live registry uses) as "no owner", and reverts
@@ -19,51 +19,109 @@ nothing else is held back:
    `abi/Letterlock.json` and the SDK's `letterlockAbi` are regenerated) and changes no gas snapshot entry. The fork
    regression test `test_fork_gasStarvedReaderNeverReadsZeros` (commit `306fa5d`) reads `keyOfAgent` for agent
    10259 at every gas budget from 5,000 to 80,000 (step 20), each read cold: 0 of 3,751 budgets returned zeros
-   (block 108228758). Under the previous rule the same test fails: 527 budgets, 35,920 to 46,440 gas, returned
-   zeros for the live key (block 108228931).
+   (block 108228758; again at block 108279356). Under the previous rule the same test fails: 527 budgets, 35,920 to
+   46,440 gas, returned zeros for the live key (block 108228931).
 2. `drop` NatSpec: it says only that the envelope format is the docs/SPEC.md §3 UTF-8 JSON, no longer that the SDK
    drops it (the SDK has no drop helper yet).
+3. `keyOfAgent` NatSpec on starved reads (commit `56e3d95`): a read given too little gas reverts
+   `RegistryCallFailed`, or reverts with no data when it runs out of gas in Letterlock itself, as when the 1/64 of
+   the gas kept back from a starved registry call cannot pay for the `RegistryCallFailed` revert. Any revert means
+   "unknown", never "no key". Comments only: the executable code and every gas snapshot entry are unchanged.
+
+NatSpec is part of the metadata whose hash ends the bytecode, so no wording in `src/Letterlock.sol` can change after
+this deploy without losing the exact match.
+
+## Build: never deploy a cached artifact
+
+`forge script` deploys the Letterlock creation code compiled into the script's own artifact
+(`out/Deploy.s.sol/Deploy.json`), not the `src/` artifact. With the dynamic test linking that Foundry 1.8 turns on by
+default, an edit inside a function body of `src/Letterlock.sol` (code or comment) recompiled only that file and left
+the script artifact as it was. The mainnet dry runs of 2026-09-26 carried the metadata hash of a source text that is
+in no commit, so Sourcify could not have matched the deployed contract exactly; a logic edit would have deployed the
+old logic. Three guards, all part of the steps below:
+
+- `foundry.toml` sets `dynamic_test_linking = false` (commit `c1e2f39`), so the script recompiles whenever the
+  source does. It is not a compiler input, so it changes no bytecode.
+- Step 1 rebuilds every artifact (`forge build --force`) and runs `test_scriptArtifactDeploysTheCurrentSource`
+  (`test/Deploy.t.sol`), which fails when the script artifact deploys other code than the current source.
+- Step 2 compares the dry run's transaction input with `forge inspect Letterlock bytecode` plus the constructor
+  argument before anything is sent, and step 3 compares the transaction that was sent.
 
 ## 0. Deployer (once)
 
-Use a dedicated mainnet key, separate from the testnet deployer. Import it into Foundry's encrypted keystore
-(`~/.foundry/keystores/`). The command prompts for the private key and a password, so the key never appears on a
-command line, in shell history, or in a plain-text file:
+Use a dedicated mainnet key, separate from the testnet deployer, in Foundry's encrypted keystore
+(`~/.foundry/keystores/letterlock-mainnet`). No command here puts the key on a command line, where the process list
+and shell history would show it (CI fails on a private-key flag in this folder).
+
+The environment file lives outside the repository (`chmod 600`):
 
 ```sh
-cast wallet import letterlock-mainnet --interactive
-```
-
-The environment file holds no key, only the address and the RPC. It lives outside the repository:
-
-```sh
-# ~/.config/monad/mainnet-deployer.env   (chmod 600)
+# ~/.config/monad/mainnet-deployer.env
 MONAD_MAINNET_ADDRESS=0x...
 MONAD_MAINNET_RPC=https://rpc.monad.xyz
+# MONAD_MAINNET_PRIVATE_KEY=0x...   only for (b) below; no later step reads it
 ```
 
-Fund `MONAD_MAINNET_ADDRESS` with MON. On 2026-09-26 a read-only simulation of this script (step 2) with the
-current source estimated 1,201,505 gas (the deploy transaction's gas limit) and 0.2427 MON at a 202 gwei max fee.
-Monad charges the full gas limit, not the gas used, so keep a margin (about 0.3 MON), plus gas for the first
-`publish` / `drop` transactions.
+Import the key once, in one of two ways:
 
-Run every step below from `contracts/`, in one shell:
+- **(a) At a terminal.** The command prompts for the key and a password:
+
+  ```sh
+  cast wallet import letterlock-mainnet --interactive
+  ```
+
+- **(b) Without a terminal** (an automated run: `--interactive` needs one), from `MONAD_MAINNET_PRIVATE_KEY` in the
+  environment file. The keystore password is a random string in a file of its own, created once (`set -C` refuses
+  to overwrite an existing one). From the repository root:
+
+  ```sh
+  (umask 077; set -C; openssl rand -hex 32 > ~/.config/monad/letterlock-mainnet.password)
+  set -a; source ~/.config/monad/mainnet-deployer.env; set +a
+  node contracts/script/keystore-from-env.mjs --key-env MONAD_MAINNET_PRIVATE_KEY --name letterlock-mainnet \
+    --password-file ~/.config/monad/letterlock-mainnet.password --expect-address "$MONAD_MAINNET_ADDRESS"
+  ```
+
+  The script reads the key from the variable that `--key-env` names, so only the name is on the command line, and
+  never prints it. It writes the keystore format that `cast wallet import` writes (mode 600, never over an existing
+  file) and keeps the file only if Foundry opens it with the password file and derives `MONAD_MAINNET_ADDRESS`;
+  `node --test contracts/script/keystore-from-env.test.mjs` checks this with random keys. Afterwards the
+  `MONAD_MAINNET_PRIVATE_KEY` line can be deleted from the environment file.
+
+Fund `MONAD_MAINNET_ADDRESS` with MON. On 2026-09-27, after `forge build --force`, a read-only simulation of this
+script (step 2) estimated 1,201,505 gas (the deploy transaction's gas limit) and 0.24270401 MON at a 202 gwei max
+fee. The stale dry runs of 2026-09-26 set the same limit; only their metadata hash differed. Monad charges the full
+gas limit, not the gas used, so keep a margin (about 0.3 MON), plus gas for the first `publish` / `drop`
+transactions.
+
+Run every step below from `contracts/`, in one shell. After (a), leave `--password-file "$PASSWORD_FILE"` out of
+steps 1 and 3 and type the password at the prompt instead:
 
 ```sh
 cd contracts
 set -a; source ~/.config/monad/mainnet-deployer.env; set +a
+PASSWORD_FILE=~/.config/monad/letterlock-mainnet.password
 ```
 
 ## 1. Pre-flight (read-only)
 
 ```sh
+git diff --quiet HEAD -- src/Letterlock.sol foundry.toml && echo "source committed"   # Sourcify matches this text
+forge build --force   # rebuild every artifact: never deploy from the cache
 test "$(cast chain-id --rpc-url "$MONAD_MAINNET_RPC")" = 143 && echo "chain ok"
-test "$(cast wallet address --account letterlock-mainnet | tr A-F a-f)" = \
-     "$(echo "$MONAD_MAINNET_ADDRESS" | tr A-F a-f)" && echo "key matches address"   # asks for the keystore password
+test "$(cast wallet address --account letterlock-mainnet --password-file "$PASSWORD_FILE" | tr A-F a-f)" = \
+     "$(echo "$MONAD_MAINNET_ADDRESS" | tr A-F a-f)" && echo "key matches address"
 cast balance "$MONAD_MAINNET_ADDRESS" --rpc-url "$MONAD_MAINNET_RPC" --ether
 cast code 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 --rpc-url "$MONAD_MAINNET_RPC" | head -c 12; echo   # not 0x
-forge test   # includes test/LetterlockFork.t.sol against the live IdentityRegistry
+LETTERLOCK_REQUIRE_FORK=true forge test
+LETTERLOCK_REQUIRE_FORK=true forge test --match-contract LetterlockMainnetForkTest \
+  | grep -F "9 passed; 0 failed; 0 skipped" && echo "mainnet fork tests ran"
 ```
+
+Every check must print its message (and the balance must cover the deploy), and the first `forge test` must exit 0.
+It runs every suite, including `test_scriptArtifactDeploysTheCurrentSource` and `test/LetterlockFork.t.sol` against
+the live IdentityRegistry. Without `LETTERLOCK_REQUIRE_FORK=true` an unreachable RPC only skips the 9 fork tests,
+and `forge test` still exits 0; with it they fail. The last command proves they ran: it prints nothing if any
+was skipped.
 
 ## 2. Simulate (nothing is sent)
 
@@ -72,22 +130,40 @@ forge script script/Deploy.s.sol:Deploy --rpc-url "$MONAD_MAINNET_RPC" --sender 
 ```
 
 Expect `Agent path enabled: identityRegistry = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` and `chain id: 143`.
+Then check that the transaction is the source as compiled now, byte for byte, and read its gas limit:
+
+```sh
+ARGS=$(cast abi-encode 'constructor(address)' 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432)
+EXPECTED="$(forge inspect Letterlock bytecode)${ARGS#0x}"
+DRY=broadcast/Deploy.s.sol/143/dry-run/run-latest.json
+test "$(jq -r '.transactions[0].transaction.input' "$DRY")" = "$EXPECTED" && echo "dry run deploys the compiled source"
+jq -r '.transactions[0].transaction.gas' "$DRY" | cast to-dec   # the gas limit
+```
+
+Do not broadcast unless it prints `dry run deploys the compiled source`. (On a copy of the tree holding the stale
+script artifact of 2026-09-26, this check fails.)
 
 ## 3. Broadcast
 
 ```sh
 forge script script/Deploy.s.sol:Deploy --rpc-url "$MONAD_MAINNET_RPC" \
-  --account letterlock-mainnet --sender "$MONAD_MAINNET_ADDRESS" --broadcast   # asks for the keystore password
+  --account letterlock-mainnet --password-file "$PASSWORD_FILE" --sender "$MONAD_MAINNET_ADDRESS" --broadcast
 ```
 
 The address, tx hash and block are in `broadcast/Deploy.s.sol/143/run-latest.json` (safe to commit; the RPC
 URL and other sensitive values go to `cache/`, which is git-ignored).
 
 ```sh
-ADDR=$(jq -r '.transactions[0].contractAddress' broadcast/Deploy.s.sol/143/run-latest.json)
-TX=$(jq -r '.transactions[0].hash' broadcast/Deploy.s.sol/143/run-latest.json)
+RUN=broadcast/Deploy.s.sol/143/run-latest.json
+test "$(jq -r '.transactions[0].transaction.input' "$RUN")" = "$EXPECTED" && echo "sent the compiled source"
+ADDR=$(jq -r '.transactions[0].contractAddress' "$RUN")
+TX=$(jq -r '.transactions[0].hash' "$RUN")
 cast receipt "$TX" --rpc-url "$MONAD_MAINNET_RPC" --json | jq '{status, blockNumber, gasUsed}'
 ```
+
+The non-interactive path was run end to end on 2026-09-27 against a local `anvil` chain (31337, so the registry
+argument is `address(0)`) with a random test key imported through (b): the key-matches-address check, the broadcast
+with `--account` and `--password-file`, and `sent the compiled source` all passed, and the receipt had status 1.
 
 ## 4. Verify the source (MonadVision, through Sourcify)
 

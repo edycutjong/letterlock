@@ -18,9 +18,10 @@ passkey PRF output. The ERC-8004 IdentityRegistry exists only on mainnet, so tes
 disabled. The first testnet deployment, `0x311921118F2D40f37e554516069A918bA290e75C`, predates the epoch rule
 below (it accepted any higher epoch) and is superseded.
 
-The source changed once after the testnet deployment (commit `d15fe63`): the registry-call rule below, and the
-`drop` NatSpec, which in `d15fe63` says the SDK drops the envelope (it has no drop helper yet). The rule is on
-the agent path only, which the testnet deployment disables, so there it behaves as the current source would.
+The source changed after the testnet deployment (commit `d15fe63`): the registry-call rule below, the `drop`
+NatSpec, which in `d15fe63` says the SDK drops the envelope (it has no drop helper yet), and the `keyOfAgent`
+NatSpec on starved reads (commit `56e3d95`). The rule is on the agent path only, which the testnet deployment
+disables, so there it behaves as the current source would.
 
 ## Interface
 
@@ -29,7 +30,7 @@ the agent path only, which the testnet deployment disables, so there it behaves 
 | `publish(bytes32 pub, uint32 epoch)` | anyone, for themselves | writes `msg.sender`'s key; `epoch` must be the current one + 1 (the first is 1) |
 | `publishForAgent(uint256 agentId, bytes32 pub, uint32 epoch)` | `identityRegistry.ownerOf(agentId)` | same rules, for an ERC-8004 agent; the epoch sequence continues across owners |
 | `keyOf(address)` → `(pub, epoch, updatedAt)` | view | zeros when none |
-| `keyOfAgent(uint256)` → `(pub, epoch, updatedAt)` | view | zeros when none, or when the agent's current owner is not the key's publisher; reverts `RegistryCallFailed` when the registry cannot answer |
+| `keyOfAgent(uint256)` → `(pub, epoch, updatedAt)` | view | zeros when none, or when the agent's current owner is not the key's publisher; reverts when the registry cannot answer (`RegistryCallFailed`, or no data when the read runs out of gas): any revert means unknown, never no key |
 | `agentKeyRecord(uint256)` → `(pub, epoch, updatedAt, publisher)` | view | the raw record, for indexers and new owners |
 | `drop(address to, uint256 toAgent, bytes envelope)` | anyone | demo transport: emits `Dropped`, stores nothing |
 
@@ -65,12 +66,15 @@ both with `node script/export-abi.mjs`).
 - **Registry calls fail closed.** `keyOfAgent`, `publishForAgent` and a drop to an agent call the registry's
   `ownerOf` in a `try`. Only its `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`: the agent was never
   minted, or was burned) reads as "no owner". Any other failure (no revert data, which is what running out of gas
-  returns; another error; a panic) reverts `RegistryCallFailed(agentId)`. So zeros from `keyOfAgent` always mean
-  that no key resolves, never that the call was starved of gas, and a contract reading it needs no workaround
-  beyond forwarding enough gas to get an answer. On a Monad mainnet fork (block 108228758, agent 10259), a contract
-  read `keyOfAgent` at every gas budget from 5,000 to 80,000 (step 20), each read cold: every budget from 46,620 up
-  returned the key, every smaller one reverted (767 with `RegistryCallFailed`, 1,314 out of gas inside Letterlock),
-  and none returned zeros. Under the rule the testnet deployment was built with, which read any failure as "no
+  returns; another error; a panic) reverts `RegistryCallFailed(agentId)`, unless the read then runs out of gas in
+  Letterlock itself, which reverts with no data: after a starved registry call only 1/64 of the gas it was given is
+  left, which may not pay for the `RegistryCallFailed` revert. So zeros from `keyOfAgent` always mean that no key
+  resolves, never that the call was starved of gas, and a contract reading it needs no workaround beyond forwarding
+  enough gas and reading any revert, not only `RegistryCallFailed`, as "unknown". On a Monad mainnet fork (block
+  108279356, agent 10259), a contract read `keyOfAgent` at every gas budget from 5,000 to 80,000 (step 20), each
+  read cold: every budget from 46,620 up returned the key, every smaller one reverted (767 with
+  `RegistryCallFailed`, 1,314 with no data, out of gas inside Letterlock), and none returned zeros (the same counts
+  as at block 108228758). Under the rule the testnet deployment was built with, which read any failure as "no
   owner", the same sweep returned zeros at 527 budgets (35,920 to 46,440 gas; block 108228931). An `eth_call` from
   an app is never starved.
 - **Trust.** The agent path is only as trustworthy as the ERC-8004 registry, which is an upgradeable proxy on
@@ -86,29 +90,40 @@ git submodule update --init --recursive   # forge-std v1.16.2
 cd contracts
 forge build
 forge test -vvv          # includes the Monad mainnet fork tests (network); set MONAD_MAINNET_RPC to override
+LETTERLOCK_REQUIRE_FORK=true forge test -vvv   # the same, but an unreachable RPC fails the fork tests, never skips them
 forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true   # exits 1 if a gas number moved
 git diff --exit-code -- snapshots/   # exits 1 if an entry was added, removed or rewritten
 forge coverage --no-match-path test/LetterlockGas.t.sol --no-match-coverage "test/" --report summary
 node script/mutate.mjs   # mutation check; exits 1 if a mutant not marked equivalent survives
 node script/export-abi.mjs --check
+node --test script/keystore-from-env.test.mjs   # the keystore import for a deploy without a terminal
 ```
 
-Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
+`foundry.toml` sets `dynamic_test_linking = false`: with Foundry 1.8's default, an edit inside a function body of
+`src/Letterlock.sol` recompiled only that file, and `script/Deploy.s.sol`, which compiles in the Letterlock creation
+code, kept deploying the previous code (`script/DeployMainnet.md`, "Build").
 
-- `forge test -vvv`: 106 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz tests (11 fuzz tests,
-  1,024 runs each), 9 registry-call tests, 9 mainnet-fork tests, 6 deploy-script tests, 8 gas benchmarks, and 2 in
-  the invariant suite: 5 invariants over 256 runs × 128 calls (32,768 calls), plus a fixed-seed 3,000-call walk that
-  reaches every accept and reject path.
+Measured on 2026-09-27 (Foundry 1.8.3, `network = "monad"`):
+
+- `LETTERLOCK_REQUIRE_FORK=true forge test -vvv`: 110 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz
+  tests (11 fuzz tests, 1,024 runs each), 10 registry-call tests, 9 mainnet-fork tests, 2 fork-gate tests, 7
+  deploy-script tests, 8 gas benchmarks, and 2 in the invariant suite: 5 invariants over 256 runs × 128 calls
+  (32,768 calls), plus a fixed-seed 3,000-call walk that reaches every accept and reject path.
+- The deploy-script tests include `test_scriptArtifactDeploysTheCurrentSource`: the script artifact that
+  `forge script` runs must deploy exactly the runtime code of the current `src/Letterlock.sol` artifact, metadata
+  hash included. On a copy of the tree holding the stale script artifact of 2026-09-26 it fails.
 - The registry-call tests (`test/LetterlockRegistryCall.t.sol`) run all three agent paths against a test-double
   registry whose `ownerOf` fails in one chosen way (no revert data, a real out-of-gas, an error string, another
   custom error, a panic, 3 bytes of the right selector), and `keyOfAgent` against an answer that does not decode.
   They check that `ERC721NonexistentToken` alone reads as "no owner", and repeat the gas-budget sweep offline
   through a proxy test double (the live registry is a proxy): 0 of 3,751 budgets return zeros, against 512 under
-  the previous rule.
+  the previous rule. With `ownerOf` out of gas, a read given 20,000 gas reverts with no data (too little is left
+  for the `RegistryCallFailed` revert) and one given 1,000,000 reverts `RegistryCallFailed`; both sweeps must
+  reach both kinds of revert.
 - Coverage of `src/Letterlock.sol`: 100% of lines (64/64), statements (89/89), branches (20/20) and functions (11/11).
 - Mutation check (`node script/mutate.mjs`): 46 hand-written mutants of `src/Letterlock.sol`, each run against the
-  unit, fuzz (256 runs), invariant (32 runs), registry-call and deploy tests in a scratch copy; the fork and gas
-  tests are left out. 44 killed. Both survivors are equivalent: #20 drops the length check before the selector
+  unit, fuzz (256 runs), invariant (32 runs), registry-call, fork-gate and deploy tests in a scratch copy; the fork
+  and gas tests are left out. 44 killed. Both survivors are equivalent: #20 drops the length check before the selector
   comparison, but `bytes4()` zero-pads revert data shorter than 4 bytes and the selector ends in `0x89`, so it
   never matches; #44 turns `>= 0xed` into `> 0xed` in the u ≥ p check, but u = p is already rejected as a libsodium
   small-order entry.
@@ -116,8 +131,10 @@ Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
   (registered in tx `0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77`) and for agent 0. One moves
   agent 10259 with the registry's own `transferFrom` and checks that the buyer publishes the stored epoch + 1. One
   checks that the live registry reverts `ERC721NonexistentToken` for an unregistered id. One is the gas-budget sweep
-  of the registry-call rule above, which fails if any budget returns zeros. They are skipped, with the RPC error,
-  when the RPC is unreachable.
+  of the registry-call rule above, which fails if any budget returns zeros. When the RPC is unreachable they are
+  skipped, with the RPC error, unless `LETTERLOCK_REQUIRE_FORK=true` is set: then they fail (the mainnet deploy
+  pre-flight sets it). The 2 fork-gate tests (`test/MainnetForkGate.t.sol`) check both behaviours offline, against
+  a refused connection.
 
 ## Gas
 
@@ -148,11 +165,12 @@ proxy and costs more.
   cold, as when another contract reads a key in its own transaction. An `eth_call` from an app costs nothing.
 - At both measured sizes, a drop to an address pays exactly the floor, 24,060 + 40 gas per envelope byte: the
   envelope's size, not the contract's execution, sets the price.
-- The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails.
+- The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails. Turning dynamic
+  test linking off left every entry unchanged too.
 
 Testnet receipts of the deployed contract (commit `d15fe63`), each equal to its transaction's gas limit: deploy
-1,104,026 · `publish` 70,863 · `drop` (484-byte envelope) 45,708. A read-only simulation of the mainnet deploy with
-the current source set a gas limit of 1,201,505 (`script/DeployMainnet.md`).
+1,104,026 · `publish` 70,863 · `drop` (484-byte envelope) 45,708. A read-only simulation of the mainnet deploy,
+after `forge build --force` on 2026-09-27, set a gas limit of 1,201,505 (`script/DeployMainnet.md`).
 
 Check that no number moved:
 
@@ -170,6 +188,9 @@ benchmark passes. The `git diff` catches both; CI runs it after the tests.
 
 - `script/Deploy.s.sol`: deploy (testnet: registry `address(0)`; mainnet: the ERC-8004 registry is enforced).
 - `script/DeployMainnet.md`: exact mainnet steps. Not run yet.
+- `script/keystore-from-env.mjs`: imports a deployer key from an environment variable into a Foundry keystore
+  without a terminal (the variable's name, not its value, is on the command line); `keystore-from-env.test.mjs`
+  checks it with random keys.
 - `script/export-abi.mjs`: forge artifact → `abi/Letterlock.json` + `packages/letterlock/src/abi.ts` (`--check`).
 - `script/mutate.mjs`: the mutation check. It holds the mutant list, and runs each mutant in a scratch copy of
   `contracts/`, never in this tree (`--only 1,4`, `--jobs 8`, `--verbose`).
