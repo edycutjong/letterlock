@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Test} from "forge-std/Test.sol";
 import {Letterlock, IERC721} from "../src/Letterlock.sol";
+import {KeyOfAgentGasSweep} from "./utils/KeyOfAgentGasSweep.sol";
 
 /// @notice The ERC-721 transfer the fork test uses to move a real agent (Letterlock itself never transfers).
 interface IERC721Transfer {
@@ -15,7 +15,7 @@ interface IERC721Transfer {
 /// @dev Agent 10259 was registered on mainnet in tx 0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77
 ///      (block 107945312: Transfer from 0x0 + Registered, read with `cast receipt`). Agent 0 exists too. Override the
 ///      agent with LETTERLOCK_FORK_AGENT_ID.
-contract LetterlockMainnetForkTest is Test {
+contract LetterlockMainnetForkTest is KeyOfAgentGasSweep {
     event KeyPublished(address indexed who, uint256 indexed agentId, bytes32 pub, uint32 epoch);
     event Dropped(address indexed to, uint256 indexed toAgent, bytes envelope);
 
@@ -123,7 +123,11 @@ contract LetterlockMainnetForkTest is Test {
     }
 
     function test_fork_unregisteredAgentIdReverts() public onlyFork {
-        uint256 unregistered = 1 << 200; // the registry's ownerOf reverts; Letterlock reports NotAgentOwner
+        uint256 unregistered = 1 << 200;
+        // The live registry reverts ERC721NonexistentToken(id), the one failure Letterlock reads as "no owner" ...
+        vm.expectRevert(abi.encodeWithSelector(IERC721.ERC721NonexistentToken.selector, unregistered));
+        registry.ownerOf(unregistered);
+        // ... so Letterlock reports NotAgentOwner, not RegistryCallFailed.
         vm.expectRevert(abi.encodeWithSelector(Letterlock.NotAgentOwner.selector, unregistered, owner));
         vm.prank(owner);
         ll.publishForAgent(unregistered, SDK_E1, 1);
@@ -181,5 +185,19 @@ contract LetterlockMainnetForkTest is Test {
         vm.expectEmit(true, true, false, true, address(ll));
         emit Dropped(address(0), agentId, envelope);
         ll.drop(address(0), agentId, envelope);
+    }
+
+    /// Regression, against the live registry: a contract reads keyOfAgent for the real agent with every gas budget
+    /// from 5,000 to 80,000 (step 20), each read cold in its own transaction. Every budget must return the live key
+    /// or revert; none may return zeros. Run against the previous source (commit d15fe63, which read any ownerOf
+    /// failure as "no owner"; only the RegistryCallFailed declaration added so this file compiles), this test fails
+    /// at block 108213528: 527 budgets, 35,920 to 46,440 gas, returned zeros for the live key.
+    function test_fork_gasStarvedReaderNeverReadsZeros() public onlyFork {
+        vm.prank(owner);
+        ll.publishForAgent(agentId, SDK_E1, 1);
+        Sweep memory s = _sweepKeyOfAgent(ll, agentId, 5_000, 80_000, 20);
+        emit log_named_uint("fork block", block.number);
+        _logSweep(s);
+        _assertNoBudgetReadsZeros(s);
     }
 }
