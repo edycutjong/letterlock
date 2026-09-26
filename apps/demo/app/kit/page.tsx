@@ -19,6 +19,7 @@ import { SLIP_CODES } from "@/lib/error-copy.ts";
 import { EXAMPLE_AGENTS, currentKey, failureValues, letter, persona } from "@/lib/examples.ts";
 import { postmarkDate } from "@/lib/format.ts";
 import { groupFingerprint } from "@/lib/keystrip.ts";
+import { tokenValue } from "@/lib/tokens.ts";
 import { EnvelopeReplay, SealReplay } from "./Replay";
 import styles from "./kit.module.css";
 
@@ -36,16 +37,17 @@ const SECTIONS = [
   { id: "fields", label: "Fields" },
 ] as const;
 
+// each swatch prints the value app/tokens.css gives its token (read when the page is built), never a copy of it
 const COLOURS = [
-  { name: "Manila", token: "--bg", hex: "#F3EEE3", use: "the page: envelope stock" },
-  { name: "Letter sheet", token: "--bg-elevated", hex: "#F8F4EB", use: "cards, slips, the letter" },
-  { name: "Inner fold", token: "--bg-sunk", hex: "#ECE6D9", use: "inside the envelope" },
-  { name: "Iron-gall ink", token: "--ink", hex: "#1E1B16", use: "text, rules, primary buttons" },
-  { name: "Pencil", token: "--muted", hex: "#6E6556", use: "secondary text, labels" },
-  { name: "Ruling", token: "--rule", hex: "#CFC4AF", use: "register hairlines" },
-  { name: "Airmail blue", token: "--before", hex: "#2F5D9E", use: "open state: a public key, a letter going out" },
-  // colour-law: label. The hex is printed as text; the swatch itself is drawn as a WaxSeal.
-  { name: "Sealing wax", token: "--after", hex: "#A3261E", use: "only as wax: the seal and the word “lock”", wax: true },
+  { name: "Manila", token: "--bg", use: "the page: envelope stock" },
+  { name: "Letter sheet", token: "--bg-elevated", use: "cards, slips, the letter" },
+  { name: "Inner fold", token: "--bg-sunk", use: "inside the envelope" },
+  { name: "Iron-gall ink", token: "--ink", use: "text, rules, primary buttons" },
+  { name: "Pencil", token: "--muted", use: "secondary text, labels" },
+  { name: "Ruling", token: "--rule", use: "register hairlines" },
+  { name: "Airmail blue", token: "--before", use: "open state: a public key, a letter going out" },
+  // the wax swatch is drawn as a WaxSeal, never as a flat red chip
+  { name: "Sealing wax", token: "--after", use: "only as wax: the seal and the word “lock”", wax: true },
 ] as const;
 
 /** A specimen on its plate. The caption names the state in words; `code` sets a component's name as code instead. */
@@ -155,7 +157,7 @@ export default function Kit() {
                   )}
                   <span className={styles.swatchName}>{c.name}</span>
                   <code className="data">
-                    {c.token} {c.hex}
+                    {c.token} {tokenValue(c.token)}
                   </code>
                   <span className={styles.swatchUse}>{c.use}</span>
                 </li>

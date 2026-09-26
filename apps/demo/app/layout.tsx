@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DIRECTORY } from "@/lib/deployment.ts";
+import { tokenValue } from "@/lib/tokens.ts";
 
 // Display: engraved-stationery Didone with a true italic for address lines; its optical-size axis keeps the
 // hairlines sturdy at 15 px and fine at 60 px. Body: a plain civil-service sans, like postal forms. Data: mono, for
@@ -44,7 +45,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F3EEE3",
+  themeColor: tokenValue("--bg"),
   colorScheme: "light",
 };
 

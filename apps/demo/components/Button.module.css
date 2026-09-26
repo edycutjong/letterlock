@@ -3,7 +3,7 @@
 .button {
   --btn-bg: var(--ink);
   --btn-fg: var(--bg-elevated);
-  --btn-edge: color-mix(in srgb, var(--ink) 70%, black);
+  --btn-edge: var(--ink);
   --btn-hover: color-mix(in srgb, var(--ink) 86%, var(--bg-elevated));
   position: relative;
   display: inline-flex;

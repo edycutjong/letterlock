@@ -77,14 +77,15 @@
   /* The stock, the tooth and the margin rule are laid over the whole document (not fixed to the viewport), so the
      sheet reads the same at any scroll position and in a full-page capture. */
 
-  /* manila stock, lit from the top-left of the first screen */
+  /* manila stock, lit from the top-left of the first screen with the letter sheet's own colour (the first layer of
+     the brand's --gradient-mesh; its second, a shade at the bottom right, would stain the middle of a long page) */
   body::before {
     content: "";
     position: absolute;
     inset: 0;
     z-index: -2;
     pointer-events: none;
-    background-image: radial-gradient(60% 80% at 18% 20%, #FBF7EF 0%, transparent 60%);
+    background-image: radial-gradient(60% 80% at 18% 20%, var(--bg-elevated) 0%, transparent 60%);
     background-size: 100% min(100%, 1100px);
     background-repeat: no-repeat;
   }
