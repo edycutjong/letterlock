@@ -31,7 +31,7 @@
     "optimizerRuns": 10000
   },
   "smokeTest": {
-    "label": "TEST KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used",
+    "label": "TEST KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used. The stand-in is kept outside the repository by the deployer's operator, and it opens anything sealed to this key: do not seal real notes to it",
     "publishedKey": "0x8d3717ea2a7310972a166c23fd79edbfd88b31624b473fe369c66ef268dd676f",
     "epoch": 1,
     "kid": "30ed71e2e20161a2",

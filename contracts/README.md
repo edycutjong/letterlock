@@ -17,14 +17,17 @@ mainnet record, [`deployments/143.json`](../deployments/143.json), was made with
 and holds the deploy and the first real mainnet transactions, all from the deployer: it registered ERC-8004 agent
 **#10260** in the IdentityRegistry (its agent card: <https://letterlock-agent.vercel.app/.well-known/agent-card.json>,
 source in `apps/agent`), then sent a `publish`, a `publishForAgent` for agent 10260 and a `drop` of a 490-byte
-envelope sealed with the SDK's `seal()`. Both published keys are DEMO KEYs, nobody's: the SDK's `deriveKeyPair()`
-over 32 random bytes standing in for a passkey PRF output, so no real note should be sealed to them. `keyOf(deployer)`
-and `keyOfAgent(10260)` returned them, and the dropped envelope opened with the re-derived key.
+envelope sealed with the SDK's `seal()`. Both published keys are DEMO KEYs: the SDK's `deriveKeyPair()` over 32
+random bytes standing in for a passkey PRF output, with no passkey behind them. The stand-ins are kept outside the
+repository by the deployer's operator, so the drop can be opened again, and whoever holds them can open anything
+sealed to these keys: never seal a real note to them. `keyOf(deployer)` and `keyOfAgent(10260)` returned them, and
+the dropped envelope opened with the re-derived key.
 
 The testnet record, including a real `publish` and a real `drop`, is in [`deployments/10143.json`](../deployments/10143.json).
 The published key there is a TEST KEY: the SDK's `deriveKeyPair()` over 32 random bytes standing in for a
-passkey PRF output. The ERC-8004 IdentityRegistry exists only on mainnet, so testnet runs with the agent path
-disabled. Two earlier testnet deployments are superseded (both listed under `previous` in the record):
+passkey PRF output, its stand-in kept the same way. The ERC-8004 IdentityRegistry exists only on mainnet, so
+testnet runs with the agent path disabled. Two earlier testnet deployments are superseded (both listed under
+`previous` in the record):
 `0x311921118F2D40f37e554516069A918bA290e75C` predates the epoch rule below (it accepted any higher epoch), and
 `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`) predates the registry-call rule and the current
 `drop` and `keyOfAgent` NatSpec. The current testnet directory is the current `src/Letterlock.sol` (commit
@@ -106,7 +109,7 @@ node script/mutate.mjs   # mutation check; exits 1 if a mutant not marked equiva
 node script/export-abi.mjs --check
 node --test script/keystore-from-env.test.mjs   # the keystore import for a deploy without a terminal
 node --test script/outside-repo.test.mjs   # smoke.mjs never writes its key file inside the repository
-node --test script/records.test.mjs   # this README's deploy gas numbers match deployments/*.json
+node --test script/records.test.mjs   # this README's deploy numbers and key notes match deployments/*.json
 ```
 
 `foundry.toml` sets `dynamic_test_linking = false`: with Foundry 1.8's default, an edit inside a function body of
@@ -216,11 +219,12 @@ benchmark passes. The `git diff` catches both; CI runs it after the tests.
 - `script/export-abi.mjs`: forge artifact → `abi/Letterlock.json` + `packages/letterlock/src/abi.ts` (`--check`).
 - `script/mutate.mjs`: the mutation check. It holds the mutant list, and runs each mutant in a scratch copy of
   `contracts/`, never in this tree (`--only 1,4`, `--jobs 8`, `--verbose`).
-- `script/smoke.mjs`: derives a key that is nobody's (the SDK's `deriveKeyPair()` over 32 random bytes in place of a
-  passkey PRF output; labelled TEST KEY, or DEMO KEY on mainnet) and seals a note to it with `seal()` (`prepare`).
-  After `cast send publish` / `publishForAgent` / `drop` it reads the key back with `keyOf` or `keyOfAgent`, and
-  with `--drop-tx` reads the `Dropped` envelope from the receipt, checks its chain, directory and recipient, and
-  opens it (`verify`).
+- `script/smoke.mjs`: derives a key with no passkey behind it (the SDK's `deriveKeyPair()` over 32 random bytes in
+  place of a passkey PRF output; labelled TEST KEY, or DEMO KEY on mainnet) and seals a note to it with `seal()`
+  (`prepare`). The stand-in goes to `--out`, outside the repository; whoever keeps it can open what is sealed to
+  the key. After `cast send publish` / `publishForAgent` / `drop` it reads the key back with `keyOf` or
+  `keyOfAgent`, and with `--drop-tx` reads the `Dropped` envelope from the receipt, checks its chain, directory and
+  recipient, and opens it (`verify`).
 - `script/outside-repo.mjs`: the check behind `smoke.mjs --out`. A path is compared with the repository after
   symlinks and letter case are resolved on the part of it that exists, by whole segments, so `./..keys`, a link into
   the tree and a dangling link are all refused (`outside-repo.test.mjs`).

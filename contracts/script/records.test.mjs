@@ -1,5 +1,6 @@
 // The contracts README, the smoke script and the deployment records (deployments/*.json) describe the same deploys.
-// These tests keep what they say in step with the records: where each deploy gas limit came from.
+// These tests keep what they say in step with the records: where each deploy gas limit came from, and what the smoke
+// test keys are.
 //
 //   node --test contracts/script/records.test.mjs
 import assert from "node:assert/strict";
@@ -40,4 +41,12 @@ test("the README's split of the registry argument's extra deploy gas adds up", (
   assert.match(readme, new RegExp(`and ${fmt(calldata)} is calldata`));
   assert.ok(coldAccess + calldata <= extra);
   assert.doesNotMatch(readme, /cheaper calldata/);
+});
+
+test("no record or doc calls a smoke-test key nobody's: each PRF stand-in is kept, and opens what is sealed to its key", () => {
+  for (const p of ["contracts/README.md", "contracts/script/smoke.mjs", "contracts/script/DeployMainnet.md", "deployments/143.json", "deployments/10143.json"])
+    assert.doesNotMatch(read(p), /nobody'?s\b/i, p);
+  for (const label of [mainnet.smokeTest.label, mainnet.smokeTest.agentKey.label, testnet.smokeTest.label])
+    assert.match(label, /stand-in is kept outside the repository by the deployer's operator/, label);
+  assert.match(readme, /The stand-ins are kept outside the repository by the deployer's operator/);
 });

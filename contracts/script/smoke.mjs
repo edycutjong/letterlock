@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Smoke run for a deployed directory, using the SDK's own derive/seal/open (packages/letterlock).
-// The key is nobody's: deriveKeyPair() over 32 random bytes that stand in for a passkey PRF output. It is labelled
-// TEST KEY (the default) or, with --label "DEMO KEY", a demo key on mainnet. No passkey is involved, and the stand-in
-// is written only to --out, which must be outside this repository.
+// The key has no passkey behind it: deriveKeyPair() over 32 random bytes that stand in for a passkey PRF output. It
+// is labelled TEST KEY (the default) or, with --label "DEMO KEY", a demo key on mainnet. The stand-in is written only
+// to --out, which must be outside this repository (outside-repo.mjs). Whoever keeps it can open anything sealed to
+// the key, so never seal a real note to one.
 //
 //   node contracts/script/smoke.mjs prepare --chain-id 143 --directory 0x.. --recipient 0x..|agent:<id> --out DIR
 //       [--label "DEMO KEY"]

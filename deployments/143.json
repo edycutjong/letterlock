@@ -47,7 +47,7 @@
     "optimizerRuns": 10000
   },
   "smokeTest": {
-    "label": "DEMO KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used, so it is nobody's key",
+    "label": "DEMO KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used. The stand-in is kept outside the repository by the deployer's operator (so the drop can be opened again), and it opens anything sealed to this key: do not seal real notes to it",
     "publishedKey": "0xd731a42a5c635049527ab327fe41b5a6a1528fa6e9c8c117f3c6396e3c106076",
     "epoch": 1,
     "kid": "db9784b7c246deb1",
@@ -60,7 +60,7 @@
       "kid": "2fc259671e68693d",
       "updatedAt": 1790459147,
       "publishBlock": 108289878,
-      "label": "DEMO KEY, derived the same way as the address key: do not seal real notes to agent:10260 at epoch 1"
+      "label": "DEMO KEY, derived the same way as the address key; its stand-in is kept outside the repository by the deployer's operator too: do not seal real notes to agent:10260 at epoch 1"
     },
     "dropBlock": 108289909,
     "envelopeBytes": 490,
