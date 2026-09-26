@@ -177,6 +177,7 @@ try {
   const frag = new URLSearchParams(new URL(link).hash.slice(1));
   const env = b64urlJson(frag.get("env"));
   const cA = await copied(mac.page);
+  const whereAfterCreate = { where: await raw(mac.page, "#where-derive"), help: await raw(mac.page, "#derive-help") };
   check("1 · Create → a 16-hex fingerprint on screen, equal to the kid of the note in the link",
     /^[0-9a-f]{16}$/.test(fpA) && env.kid === fpA && env.v === 1 && env.epoch === 1, group(fpA));
   check("the hand-off link is this origin + #env=<base64url JSON> (+ cid, who); the address bar carries it too",
@@ -219,6 +220,11 @@ try {
     shownAfterReload && qrReload.data === link && (await text(mac.page, "#handoff-fp")) === group(fpA)
       && (await authLogAt(mac, markReload)).length === markReload && credsA.length === 1,
     { handoff: await mac.page.locator("#handoff").isVisible(), banner: await mac.page.locator("#incoming").isVisible(), passkeys: credsA.length });
+  const ownReload = { where: await raw(mac.page, "#where-derive"), help: await raw(mac.page, "#derive-help"), title: await raw(mac.page, "#incoming-title"), action: await raw(mac.page, "#incoming-action") };
+  check("A, its own note (after 1 · Create and after a reload): step 2 reads 'On this Mac: self-check' with self-check help, and the banner says the note is this device's own, not the iPad's",
+    [whereAfterCreate, ownReload].every((o) => o.where === "On this Mac: self-check" && o.help.includes("Tap once as a self-check") && !o.help.includes("Nothing from the other device"))
+      && ownReload.title === "This device's own note is in this link" && ownReload.action.includes("as the self-check") && ownReload.action.includes("iPad camera"),
+    { whereAfterCreate, ownReload });
 
   // ---------- A': storage wiped, page opened from the link (what the iPad does) ----------
   await mac.page.evaluate(() => localStorage.clear());
@@ -250,6 +256,13 @@ try {
   await dash.page.click("#create");
   await dash.page.locator("#error").waitFor({ state: "visible" });
   const tooLong = { title: await text(dash.page, "#error-title"), help: await text(dash.page, "#error-text") };
+  await dash.page.click("#derive");                         // no note in the link or in storage: 2 seals the field's note
+  await dash.page.locator("#error").waitFor({ state: "visible" });
+  const tooLong2 = await copied(dash.page, "#copy-error");
+  check("2 · Use my passkey with no note to open: the same 200-byte limit is enforced before any prompt",
+    tooLong2.text.split("\n")[0].endsWith("2 · Use my passkey failed") && tooLong2.text.includes("NOTE_TOO_LONG: 210 bytes")
+      && (await text(dash.page, "#error-text")).includes("200 bytes or fewer") && (await authLogAt(dash, markD)).length === markD && (await dash.page.locator("#handoff").isHidden()),
+    tooLong2.text.split("\n")[1]);
   await dash.page.fill("#note", "a".repeat(200));
   const at200 = { value: (await dash.page.inputValue("#note")).length, count: await text(dash.page, "#note-bytes"), flagged: await dash.page.locator("#note-bytes.over").count() };
   check("note field: limit stated in bytes (200) with a live count; 70 CJK characters = 210 bytes are flagged before tapping and refused with no prompt; 200 Latin letters fit",
@@ -286,7 +299,12 @@ try {
   await tap(twice.page, "#create");
   const { credentials: made2 } = await twice.cdp.send("WebAuthn.getCredentials", { authenticatorId: twice.authenticatorId });
   const names = made2.map((c) => c.userName);
-  const whoN = new URLSearchParams(new URL(await twice.page.locator("#link").getAttribute("href")).hash.slice(1)).get("who");
+  const linkN = await twice.page.locator("#link").getAttribute("href");
+  const whoN = new URLSearchParams(new URL(linkN).hash.slice(1)).get("who");
+  const qrN = await qrOf(twice.page);
+  const defaultNote = { linkChars: linkN.length, cidChars: new URLSearchParams(new URL(linkN).hash.slice(1)).get("cid")?.length, version: qrN.version };
+  check("the default note (field left as is) seals, and its QR code decodes to exactly the link", qrN.data === linkN
+    && (await twice.page.inputValue("#note")) === "the dentist moved to Thursday 10:40", defaultNote);
   check("two 1 · Create taps at the same instant → two passkeys with different names; the link names the newer one",
     names.length === 2 && new Set(names).size === 2 && names.every((n) => /^maya \d\d:\d\d · [a-z2-9]{3}$/.test(n)) && names.includes(whoN), { names, who: whoN });
 
@@ -339,6 +357,19 @@ try {
       && toMac.h2 === "Now take the note to your Mac" && !toMac.scan && toMac.send && toMac.targets.every((t) => t === "Mac") && macWhere === "On your Mac",
     { ...tabletIdle, ...toMac, macWhere });
 
+  // ---------- a device that holds its own hint opens another passkey's link (the reverse run's Mac, mirrored) ----------
+  await tablet.page.goto("about:blank");
+  await load(tablet.page, link);                            // Mac A's link; the tablet still stores its own hint
+  const foreignBefore = { saved: await text(tablet.page, "#saved"), where: await raw(tablet.page, "#where-derive"), title: await raw(tablet.page, "#incoming-title") };
+  await tap(tablet.page, "#derive");
+  const cI = await copied(tablet.page);
+  const foreignAfter = { lookup: await fact(tablet.page, "Lookup"), saved: await text(tablet.page, "#saved"), stored: await tablet.page.evaluate(() => localStorage.getItem("ll.cred") !== null) };
+  check("a stored hint for another passkey: before and after 2, the page says the note is sealed to another key and the lookup is by name, never 're-checks it here'",
+    foreignBefore.saved.includes("also holds a hint for its own passkey") && foreignBefore.saved.includes("sealed to another key") && !foreignBefore.saved.includes("re-checks")
+      && foreignBefore.where === "On your iPad" && foreignBefore.title === "A sealed note is in this link"
+      && cI.json.path === "discoverable" && foreignAfter.stored && foreignAfter.lookup === "discoverable — this browser's saved passkey hint does not match this note's key; you picked the passkey by name"
+      && !foreignAfter.saved.includes("re-checks"), { ...foreignBefore, ...foreignAfter, verdict: cI.json.verdict });
+
   // ---------- simulated: PRF enabled at creation but not evaluated → mera's fallback assertion (2 prompts) ----------
   const late = await device({ label: "E", simulate: true });
   await load(late.page, PAGE);
@@ -383,9 +414,13 @@ try {
   await blocked.page.evaluate(() => { window.__simPrfEnabledOnly = true; window.__simBlockNextGet = true; });
   await blocked.page.click("#create");
   await blocked.page.locator("#error").waitFor({ state: "visible" });
-  const stuck = { title: await text(blocked.page, "#error-title"), next: await blocked.page.locator("#step-derive.is-next").count() };
+  const stuck = { title: await text(blocked.page, "#error-title"), next: await blocked.page.locator("#step-derive.is-next").count(), where: await raw(blocked.page, "#where-derive") };
   await tap(blocked.page, "#derive");
   const cF = await copied(blocked.page);
+  const sealedF = { verdict: await text(blocked.page, "#verdict"), line: await fact(blocked.page, "Note sealed"), handoff: await blocked.page.locator("#handoff").isVisible() };
+  check("recovered path: step 2 reads 'On this Mac: one more tap', and the tap that seals a new note says so (not 'No note in this link')",
+    stuck.where === "On this Mac: one more tap" && sealedF.verdict.startsWith("No note came with this link, so a new note was sealed") && !sealedF.verdict.includes("No note in this link")
+      && sealedF.line?.includes("the dentist moved to Thursday 10:40") && sealedF.handoff, { where: stuck.where, ...sealedF });
   const fpF = await fpOf(blocked.page);
   const linkF = await blocked.page.locator("#link").getAttribute("href");
   await blocked.page.evaluate(() => localStorage.clear());
@@ -429,7 +464,7 @@ try {
   check("a garbage or truncated #env link → 'damaged link' message, no banner, no prompt", damaged1 && damaged2);
 
   check("no uncaught page errors or console errors (incl. CSP violations)", errors.length === 0, errors);
-  writeFileSync(join(here, "page-check-result.json"), JSON.stringify({ page: PAGE, chromium: browser.version(), when: new Date().toISOString(), checks, fingerprint: fpA, linkChars: link.length, qrVersion: qr.version, denseNote: { linkChars: dense.link.length, qrVersion: dense.qr.version } }, null, 1));
+  writeFileSync(join(here, "page-check-result.json"), JSON.stringify({ page: PAGE, chromium: browser.version(), when: new Date().toISOString(), checks, fingerprint: fpA, linkChars: link.length, qrVersion: qr.version, denseNote: { linkChars: dense.link.length, qrVersion: dense.qr.version }, defaultNote }, null, 1));
 } finally {
   await browser.close();
   if (server) await (typeof server.close === "function" ? server.close() : new Promise((r) => server.httpServer.close(r)));
