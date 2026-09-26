@@ -61,6 +61,7 @@ forge build
 forge test -vvv          # includes the Monad mainnet fork tests (network); set MONAD_MAINNET_RPC to override
 forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true   # exits 1 if a gas number moved
 forge coverage --no-match-path test/LetterlockGas.t.sol --no-match-coverage "test/" --report summary
+node script/mutate.mjs   # mutation check; exits 1 if a mutant not marked equivalent survives
 node script/export-abi.mjs --check
 ```
 
@@ -71,8 +72,10 @@ Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
   5 invariants over 256 runs × 128 calls (32,768 calls), plus a fixed-seed 3,000-call walk that reaches every
   accept and reject path.
 - Coverage of `src/Letterlock.sol`: 100% of lines (62/62), statements (85/85), branches (19/19) and functions (11/11).
-- Mutation check (34 hand-written mutants of `Letterlock.sol`): 33 killed. The survivor turns `>= 0xed` into
-  `> 0xed` in the u ≥ p check, and it is equivalent: u = p is already rejected as a libsodium small-order entry.
+- Mutation check (`node script/mutate.mjs`): 41 hand-written mutants of `src/Letterlock.sol`, each run against the
+  unit, fuzz (256 runs), invariant (32 runs) and deploy tests in a scratch copy; the fork and gas tests are left out.
+  40 killed. The survivor (#39) turns `>= 0xed` into `> 0xed` in the u ≥ p check, and it is equivalent: u = p is
+  already rejected as a libsodium small-order entry.
 - The fork test deploys on the latest mainnet block and reads the live registry's `ownerOf` for agent 10259
   (registered in tx `0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77`) and for agent 0. It is
   skipped, with the RPC error, when the RPC is unreachable.
