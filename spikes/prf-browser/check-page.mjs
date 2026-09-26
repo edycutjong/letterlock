@@ -33,9 +33,32 @@ const host = new URL(PAGE).hostname;
 const browser = await chromium.launch();
 const errors = [];
 
-const device = async ({ hasPrf = true, viewport = { width: 1280, height: 900 }, label }) => {
+// Chromium's virtual authenticator always returns PRF at creation. To reach mera's fallback path, `simulate`
+// emulates (test-only) an authenticator that enables PRF at creation without evaluating it, and can block the
+// next assertion once, the way a browser may refuse a second prompt that no fresh tap started.
+const simulateAuthenticator = () => {
+  if (typeof CredentialsContainer === "undefined") return; // about:blank between loads
+  const proto = CredentialsContainer.prototype;
+  const create = proto.create;
+  const get = proto.get;
+  proto.create = async function (o) {
+    const cred = await create.call(this, o);
+    if (window.__simPrfEnabledOnly && cred) {
+      const results = cred.getClientExtensionResults.bind(cred);
+      cred.getClientExtensionResults = () => { const r = results(); if (r.prf) r.prf = { enabled: true }; return r; };
+    }
+    return cred;
+  };
+  proto.get = function (o) {
+    if (window.__simBlockNextGet) { window.__simBlockNextGet = false; return Promise.reject(new DOMException("simulated: second prompt blocked", "NotAllowedError")); }
+    return get.call(this, o);
+  };
+};
+
+const device = async ({ hasPrf = true, viewport = { width: 1280, height: 900 }, label, simulate = false }) => {
   const ctx = await browser.newContext({ viewport });
   await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  if (simulate) await ctx.addInitScript(simulateAuthenticator);
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
@@ -187,6 +210,40 @@ try {
   await dash.page.locator("#error").waitFor({ state: "visible" });
   check("no-PRF authenticator: 1 · Create explains PRF_UNSUPPORTED and names the passkey left behind",
     (await text(dash.page, "#error-text")).includes("was still saved"), await text(dash.page, "#error-title"));
+
+  // ---------- simulated: PRF enabled at creation but not evaluated → mera's fallback assertion (2 prompts) ----------
+  const late = await device({ label: "E", simulate: true });
+  await load(late.page, PAGE);
+  await late.page.evaluate(() => { window.__simPrfEnabledOnly = true; });
+  await tap(late.page, "#create");
+  const cE = await copied(late.page);
+  const fpE = await fpOf(late.page);
+  const promptsE = await fact(late.page, "Passkey prompts");
+  await tap(late.page, "#derive");
+  const cE2 = await copied(late.page);
+  check("simulated late PRF: 2 prompts (create, then a credential-hint assertion), reported as 'fallback'; the key re-derives",
+    cE.json.prompts === 2 && cE.json.prfAt === "fallback" && cE.json.ceremonies.map((c) => `${c.kind}:${c.lookup ?? "-"}:${c.prf}`).join() === "create:-:enabled-only,get:credential-hint:output"
+      && (await fpOf(late.page)) === fpE && cE2.json.verdict === "pass", promptsE);
+
+  // ---------- simulated: ...and the second prompt is blocked → the passkey is kept, one more tap finishes ----------
+  const blocked = await device({ label: "F", simulate: true });
+  await load(blocked.page, PAGE);
+  await blocked.page.evaluate(() => { window.__simPrfEnabledOnly = true; window.__simBlockNextGet = true; });
+  await blocked.page.click("#create");
+  await blocked.page.locator("#error").waitFor({ state: "visible" });
+  const stuck = { title: await text(blocked.page, "#error-title"), next: await blocked.page.locator("#step-derive.is-next").count() };
+  await tap(blocked.page, "#derive");
+  const cF = await copied(blocked.page);
+  const fpF = await fpOf(blocked.page);
+  const linkF = await blocked.page.locator("#link").getAttribute("href");
+  await blocked.page.evaluate(() => localStorage.clear());
+  await blocked.page.goto("about:blank");
+  await load(blocked.page, linkF);
+  await tap(blocked.page, "#derive");
+  const cF2 = await copied(blocked.page);
+  check("simulated blocked 2nd prompt: 'one more tap' → 2 · Use my passkey finishes with the kept credential hint, and its new link opens discoverably",
+    stuck.title.includes("one more tap") && stuck.next === 1 && cF.json.path === "credential-hint" && /^[0-9a-f]{16}$/.test(fpF)
+      && cF2.json.path === "discoverable" && cF2.json.verdict === "pass" && (await fpOf(blocked.page)) === fpF, stuck.title);
 
   // ---------- damaged links ----------
   await load(dash.page, PAGE + "#env=bm90LWpzb24");
