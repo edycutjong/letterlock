@@ -4,11 +4,12 @@ A passkey becomes an **encryption address**. The owner's device derives an X2551
 WebAuthn PRF output and publishes only the public half on Monad. Anyone resolves `keyOf(address)` and seals
 with HPKE; only the same passkey — on any device it syncs to — can open.
 
-Status: SDK core implemented in `packages/letterlock` (tested). Contract implemented in `contracts/` and deployed on
-Monad mainnet and testnet from the same source (§8), Sourcify-verified. The mainnet directory's first keys are demo
-keys from the deploy smoke test (random bytes in place of a passkey), one for the deployer and one for ERC-8004 agent
-#10260. This document is normative for the code; tests pin the derivation and envelope formats (§2–§3) and the
-contract rules (§8). The §7 binding layout is spike-only and gets its pinned test when it is ported.
+Status: SDK implemented in `packages/letterlock` (tested): the core (§2–§3), the chain client and a CLI (§4), with the
+rpId pin of §6. Contract implemented in `contracts/` and deployed on Monad mainnet and testnet from the same source
+(§8), Sourcify-verified. The mainnet directory's first keys are demo keys from the deploy smoke test (random bytes in
+place of a passkey), one for the deployer and one for ERC-8004 agent #10260. This document is normative for the code;
+tests pin the derivation and envelope formats (§2–§3) and the contract rules (§8). The §7 binding layout is
+spike-only and gets its pinned test when it is ported.
 
 ## 1. Primitives
 | Role | Choice |
@@ -52,8 +53,10 @@ lp(x) = u16(len(x)) ‖ x;  integers big-endian;  recipient = lower-cased 0x-add
 - `kid` is **not** authenticated. It is consulted only AFTER decryption fails, to report `WRONG_KEY` instead of
   `TAMPERED`; editing it can never make the right key fail, and never decrypts anything.
 - `seal` takes the recipient key as one value `{ recipient, publicKey, epoch }`. That value must come from a
-  single `keyOf` read: an epoch-1 key labelled epoch 2 produces an envelope nobody can open. The Day-3
-  `resolve()` builds this value from one contract read so callers never assemble it by hand.
+  single `keyOf` read: an epoch-1 key labelled epoch 2 produces an envelope nobody can open. `resolve()` (§4)
+  builds this value from one contract read so callers never assemble it by hand.
+- Wire form (`encodeEnvelope`, what `drop` sends): the JSON above as UTF-8, fields in the order shown, no
+  whitespace. `decodeEnvelope` keeps only these fields and validates them as `open` does, without decrypting.
 
 ## 4. Operations
 | Call | Passkey prompt | Notes |
@@ -64,16 +67,45 @@ lp(x) = u16(len(x)) ‖ x;  integers big-endian;  recipient = lower-cased 0x-add
 | `open(envelope, keys)` | none | with an already-derived key |
 | `openWithPasskey(envelope)` | 1 | validates the envelope first (no prompt wasted), derives `envelope.epoch`, opens, wipes its `sk` copy |
 
+The chain client, `letterlock({ chain: "monad" | "monad-testnet", rpcUrl?, directory?, rpId? })`, carries the §8
+directory addresses as constants and checks once, with `eth_chainId`, that the RPC serves the chain it names.
+
+| Call | Passkey prompt | Notes |
+|---|---|---|
+| `resolve(to)` | none | ONE `keyOf` / `keyOfAgent` read → `{ recipient, publicKey, epoch, kid, updatedAt }`; zeros → `NO_KEY_PUBLISHED` |
+| `sealTo(to, plaintext)` | none | `resolve` + `seal` |
+| `publish({ account, keys })` | none | `publish(pub, epoch)` from `account`; simulated first, so a refused call costs no gas |
+| `rotate({ account, credential })` | 1 | reads the account's epoch e, derives e + 1 (§2), publishes it, wipes `sk` |
+| `publishForAgent({ account, agentId, keys })` | none | `publishForAgent`; the epoch follows the agent's record across owners (§8) |
+| `drop({ account, envelope })` | none | sends the §3 wire form to the envelope's own recipient; chain and directory must be the client's |
+| `inbox(to, { fromBlock?, toBlock? })` | none | `Dropped` logs for `(to, NO_AGENT)` or `(address(0), agentId)`, from the deploy block by default, in pages the RPC accepts; bytes that are not an envelope for `to` on this chain and directory are returned as `rejected`, never as envelopes |
+| `meraAccount({ rpId, credential })` | 1 | the passkey's EVM account (§7) as a viem account backed by a mera signing session |
+
+A first publish therefore takes two prompts, one per PRF salt: the key (§2) and the account (§7).
+
 ## 5. Errors
 | Code | Meaning |
 |---|---|
 | `PRF_UNSUPPORTED` | the authenticator returns no PRF output (e.g. Dashlane, some Chrome profiles) |
 | `PASSKEY_FAILED` | ceremony cancelled, timed out, or no passkey for this site |
 | `NO_KEY_PUBLISHED` | the recipient has no key in the directory |
-| `EPOCH_MISMATCH` | the envelope names another epoch than the key supplied (pre-auth hint) |
+| `EPOCH_MISMATCH` | the envelope names another epoch than the key supplied (pre-auth hint); or a publish named another epoch than the directory's current + 1 (`EpochNotNext`) |
 | `WRONG_KEY` | decryption failed and `kid` names another key — the wrong passkey was chosen |
 | `TAMPERED` | authentication failed: the envelope was altered in transit |
 | `INPUT_INVALID` | malformed recipient, directory, epoch, key length, non-byte plaintext, or a low-order X25519 key |
+
+Chain client (§4), in the separate union `ChainErrorCode`; the directory's custom errors map as listed:
+
+| Code | Meaning |
+|---|---|
+| `NOT_AGENT_OWNER` | the account is not the agent's ERC-8004 owner (`NotAgentOwner`; also an agent nobody owns) |
+| `INSUFFICIENT_FUNDS` | the account cannot pay for gas |
+| `CHAIN_UNAVAILABLE` | no answer: the RPC failed, the registry call failed (`RegistryCallFailed`), or a call reverted without a known error. Unknown, never "no key" (§8) |
+
+`ZeroKey`, `LowOrderKey`, `NonCanonicalKey`, `AgentPathDisabled`, `AgentIdReserved`, `InvalidRecipient`,
+`EmptyEnvelope` and `EnvelopeTooLarge` are `INPUT_INVALID`; `EpochNotNext` is `EPOCH_MISMATCH`; `NoKeyPublished` is
+`NO_KEY_PUBLISHED`. An RPC that serves another chain than the client's, and an address with no directory, are
+`INPUT_INVALID` too.
 
 ## 6. Threat model
 **Protects:** the content of an envelope against everyone except holders of the recipient's passkey. This
@@ -86,9 +118,12 @@ recipient, epoch, directory or chain.
   envelope alone. If that matters, put a nonce and timestamp inside the plaintext and deduplicate on it.
 - **Metadata.** Recipient, epoch and timing are public on the transport the app chooses.
 - **Key loss.** If every synced copy of the passkey is lost, the key is lost. v1 has no recovery.
-- **Domain change.** PRF output is bound to the WebAuthn rpId. Letterlock pins ONE production rpId. Keys
-  derived on another origin (localhost, preview deploys) cannot be re-derived in production. Planned (Day 2+,
-  not yet implemented): the SDK config pins the rpId and `publish` refuses any other.
+- **Domain change.** PRF output is bound to the WebAuthn rpId. Letterlock pins ONE production rpId,
+  `LETTERLOCK_RP_ID` (`letterlock-app.vercel.app`). Keys derived on another origin (localhost, preview deploys)
+  cannot be re-derived in production. The chain client refuses `publish`, `rotate` and `publishForAgent` when its
+  rpId is another one, or when the key carries another rpId (keys from `createEncryptionAddress` and
+  `deriveFromPasskey` record theirs), unless it was created with `unsafeAllowAnyRpId: true`, for tests. Reads and
+  seals are not pinned: sealing needs no passkey.
 - **A compromised device during `open`** exposes that epoch's key. Rotate to recover forward secrecy for new
   notes.
 
@@ -105,7 +140,11 @@ things:
   rpIdHash and the UP/UV flags;
 - avoid rebuilding `clientDataJSON` from a template, because browsers add fields.
 
-Until that ships, the binding is `msg.sender` = the passkey-derived mera account.
+Until that ships, the binding is `msg.sender` = the passkey-derived mera account: `meraAccount` evaluates the PRF with
+mera's own salt `SHA-256("mera.prf.salt.v1")`, uses the output as BIP-39 entropy, and takes the BIP-32 key at
+`m/44'/60'/0'/0/0` of its seed, as mera's passkey-account recipe does. The key lives in a mera
+`Secp256k1SigningSession` and signs through `toViemAccount`; the PRF output, the seed and the HD keys are zeroed once
+the session holds its copy (best effort, as in §2).
 
 ## 8. Contract
 `contracts/src/Letterlock.sol`. ABI: `contracts/abi/Letterlock.json`, and `letterlockAbi`, exported by the
@@ -161,7 +200,8 @@ directory `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before
   `(address(0), agentId)` for `"agent:<id>"`. Anything else reverts `InvalidRecipient`.
 - The envelope is the §3 JSON as UTF-8, 1 to 16,384 bytes (`EmptyEnvelope`, `EnvelopeTooLarge`). The recipient must
   have a key that resolves at that moment (`NoKeyPublished`).
-- The SDK has no drop helper yet (planned); the mainnet and testnet drops were sent with `cast send`.
+- The SDK's `drop()` sends the §3 wire form and `inbox()` reads `Dropped` logs back (§4). The smoke-test drops on
+  mainnet and testnet were sent with `cast send`.
 - The contract does not validate the envelope: a successful drop says nothing about whether it opens. An envelope
   dropped to an agent is sealed to the key that resolves at that moment, so after a transfer only the previous owner
   can open it.
