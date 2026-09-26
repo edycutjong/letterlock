@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ExampleBadge } from "@/components/ExampleBadge";
 import { ExampleAction } from "@/components/ExampleAction";
+import { ExampleForm } from "@/components/ExampleForm";
 import { TextField } from "@/components/Field";
 import { ArrowOutIcon, LookupIcon } from "@/components/Icons";
 import { PageHead } from "@/components/PageHead";
@@ -58,7 +59,7 @@ export default function Register() {
         lede="Every key posted to the directory. Anyone may read it: find an address, then seal to the key on its line. When someone rotates, their earlier line stays in the register, ruled through."
       />
 
-      <form className={styles.lookup} role="search" aria-label="Look up an address">
+      <ExampleForm className={styles.lookup} role="search" aria-label="Look up an address">
         <TextField
           className={styles.lookupField}
           label="Look up"
@@ -67,10 +68,16 @@ export default function Register() {
           placeholder="0x… or agent:<id>"
           hint="keyOf(address) or keyOfAgent(id), read from the directory. Free: a read sends no transaction."
         />
-        <ExampleAction icon={<LookupIcon />} size="md" className={styles.lookupAction} does="Looking up will call keyOf on the directory and ink the line it finds.">
+        <ExampleAction
+          submit
+          icon={<LookupIcon />}
+          size="md"
+          className={styles.lookupAction}
+          does="Looking up will call keyOf on the directory and ink the line it finds."
+        >
           Look up
         </ExampleAction>
-      </form>
+      </ExampleForm>
 
       <section className={styles.section} aria-labelledby="live-title">
         <div className={styles.sectionHead}>

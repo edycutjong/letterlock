@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Envelope } from "@/components/Envelope";
 import { ExampleAction } from "@/components/ExampleAction";
+import { ExampleForm } from "@/components/ExampleForm";
 import { NoteField, TextField } from "@/components/Field";
 import { EnvelopeIcon } from "@/components/Icons";
 import { PageHead } from "@/components/PageHead";
@@ -26,7 +27,7 @@ export default function SealANote() {
       />
 
       <div className={styles.grid}>
-        <form className={styles.form} aria-label="Seal a note">
+        <ExampleForm className={styles.form} aria-label="Seal a note">
           <TextField label="To" name="to" defaultValue={maya.address} data hint="An address (0x…) or an agent (agent:<id>)." />
 
           <RegisterTable
@@ -41,9 +42,11 @@ export default function SealANote() {
           <NoteField label="Note" defaultValue={note.text} rows={4} />
 
           <div className={styles.submit}>
-            <ExampleAction does="Sealing runs on this device, with the key on the line above; no passkey is needed.">Seal</ExampleAction>
+            <ExampleAction submit does="Sealing runs on this device, with the key on the line above; no passkey is needed.">
+              Seal
+            </ExampleAction>
           </div>
-        </form>
+        </ExampleForm>
 
         <section className={styles.result} aria-labelledby="sealed-title">
           <h2 id="sealed-title" className={styles.resultTitle}>

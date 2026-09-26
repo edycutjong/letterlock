@@ -13,6 +13,8 @@ export type ExampleActionProps = {
   icon?: ReactNode;
   block?: boolean;
   size?: "md" | "lg";
+  /** the submit button of its ExampleForm: Enter in the form's fields presses it */
+  submit?: boolean;
   /** what the real action will do, said when the button is pressed on this example page */
   does: string;
   className?: string;
@@ -22,12 +24,13 @@ export type ExampleActionProps = {
  * A page's action while the page shows example content: it looks and responds like the real button, and when
  * pressed it says plainly that nothing is connected yet, instead of pretending to wait for a passkey or a chain.
  */
-export function ExampleAction({ children, tone = "ink", passkey, icon, block, size, does, className }: ExampleActionProps) {
+export function ExampleAction({ children, tone = "ink", passkey, icon, block, size, submit, does, className }: ExampleActionProps) {
   const [pressed, setPressed] = useState(false);
   const noteId = useId();
   return (
     <div className={[styles.action, block && styles.block, className].filter(Boolean).join(" ")}>
       <Button
+        type={submit ? "submit" : "button"}
         tone={tone}
         size={size}
         block={block}
