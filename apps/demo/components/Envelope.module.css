@@ -1,0 +1,297 @@
+/* The envelope is drawn in layers inside one stacking context (the stage), back to front:
+     1 the inside of the envelope · 2 the flap, when folded back · 3 the letter · 4 the pocket's face
+     5 the address line, key strip and epoch · 6 the flap, when down · 7 the seal
+   Every length inside is in container units (cqi) of the envelope's own width, so the drawing, the lettering and the
+   seal keep their proportions from a 160 px inbox thumbnail to a 640 px letter on an iPad. */
+
+.envelope {
+  margin: 0;
+  width: 100%;
+}
+
+.stage {
+  container-type: inline-size;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: 0fr auto;
+  /* closing: the letter slides back into the pocket first */
+  transition: grid-template-rows 360ms cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* opening: the letter rises once the flap is past upright */
+.envelope[data-flap="open"][data-letter] .stage {
+  grid-template-rows: 1fr auto;
+  transition: grid-template-rows 520ms cubic-bezier(0.2, 0.75, 0.25, 1) 260ms;
+}
+
+/* ---- the letter ------------------------------------------------------------------------------------------ */
+
+.letterRow {
+  grid-row: 1;
+  min-height: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  /* nothing of a tall letter may show below the envelope while it is still inside */
+  clip-path: inset(-100vmax -10cqi -63.2cqi -10cqi);
+}
+
+.letter {
+  --overlap: 29cqi;
+  --note: clamp(15px, 5.1cqi, 25px);
+  --pitch: calc(var(--note) * 1.62);
+  --pad-top: calc(var(--pitch) * 0.95);
+  width: 84%;
+  margin-bottom: calc(-1 * var(--overlap));
+  padding: var(--pad-top) 6.5cqi calc(var(--overlap) + var(--pitch) * 0.6);
+  background-color: var(--bg-elevated);
+  background-image:
+    linear-gradient(to bottom, color-mix(in srgb, var(--bg-elevated) 0%, transparent), color-mix(in srgb, var(--bg-sunk) 55%, transparent)),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(var(--pitch) - 1px),
+      color-mix(in srgb, var(--rule) 80%, transparent) calc(var(--pitch) - 1px) var(--pitch)
+    );
+  background-position:
+    0 0,
+    0 calc(var(--pad-top) - var(--note) * 0.3);
+  border: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
+  border-radius: 2px;
+  box-shadow:
+    0 1px 1px color-mix(in srgb, var(--ink) 10%, transparent),
+    1px 3px 10px -4px color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+.note {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: var(--note);
+  line-height: var(--pitch);
+  letter-spacing: -0.005em;
+  word-spacing: 0.06em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.note p + p {
+  margin-top: var(--pitch);
+}
+
+/* ---- the envelope ---------------------------------------------------------------------------------------- */
+
+.body {
+  grid-row: 2;
+  position: relative;
+  aspect-ratio: 380 / 240;
+  border-radius: 4px;
+  /* light from the top-left: contact, key and ambient shadows falling down-right */
+  box-shadow:
+    0.5px 1px 1px color-mix(in srgb, var(--ink) 20%, transparent),
+    2.5px 4.5px 7px -1px color-mix(in srgb, var(--ink) 14%, transparent),
+    10px 17px 30px -10px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.back,
+.front {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.back {
+  z-index: 1;
+}
+
+.front {
+  z-index: 4;
+  pointer-events: none;
+}
+
+.insideDeep {
+  stop-color: color-mix(in srgb, var(--bg-sunk) 78%, var(--muted));
+}
+
+.insideLit {
+  stop-color: var(--bg-sunk);
+}
+
+.paperLit {
+  stop-color: var(--bg-elevated);
+}
+
+.paperShade {
+  stop-color: var(--bg);
+}
+
+.airmailInk {
+  fill: var(--before);
+}
+
+.pocketEdge,
+.edge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+
+.rule {
+  fill: var(--ink);
+}
+
+.outline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.2;
+}
+
+/* ---- the flap: a hinge along the top edge; down over the pocket, or folded back behind the letter ---------- */
+
+.flap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 55%;
+  z-index: 6;
+  transform-origin: 50% 0;
+  transform-style: preserve-3d;
+  transform: perspective(1400px) rotateX(0deg);
+  pointer-events: none;
+  /* closing: wait for the letter, swing down, and pass in front of it once past upright */
+  transition:
+    transform 440ms cubic-bezier(0.45, 0, 0.2, 1) 280ms,
+    z-index 0s linear 500ms;
+}
+
+.envelope[data-flap="open"] .flap {
+  transform: perspective(1400px) rotateX(180deg);
+  z-index: 2;
+  transition:
+    transform 440ms cubic-bezier(0.45, 0, 0.2, 1),
+    z-index 0s linear 220ms;
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.inner {
+  transform: rotateX(180deg);
+}
+
+.flapFold {
+  stop-color: var(--bg-sunk);
+}
+
+.flapMid {
+  stop-color: var(--bg);
+}
+
+.flapLit {
+  stop-color: var(--bg-elevated);
+}
+
+.flapShadow {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 7;
+  opacity: 0.2;
+}
+
+.flapHighlight {
+  fill: none;
+  stroke: var(--bg-elevated);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.innerPaper {
+  fill: color-mix(in srgb, var(--bg-sunk) 88%, var(--muted));
+}
+
+.innerEdge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+/* ---- lettering on the pocket ------------------------------------------------------------------------------ */
+
+.address {
+  position: absolute;
+  z-index: 5;
+  left: 8.2%;
+  bottom: 21.9%;
+  margin: 0;
+  font-size: clamp(14px, 4.8cqi, 32px);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.strip {
+  position: absolute;
+  z-index: 5;
+  right: 10.8%;
+  bottom: 22.4%;
+  display: flex;
+}
+
+.strip svg {
+  width: auto;
+  height: 2.9cqi;
+}
+
+/* under the rule, clear of its curled left end */
+.epoch {
+  position: absolute;
+  z-index: 5;
+  left: 8.4%;
+  top: 85.4%;
+  margin: 0;
+  font-size: max(9.5px, 2.35cqi);
+  letter-spacing: 0.2em;
+  line-height: 1;
+}
+
+/* ---- the seal, pressed over the flap's tip, its skirt down on the address rule ------------------------------ */
+
+/* sized and placed so its widest point clears the end of the longest address line (0x1234…abcd) */
+.seal {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 61.5%;
+  width: 26%;
+  transform: translate(-50%, -50%) rotate(-6deg);
+}
+
+.envelope[data-variant="compact"] .seal {
+  top: 56%;
+  width: 31%;
+}
+
+/* an open flap with no letter in front of it stands above the envelope: keep it inside the figure. (A percentage,
+   not cqi: container units on the container itself would resolve against the page, not the envelope.) */
+.envelope[data-flap="open"]:not([data-letter]) .stage {
+  padding-top: 34.8%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .flap {
+    transition: none !important;
+  }
+}

@@ -1,0 +1,198 @@
+/* A register card lying on the stock: the letter sheet's paper, a hairline edge, a soft shadow down-right. */
+.card {
+  position: relative;
+  padding: clamp(20px, 3.2vw, 32px);
+  padding-top: clamp(20px, 3vw, 28px);
+  background-color: var(--bg-elevated);
+  background-image: linear-gradient(
+    160deg,
+    var(--bg-elevated) 0%,
+    var(--bg-elevated) 55%,
+    color-mix(in srgb, var(--bg-sunk) 70%, var(--bg-elevated)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--rule) 85%, transparent);
+  border-radius: 3px;
+  box-shadow: var(--shadow-sm), var(--shadow-md);
+}
+
+.postmark {
+  position: absolute;
+  top: -26px;
+  right: clamp(-18px, -1.2vw, -8px);
+  pointer-events: none;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 24px;
+}
+
+/* leave the corner to the postmark */
+.card[data-postmark] .head {
+  padding-right: 84px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+
+.address {
+  margin: 18px 0 0;
+  font-size: var(--fs-address);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.rule {
+  display: block;
+  width: min(100%, 340px);
+  height: auto;
+  margin-top: 6px;
+  color: var(--ink);
+}
+
+.facts {
+  margin: 18px 0 0;
+  display: grid;
+  gap: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 5.75rem 1fr;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
+}
+
+.row:last-child {
+  border-bottom: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
+}
+
+.row dt {
+  margin: 0;
+}
+
+.row dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* roman, not italic: a lone italic Didone 1 reads as a capital I */
+.epoch {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.full {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+}
+
+.row dd {
+  line-height: 1.45;
+}
+
+.tx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.txLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 28px;
+}
+
+.when {
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: var(--fs-small);
+}
+
+/* three pencil dots filling in turn: waiting on the chain, not on a person */
+.dots {
+  width: 22px;
+  height: 6px;
+  background:
+    radial-gradient(circle, var(--muted) 2.4px, transparent 2.6px) 0 50% / 8px 6px repeat-x;
+  animation: dots 1.2s steps(4, end) infinite;
+  clip-path: inset(0 100% 0 0);
+}
+
+@keyframes dots {
+  to {
+    clip-path: inset(0 -10% 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots {
+    animation: none;
+    clip-path: none;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 22px;
+}
+
+.footnote {
+  flex: 1 1 16rem;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@media (max-width: 479.98px) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .card[data-postmark] .head {
+    padding-right: 60px;
+  }
+  .postmark {
+    width: 84px;
+    height: 84px;
+    top: -30px;
+  }
+}

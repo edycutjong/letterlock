@@ -1,0 +1,62 @@
+/* Struck in ink and multiplied into the paper, so whatever it lands on (airmail chevrons, a register card) shows
+   through the ink the way a real cancellation does. */
+.postmark {
+  display: block;
+  flex: none;
+  overflow: visible;
+  color: var(--ink);
+  mix-blend-mode: multiply;
+  opacity: 0.8;
+  transform: rotate(var(--tilt, -8deg));
+}
+
+.ink {
+  fill: none;
+  stroke: currentColor;
+}
+
+.outer {
+  stroke-width: 2.2;
+}
+
+.inner {
+  stroke-width: 1.2;
+}
+
+.bars path {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.arc,
+.centerLabel {
+  fill: currentColor;
+  stroke: none;
+  font-family: var(--font-body);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.arc {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+}
+
+.arcBottom {
+  font-size: 8.4px;
+  letter-spacing: 0.1em;
+}
+
+.centerLabel {
+  font-size: 7.5px;
+  letter-spacing: 0.22em;
+}
+
+.center {
+  fill: currentColor;
+  stroke: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: 0;
+}
