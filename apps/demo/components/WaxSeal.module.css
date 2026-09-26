@@ -1,0 +1,251 @@
+/* The seal's motion. Every moving part runs for the whole of its state's duration and starts at 0 ms, so one
+   negative delay freezes the whole seal at any instant (the /kit filmstrip), and the resting styles below ARE the
+   end states: with the animations removed (reduced motion), `pressing` shows pressed and `cracking` shows cracked. */
+
+.seal {
+  display: block;
+  overflow: visible;
+}
+
+.seal:not([width]) {
+  width: 100%;
+  height: auto;
+}
+
+.wax,
+.cast,
+.ring,
+.halfA,
+.halfB {
+  transform-box: view-box;
+}
+
+/* ---- absent: a pencilled ring where the wax will land ---- */
+
+.spot circle {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 3.5 5;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+/* ---- pressing → pressed: the wax drops, squashes into the paper and settles (280 ms) ---- */
+
+.wax,
+.cast {
+  transform-origin: 100px 100px;
+}
+
+.ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+  opacity: 0;
+  transform-origin: 100px 102px;
+}
+
+.seal[data-state="pressing"] .wax {
+  animation:
+    wax-press var(--press-ms) both,
+    wax-appear var(--press-ms) linear both;
+}
+
+@keyframes wax-press {
+  0% {
+    transform: translate(0, -16px) scale(1.2) rotate(-10deg);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.9, 0.55);
+  }
+  55% {
+    transform: translate(0, 1.2px) scale(0.962) rotate(1.4deg);
+    animation-timing-function: var(--ease-press);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes wax-appear {
+  0% {
+    opacity: 0;
+  }
+  28%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* the shadow closes in as the wax comes down and meets it exactly when it lands */
+.seal[data-state="pressing"] .cast {
+  animation: cast-land var(--press-ms) both;
+}
+
+@keyframes cast-land {
+  0% {
+    transform: translate(10px, 16px) scale(1.14);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.8, 0.6);
+  }
+  30% {
+    opacity: 0.5;
+  }
+  55%,
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* a pressure ring runs out through the paper from the landing */
+.seal[data-state="pressing"] .ring {
+  animation: ring var(--press-ms) both;
+}
+
+@keyframes ring {
+  0%,
+  50% {
+    opacity: 0;
+    transform: scale(0.84);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  60% {
+    opacity: 0.22;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+/* ---- cracking → cracked: the crack runs down through the L, then the halves part (560 ms) ---- */
+
+.halfA {
+  transform-origin: 62px 104px;
+}
+
+.halfB {
+  transform-origin: 138px 98px;
+}
+
+.seal[data-state^="crack"] .halfA {
+  transform: translate(-8px, 3px) rotate(-7deg);
+}
+
+.seal[data-state^="crack"] .halfB {
+  transform: translate(8px, 2px) rotate(6deg);
+}
+
+.lip {
+  opacity: 0;
+}
+
+.seal[data-state^="crack"] .lip {
+  opacity: 1;
+}
+
+.crackLine {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  opacity: 0;
+}
+
+.seal[data-state="cracking"] .halfA {
+  animation: part-a var(--crack-ms) both;
+}
+
+.seal[data-state="cracking"] .halfB {
+  animation: part-b var(--crack-ms) both;
+}
+
+@keyframes part-a {
+  0% {
+    transform: none;
+  }
+  12% {
+    transform: translate(-0.5px, 0);
+  }
+  22% {
+    transform: translate(0.4px, 0);
+  }
+  34% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.16, 0.9, 0.3, 1);
+  }
+  100% {
+    transform: translate(-8px, 3px) rotate(-7deg);
+  }
+}
+
+@keyframes part-b {
+  0% {
+    transform: none;
+  }
+  12% {
+    transform: translate(0.5px, 0);
+  }
+  22% {
+    transform: translate(-0.4px, 0);
+  }
+  34% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.16, 0.9, 0.3, 1);
+  }
+  100% {
+    transform: translate(8px, 2px) rotate(6deg);
+  }
+}
+
+.seal[data-state="cracking"] .lip {
+  animation: lip var(--crack-ms) linear both;
+}
+
+@keyframes lip {
+  0%,
+  36% {
+    opacity: 0;
+  }
+  70%,
+  100% {
+    opacity: 1;
+  }
+}
+
+.seal[data-state="cracking"] .crackLine {
+  animation: crack-run var(--crack-ms) both;
+}
+
+@keyframes crack-run {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0.4);
+  }
+  30% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  52% {
+    opacity: 1;
+  }
+  74%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+/* ---- the /kit filmstrip: hold every moving part at the same instant ---- */
+
+.seal[data-frozen] * {
+  animation-play-state: paused !important;
+  animation-delay: calc(var(--freeze, 0ms) * -1) !important;
+}
+
+/* ---- reduced motion: the state changes at once (frozen frames are stills, so they stay) ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .seal:not([data-frozen]) * {
+    animation: none !important;
+  }
+}
