@@ -48,3 +48,11 @@ test("hybrid without an open → the hybrid hint; no note → info; unknown cred
   assert.match(v({ wrongKey: true, sameCredential: null }).text, /^Different key: either another passkey/);
   assert.deepEqual(v({ openError: { code: "TAMPERED", help: "Open the link again." } }), { level: "fail", text: "The note did not open (TAMPERED). Open the link again." });
 });
+
+test("no note to open, and this tap sealed one → INFO that says a note was sealed and what to do next, never 'No note in this link'", () => {
+  const r = v({ hasNote: false, sealed: true, other: "iPad" });
+  assert.equal(r.level, "info");
+  assert.match(r.text, /^No note came with this link, so a new note was sealed to this key and put in the link\./);
+  assert.match(r.text, /Tap 2 once more .* open the link on the iPad/);
+  assert.doesNotMatch(r.text, /^No note in this link/);
+});

@@ -114,6 +114,8 @@ const showFingerprint = (el: HTMLElement, fp: string) => {
   el.setAttribute("aria-label", `Key fingerprint ${group(fp)}`);
 };
 
+const strong = (text: string) => Object.assign(document.createElement("strong"), { textContent: text });
+
 const reveal = (el: HTMLElement) => {
   const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
@@ -148,13 +150,34 @@ const isOwnNote = (env: Envelope): boolean => {
   return mine !== null && mine.enc === env.enc && mine.ct === env.ct && store.get("ll.fp") === env.kid;
 };
 
+/**
+ * What "2 · Use my passkey" does on this device right now, so its card says so: open a note sealed on the other
+ * device ("open"), open this device's own note with its credential hint ("self-check"), or finish a passkey whose
+ * creation stopped before it returned the key ("finish"). Mirrors the branches at the top of derive().
+ */
+type StepTwo = "open" | "self-check" | "finish";
+const stepTwo = (): StepTwo => {
+  if (handoff) return isOwnNote(handoff.env) ? "self-check" : "open";
+  if (!storedCredential()) return "open";
+  return store.get("ll.env") !== null && store.get("ll.fp") !== null ? "self-check" : "finish";
+};
+const DERIVE_HELP: Record<StepTwo, () => string> = {
+  open: () => "First open this page from the other device's QR code or link, so the sealed note comes with it. Then tap and choose the passkey. Nothing from the other device is stored here: you pick the passkey by name. Pick the passkey saved on this device itself — not “use a passkey from another device”.",
+  "self-check": () => `This ${here()} made the passkey the note is sealed to. Tap once as a self-check: it must show the same fingerprint and open the note. Then open the link on the ${other()}, where this step is the real test.`,
+  finish: () => `This ${here()} saved a new passkey, but the browser stopped before it returned the key. Tap once to finish: it derives the key here and seals the note for the ${other()}.`,
+};
+
 const renderSaved = () => {
   const cred = storedCredential();
   const fp = store.get("ll.fp");
   const name = store.get("ll.name");
+  const mode = stepTwo();
   const el = $("saved");
-  if (cred) {
-    el.textContent = `This device made the passkey “${name ?? "maya"}”${fp ? ` (key ${group(fp)})` : ""}. “2 · Use my passkey” re-checks it here with a credential hint.`;
+  if (cred && handoff && mode === "open") {
+    // e.g. the reverse run: the Mac still holds its main-run hint, but this link's note is sealed to the iPad's key
+    el.textContent = `This browser also holds a hint for its own passkey “${name ?? "maya"}”${fp ? ` (key ${group(fp)})` : ""}, but the note in this link is sealed to another key. “2 · Use my passkey” therefore looks the passkey up by name: pick ${handoff.who ? `“${handoff.who}”` : `the passkey the ${other()} made`}.`;
+  } else if (cred) {
+    el.textContent = `This device made the passkey “${name ?? "maya"}”${fp ? ` (key ${group(fp)})` : ""}. “2 · Use my passkey” ${mode === "finish" ? "finishes it" : "re-checks it"} here with a credential hint.`;
   } else if (isTablet() && !handoff) {
     el.textContent = "On the iPad: for the main test, open this page from the Mac's QR code, then tap “2 · Use my passkey”. Tap “1 · Create” here only for the optional reverse run (iPad → Mac).";
   } else {
@@ -162,9 +185,11 @@ const renderSaved = () => {
   }
   el.hidden = el.textContent === "";
   // a note from the other device means this device opens it; on an iPad, creating is the reverse run's job
-  const foreign = handoff !== null && !isOwnNote(handoff.env);
   $("where-create").textContent = isTablet() ? "On the iPad: reverse run only" : "On your Mac";
-  $("where-derive").textContent = foreign ? `On your ${here()}` : "On your iPad";
+  $("where-derive").textContent = mode === "self-check" ? `On this ${here()}: self-check`
+    : mode === "finish" ? `On this ${here()}: one more tap`
+    : handoff ? `On your ${here()}` : "On your iPad";
+  $("derive-help").textContent = DERIVE_HELP[mode]();
 };
 
 const renderHandoff = async (link: string, fp: string, who: string, target: string) => {
@@ -244,9 +269,15 @@ const loadHandoff = () => {
   try { handoff = readHandoff(location.hash); } catch (e) { handoff = null; showError(e, { step: "open link" }); }
   $("incoming").hidden = !handoff;
   if (handoff) {
+    const own = isOwnNote(handoff.env);
     $("incoming-kid").textContent = KID.test(handoff.env.kid) ? group(handoff.env.kid) : "(unknown)";
     $("incoming-who-wrap").hidden = !handoff.who;
     $("incoming-who").textContent = handoff.who ? `“${handoff.who}”` : "";
+    // reloaded on the device that sealed it: this is the self-check, not the other device's open
+    $("incoming-title").textContent = own ? "This device's own note is in this link" : "A sealed note is in this link";
+    $("incoming-action").replaceChildren(...(own
+      ? [`This ${here()} made that passkey. Tap `, strong("2 · Use my passkey"), ` below once as the self-check, then ${other() === "iPad" ? "point the iPad camera at the QR code below" : "send the link below to the Mac"}.`]
+      : ["Only that passkey can open it. Tap ", strong("2 · Use my passkey"), " below."]));
   }
   setNext(handoff ? "derive" : "create");
   $("step-create").classList.toggle("is-quiet", !!handoff);
@@ -359,9 +390,15 @@ const derive = async (envJson?: string) => {
   clearError();
   // --- synchronous until deriveFromPasskey: keeps the tap's user activation for Safari ---
   let env: Envelope | null;
+  let fresh: string | null = null; // with no note to open, the note this tap seals: its limit is checked before any prompt
   try {
     env = envJson !== undefined ? (JSON.parse(envJson) as Envelope) : handoff?.env ?? json<Envelope>(store.get("ll.env"));
     if (env) parseEnvelope(env); // a malformed note must not cost a passkey prompt
+    else {
+      fresh = noteText();
+      const bytes = utf8(fresh).length;
+      if (bytes > MAX_NOTE_BYTES) throw new Error(`NOTE_TOO_LONG: ${bytes} bytes`);
+    }
   } catch (e) { showError(e, { step: "2 · Use my passkey" }); throw e; }
   const hint = storedCredential();
   const useHint = hint !== null && (env === null || env.kid === store.get("ll.fp"));
@@ -384,7 +421,7 @@ const derive = async (envJson?: string) => {
     let sealed: Envelope | null = null;
     try {
       if (env) opened = new TextDecoder().decode(await open(env, keys));
-      else sealed = await sealNote(keys.publicKey, keys.epoch, noteText());
+      else sealed = await sealNote(keys.publicKey, keys.epoch, fresh ?? noteText());
     } catch (e) { openError = e; } finally { keys.secretKey.fill(0); }
     const cs = ceremonies.slice(mark);
     const sameCredential = linkCid === null ? null : linkCid === keys.credentialId;
@@ -392,7 +429,7 @@ const derive = async (envJson?: string) => {
     const hybrid = attachment === "cross-platform";
     const openCode = openError ? codeOf(openError) : null;
     const verdict: Verdict = deriveVerdict({
-      hasNote: env !== null, opened: opened !== null, wrongKey: isLetterlockError(openError, "WRONG_KEY"), hybrid, creator,
+      hasNote: env !== null, sealed: sealed !== null, opened: opened !== null, wrongKey: isLetterlockError(openError, "WRONG_KEY"), hybrid, creator,
       sameCredential, who: link?.who, other: other(), openError: openCode ? { code: openCode, help: friendly(openCode, {}) } : undefined,
     });
     const result = {
@@ -416,7 +453,10 @@ const derive = async (envJson?: string) => {
       fingerprint: fp,
       lines: [
         ...(env ? [["Note was sealed to", KID.test(env.kid) ? group(env.kid) : "(unknown)"] as [string, string]] : []),
-        ["Lookup", path === "discoverable" ? "discoverable — no passkey hint saved in this browser; you picked the passkey by name" : "credential hint — this device created the passkey"],
+        ...(sealed && fresh !== null ? [["Note sealed", `“${fresh}” (${utf8(fresh).length} bytes) → ${sealed.ct.length}-character ciphertext in the link`] as [string, string]] : []),
+        ["Lookup", path === "credential-hint" ? "credential hint — this device created the passkey"
+          : hint === null ? "discoverable — no passkey hint saved in this browser; you picked the passkey by name"
+          : "discoverable — this browser's saved passkey hint does not match this note's key; you picked the passkey by name"],
         ["Passkey prompts", promptLine(cs)],
         ["Passkey used from", attachmentLine(attachment)],
         ["Same passkey as the link", sameCredential === null ? "unknown" : sameCredential ? "yes" : "no"],

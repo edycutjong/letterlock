@@ -35,9 +35,9 @@
     </section>
 
     <section id="incoming" class="banner" hidden aria-live="polite">
-      <p class="banner-title">A sealed note is in this link</p>
+      <p id="incoming-title" class="banner-title">A sealed note is in this link</p>
       <p>It was sealed to key <strong id="incoming-kid" class="mono">…</strong><span id="incoming-who-wrap" hidden> — made by the passkey named <strong id="incoming-who">…</strong></span>.
-        Only that passkey can open it. Tap <strong>2 · Use my passkey</strong> below.</p>
+        <span id="incoming-action">Only that passkey can open it. Tap <strong>2 · Use my passkey</strong> below.</span></p>
     </section>
 
     <section id="error" class="alert" hidden role="alert">
@@ -64,7 +64,7 @@
       <li id="step-derive" class="step">
         <p id="where-derive" class="where">On your iPad</p>
         <button id="derive" type="button" class="action">2 · Use my passkey</button>
-        <p class="step-help">First open this page from the other device's QR code or link, so the sealed note comes with
+        <p id="derive-help" class="step-help">First open this page from the other device's QR code or link, so the sealed note comes with
           it. Then tap and choose the passkey. Nothing from the other device is stored here: you pick the passkey by
           name. Pick the passkey saved on this device itself — not “use a passkey from another device”.</p>
       </li>

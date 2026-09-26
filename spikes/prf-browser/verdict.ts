@@ -8,6 +8,8 @@ export const HYBRID_HINT = "The passkey was used from ANOTHER device (hybrid / Q
 export type Outcome = {
   /** A sealed note came with the link (or from this device's storage). */
   readonly hasNote: boolean;
+  /** With no note to open, this tap sealed a new one to the key it derived and put it in the link. */
+  readonly sealed?: boolean | undefined;
   /** The note decrypted with the key just derived. */
   readonly opened: boolean;
   /** Opening failed with WRONG_KEY: the note's kid names another key. */
@@ -27,6 +29,9 @@ export type Outcome = {
 };
 
 export const deriveVerdict = (o: Outcome): Verdict => {
+  if (!o.hasNote && o.sealed) {
+    return { level: "info", text: `No note came with this link, so a new note was sealed to this key and put in the link. Tap 2 once more to check that it opens here, then open the link on the ${o.other}: both must show this fingerprint.` };
+  }
   if (!o.hasNote) return { level: "info", text: "No note in this link. Compare this fingerprint with your other device by eye." };
   if (o.opened && o.hybrid) {
     // the key is right, but it came from the other device: the synced copy on this one was never used
