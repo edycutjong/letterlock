@@ -48,6 +48,12 @@ importers:
         specifier: 1.5.4
         version: 1.5.4
     devDependencies:
+      '@category-labs/mera':
+        specifier: 0.2.0
+        version: 0.2.0
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
       '@types/qrcode':
         specifier: 1.5.6
         version: 1.5.6
@@ -57,6 +63,9 @@ importers:
       playwright:
         specifier: ^1.55.0
         version: 1.63.0
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
       vite:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@26.6.3)

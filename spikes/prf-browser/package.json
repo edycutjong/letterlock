@@ -7,7 +7,9 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node run-spike.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test:unit": "node --test \"test/*.test.ts\"",
+    "test": "node --test \"test/*.test.ts\" && node run-spike.mjs",
     "check:page": "node check-page.mjs"
   },
   "dependencies": {
@@ -15,9 +17,12 @@
     "qrcode": "1.5.4"
   },
   "devDependencies": {
+    "@category-labs/mera": "0.2.0",
+    "@types/node": "^26.6.3",
     "@types/qrcode": "1.5.6",
     "jsqr": "1.4.0",
     "playwright": "^1.55.0",
+    "typescript": "^5.9.0",
     "vite": "^8.3.1"
   }
 }
