@@ -49,7 +49,7 @@ key first made on an iPhone or iPad would not open notes on a Mac, and Letterloc
 2. Tap **1 · Create**. Touch ID asks to save a passkey. Accept it, so it is saved to iCloud Keychain.
 3. The page shows a large fingerprint (four groups of four characters), the number of passkey prompts it took,
    the passkey's name (for example `maya 14:05 · k3f`), and a QR code.
-4. **Self-check:** tap **2 · Use my passkey** once, on the Mac. Touch ID asks again. The page must show the same
+4. **Self-check:** tap **2 · Use my passkey** once, on the Mac (its card now reads *On this Mac: self-check*). Touch ID asks again. The page must show the same
    fingerprint, open the note, and say *Self-check passed*. This rules out a difference between creating the
    passkey and signing in with it on the Mac itself, which the iPad could not tell apart from a sync problem.
    The QR code stays on screen (it also comes back if you reload the page). Leave this screen open.
@@ -81,7 +81,9 @@ This tests the direction that thread 822523 reports as failing. Run it after the
 2. Self-check: tap **2 · Use my passkey** once on the iPad. It must show the same fingerprint and open the note.
 3. Send the link to the Mac with **Share…** (AirDrop) or **Copy link**. The Mac's camera cannot read the QR code.
 4. On the Mac, wait until the passkey shows in the Passwords app, open the link in Safari, tap
-   **2 · Use my passkey**, and pick the passkey named on the iPad (the copy saved on the Mac).
+   **2 · Use my passkey**, and pick the passkey named on the iPad (the copy saved on the Mac). The Mac still
+   holds the hint for its own main-run passkey; the page says so, and says that this note is sealed to another
+   key, so the passkey is looked up by name.
 5. Compare the fingerprints and send both **Copy result** texts, labelled *reverse run*, with both OS versions.
 
 ## Reading the result
@@ -105,9 +107,11 @@ What the detail lines record:
   creation* or *2 — … needed a second prompt (mera's fallback assertion)*. `docs/SPEC.md` §4 allows either path;
   this line records which one Safari takes. If Safari blocks the second prompt, the page keeps the new passkey
   and asks for one more tap.
-- **Lookup** on the device that opens the link must be *discoverable — no passkey hint saved in this browser*.
-  Nothing from the other device is stored there, so the passkey is picked by name in the system passkey sheet.
-  *Credential hint* only appears on the device that created the passkey (the self-check).
+- **Lookup** on the device that opens the link must start with *discoverable*: nothing from the other device is
+  stored there, so the passkey is picked by name in the system passkey sheet. It reads *no passkey hint saved in
+  this browser* on a device that never made a test passkey, and *this browser's saved passkey hint does not match
+  this note's key* on one that did, such as the Mac in the reverse run. *Credential hint* only appears on the
+  device that created the passkey (the self-check).
 - **Passkey used from** must be *this device*. It comes from the credential's `authenticatorAttachment`:
   `platform` means on-device, and `cross-platform` means hybrid or a security key.
 - **Device** and **User agent** come from the browser's own `navigator.userAgent`. iPadOS Safari reports a Mac
@@ -123,10 +127,13 @@ What the detail lines record:
 - **The link carries only the sealed note.** It has the form `#env=<base64url JSON envelope>`, with `&cid` and
   `&who` added only to diagnose a failed open. Browsers never send the part after `#` to the server, and the note
   can only be opened with the passkey.
-- **The note is limited to 200 bytes**, counted live under the field, so the QR code stays scannable. Emoji and
-  Chinese, Japanese or Korean characters take 3–4 bytes each. The default note makes a version-17 QR code and a
-  200-byte note a version-23 one. jsQR decodes both from the page; whether an iPad camera reads the denser one
-  off a Mac screen is untested.
+- **The note is limited to 200 bytes**, counted live under the field and checked before any prompt, on
+  *1 · Create* and on *2 · Use my passkey* when that tap seals a new note. This keeps the QR code scannable. Emoji
+  and Chinese, Japanese or Korean characters take 3–4 bytes each. The link's length also depends on the address
+  and the credential ID, so the QR version does too. Measured by `check-page.mjs` on the live page with
+  Chromium's 43-character credential IDs: the default note gives a 517-character link and a version-18 code
+  (503 characters and version 17 on `localhost`), and a 200-byte note gives version 23. jsQR decodes all of them
+  from the page; whether an iPad camera reads the denser ones off a Mac screen is untested.
 - **How prompts are counted.** The page watches `navigator.credentials.create/get`. It never changes a request or
   a result. mera 0.2.0 does not export its browser `WebAuthnClient`, and a wrapping client would have replaced
   mera's client with a copy. Watching the browser calls instead keeps mera's own code under test. The automated
@@ -137,31 +144,38 @@ What the detail lines record:
 
 ```sh
 pnpm --filter prf-browser-spike typecheck    # tsc --strict over the page, its modules and the unit tests
-pnpm --filter prf-browser-spike test:unit    # node:test: verdicts, passkey names, note limit, build stamp, planning-file names
+pnpm --filter prf-browser-spike test:unit    # node:test: verdicts, passkey names, note limit, build stamp, planning-file names (files and history)
 pnpm --filter prf-browser-spike test         # the unit tests, then run-spike.mjs (dev server, real Monad RPC for the P256 checks)
 pnpm --filter prf-browser-spike check:page   # check-page.mjs: taps the real buttons on the production build
 node check-page.mjs --url https://letterlock-spike.vercel.app/   # the same checks against the live page
 ```
 
-Results on 2026-09-26 with Chromium 153 virtual authenticators, page build `89c3767`:
+Results on 2026-09-26 with Chromium 153 virtual authenticators, page build `51e8eab`:
 
 - `pnpm typecheck` (the SDK and this page, `tsc --strict`): no errors.
-- `test:unit`: **27/27**.
-- `check-page.mjs`: **35/35** on the local production build and **36/36** on the live page; the live run adds the
-  CSP header check. Against the previous live build (`fa47ecc`), 9 of the same checks failed, each on a defect
-  fixed since.
+- `test:unit`: **29/29**.
+- `check-page.mjs`: **40/40** on the local production build and **41/41** on the live page; the live run adds the
+  CSP header check. (An earlier round, against live build `fa47ecc`, had 9 of its checks fail, each on a defect
+  fixed since.)
 - `run-spike.mjs`: **13/14 passed, 1 SKIP**. The SKIP is the cross-device check, which is this human run.
 - The SDK's own suite (`pnpm --filter letterlock test`): **59/59**.
 
-`check-page.mjs` covers the following:
+Not everything is covered by `check-page.mjs`: the build stamp, the strict typecheck and the planning-file
+names are covered by the unit tests and `tsc`. (Commit `0c55419` said check-page covered every finding of that
+audit; that overstated it.) `check-page.mjs` covers the following:
 - the rpId shown on the page with its test-only caveat, and the fingerprint matching the note's `kid`;
 - the QR code decoding (jsQR) to exactly the link, also for a 200-byte note, and coming back after the
   self-check and after a reload on the creating device;
 - the prompt count against Chromium's authenticator log (CDP `WebAuthn.credentialAdded`/`credentialAsserted`),
   so an observer that missed or double-counted a prompt would fail;
-- credential-hint (self-check) and discoverable opens, and the Lookup wording;
+- credential-hint (self-check) and discoverable opens, and the Lookup wording, also when the browser holds a hint
+  for another passkey;
+- on the creating device, step 2 reads *On this Mac: self-check* after 1 · Create and after a reload, and the
+  banner calls the note this device's own;
 - two passkeys created at one fixed instant get different names;
-- the note's byte limit, shown live and enforced before any prompt;
+- the note's byte limit, shown live and enforced before any prompt on both buttons, and the verdict when a tap
+  seals a new note;
+- the default note's QR code decoding to exactly the link;
 - an iPad user agent: the reverse run is offered, and its hand-off targets the Mac;
 - the wrong-passkey diagnosis, and readable `PRF_UNSUPPORTED` and damaged-link states;
 - Copy result, and no sideways scroll at iPad and phone widths;
