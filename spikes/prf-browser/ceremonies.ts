@@ -18,6 +18,12 @@ export type Ceremony = {
   /** Credential that answered, canonical unpadded base64url. */
   readonly credentialId?: string;
   readonly transports?: readonly string[];
+  /**
+   * PublicKeyCredential.authenticatorAttachment: "platform" = a passkey stored on this device (iCloud Keychain),
+   * "cross-platform" = another device over hybrid (QR / Bluetooth) or a security key. Safari 18.x has returned a
+   * different PRF value over hybrid than on-device, so the cross-device test must stay on "platform".
+   */
+  readonly attachment?: string;
   /** DOMException name and message when the ceremony failed. */
   readonly error?: string;
 };
@@ -49,6 +55,7 @@ const describe = (kind: Ceremony["kind"], cred: Credential | null, t0: number, l
     ms: elapsed(t0),
     ...(pkc?.rawId ? { credentialId: b64url(pkc.rawId) } : {}),
     ...(transports ? { transports } : {}),
+    ...(typeof pkc?.authenticatorAttachment === "string" ? { attachment: pkc.authenticatorAttachment } : {}),
   };
 };
 

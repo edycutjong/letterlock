@@ -62,7 +62,8 @@
         <p class="where">On your iPad</p>
         <button id="derive" type="button" class="action">2 · Use my passkey</button>
         <p class="step-help">First open this page from the Mac's QR code, so the sealed note comes with it. Then tap
-          and choose the passkey. Nothing from the Mac is stored on the iPad: the passkey is found by name.</p>
+          and choose the passkey. Nothing from the Mac is stored on the iPad: the passkey is found by name. Pick the
+          passkey saved on the iPad itself — not “use a passkey from another device”.</p>
       </li>
     </ol>
 
@@ -90,7 +91,8 @@
         <li>Wait until the passkey reaches the iPad: open the <strong>Passwords</strong> app there and search
           <strong id="handoff-host">…</strong> (iCloud Keychain usually syncs within a minute).</li>
         <li>Point the iPad camera at this code and open the link in Safari.</li>
-        <li>Tap <strong>2 · Use my passkey</strong> and choose <strong id="handoff-who">…</strong>.</li>
+        <li>Tap <strong>2 · Use my passkey</strong> and choose <strong id="handoff-who">…</strong> — the copy saved
+          on the iPad, not “use a passkey from another device”.</li>
         <li>The iPad must show this same fingerprint: <strong id="handoff-fp" class="mono">…</strong></li>
       </ol>
       <div class="qr-frame"><canvas id="qr" role="img" aria-label="QR code of the link that carries the sealed note"></canvas></div>

@@ -96,8 +96,12 @@ const promptLine = (cs: readonly Ceremony[]) => {
   const arrival = prfArrival(cs);
   const how = arrival === "create" ? "the PRF output came with the creation"
     : arrival === "fallback" ? "the PRF output needed a second prompt (mera's fallback assertion)" : "no PRF output";
-  return `${n}${cs.some((c) => c.kind === "create") ? ` — ${how}` : ""}${n ? ` (${cs.map((c) => `${c.kind} ${c.ms} ms`).join(", ")})` : ""}`;
+  return `${n}${cs.some((c) => c.kind === "create") ? ` — ${how}` : ""}${n ? ` (${cs.map((c) => `${c.kind} ${c.ms} ms${c.attachment ? `, ${c.attachment}` : ""}`).join("; ")})` : ""}`;
 };
+const attachmentLine = (a: string | undefined) =>
+  a === "platform" ? "this device (a passkey stored here, e.g. synced by iCloud Keychain)"
+    : a === "cross-platform" ? "ANOTHER device over hybrid (QR / Bluetooth) or a security key — not the synced copy"
+    : "not reported by this browser";
 
 // ---------- rendering ----------
 const log = <T>(o: T): T => { $("log").textContent += "\n" + JSON.stringify(o, null, 1); return o; };
@@ -178,7 +182,9 @@ const causeChain = (e: unknown): string => {
   }
   return parts.join(" ← ");
 };
-const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean }) => {
+const HYBRID_HINT = "The passkey was used from ANOTHER device (hybrid / QR), and Safari 18.x can return no PRF output or a different one that way. Wait until the passkey shows in this device's Passwords app, then tap 2 again and pick it here.";
+const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; hybrid?: boolean }) => {
+  if (ctx.hybrid && (code === "PRF_UNSUPPORTED" || code === "WRONG_KEY")) return HYBRID_HINT;
   switch (code) {
     case "PRF_UNSUPPORTED":
       return "This browser or passkey provider does not return the passkey's PRF output, so no key can be made. Use Safari 18 or newer with iCloud Keychain, not a third-party password manager."
@@ -195,7 +201,7 @@ const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean }
   }
 };
 
-const showError = (e: unknown, ctx: { step: string; ceremonies?: readonly Ceremony[]; savedName?: string; recovered?: boolean }) => {
+const showError = (e: unknown, ctx: { step: string; ceremonies?: readonly Ceremony[]; savedName?: string; recovered?: boolean; hybrid?: boolean }) => {
   const code = codeOf(e);
   $("error").hidden = false;
   $("error-title").textContent = ctx.recovered ? "Almost there: one more tap" : `That didn't work (${code})`;
@@ -351,9 +357,13 @@ const derive = async (envJson?: string) => {
     } catch (e) { openError = e; } finally { keys.secretKey.fill(0); }
     const cs = ceremonies.slice(mark);
     const sameCredential = linkCid === null ? null : linkCid === keys.credentialId;
+    const attachment = cs.find((c) => c.kind === "get" && c.ok)?.attachment;
+    const hybrid = attachment === "cross-platform";
     const verdict: Verdict = !env
       ? { level: "info", text: "No note in this link. Compare this fingerprint with your other device by eye." }
-      : opened !== null ? { level: "pass", text: "Same key — the note opened on this device." }
+      : opened !== null
+        ? { level: "pass", text: hybrid ? "Same key — the note opened, but through ANOTHER device (hybrid), not the passkey synced to this one." : "Same key — the note opened on this device." }
+      : hybrid ? { level: "retry", text: HYBRID_HINT }
       : isLetterlockError(openError, "WRONG_KEY")
         ? sameCredential === true
           ? { level: "fail", text: "Same passkey as the other device, but a DIFFERENT key: its PRF output did not match across devices. Please send this result." }
@@ -362,7 +372,7 @@ const derive = async (envJson?: string) => {
             : { level: "fail", text: "Different key: either another passkey was chosen, or the PRF output differs across devices." }
         : { level: "fail", text: `The note did not open (${codeOf(openError)}). ${friendly(codeOf(openError), {})}` };
     const result = {
-      step: "derive", path, fingerprint: fp, pk, credentialId: keys.credentialId, ceremonyMs, opened,
+      step: "derive", path, attachment: attachment ?? null, fingerprint: fp, pk, credentialId: keys.credentialId, ceremonyMs, opened,
       openError: openError ? causeChain(openError) : null, noteSealedTo: env?.kid ?? null, sameCredential,
       prompts: cs.length, ceremonies: cs, verdict: verdict.level,
     };
@@ -379,12 +389,13 @@ const derive = async (envJson?: string) => {
         ...(env ? [["Note was sealed to", KID.test(env.kid) ? group(env.kid) : "(unknown)"] as [string, string]] : []),
         ["Lookup", path === "discoverable" ? "discoverable — no saved passkey on this device; the passkey was found by name" : "credential hint — this device created the passkey"],
         ["Passkey prompts", promptLine(cs)],
+        ["Passkey used from", attachmentLine(attachment)],
         ["Same passkey as the link", sameCredential === null ? "unknown" : sameCredential ? "yes" : "no"],
         ["Credential ID", keys.credentialId],
         ...(openError ? [["Open error", causeChain(openError)] as [string, string]] : []),
         ...commonLines(),
       ],
-      data: { step: "derive", verdict: verdict.level, path, fingerprint: fp, pk, noteSealedTo: env?.kid ?? null, opened, sameCredential, credentialId: keys.credentialId, prompts: cs.length, ceremonies: cs },
+      data: { step: "derive", verdict: verdict.level, path, attachment: attachment ?? null, fingerprint: fp, pk, noteSealedTo: env?.kid ?? null, opened, sameCredential, credentialId: keys.credentialId, prompts: cs.length, ceremonies: cs },
     }, opened);
     if (sealed) await renderHandoff(location.href, fp, handoff?.who ?? "your passkey", false);
     else $("handoff").hidden = true;
@@ -393,7 +404,7 @@ const derive = async (envJson?: string) => {
     return log(result);
   } catch (e) {
     const cs = ceremonies.slice(mark);
-    showError(e, { step: "2 · Use my passkey", ceremonies: cs });
+    showError(e, { step: "2 · Use my passkey", ceremonies: cs, hybrid: cs.some((c) => c.kind === "get" && c.attachment === "cross-platform") });
     log({ step: "derive", path, error: causeChain(e), ceremonies: cs });
     throw e;
   } finally {
