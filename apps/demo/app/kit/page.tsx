@@ -470,6 +470,9 @@ export default function Kit() {
               <Specimen name="NoteField" code detail="bytes counted live" plain wide>
                 <NoteField label="Note" defaultValue={note.text} rows={3} />
               </Specimen>
+              <Specimen name="NoteField" code detail="over its byte limit (64 here), announced once as it goes over" plain wide>
+                <NoteField label="Note" defaultValue={note.text} rows={3} maxBytes={64} />
+              </Specimen>
             </div>
           </Section>
         </div>

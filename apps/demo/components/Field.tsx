@@ -57,7 +57,10 @@ type NoteFieldProps = {
   className?: string;
 };
 
-/** The note, written on a ruled letter sheet, with its size counted live in UTF-8 bytes (what the envelope carries). */
+/**
+ * The note, written on a ruled letter sheet, with its size counted live in UTF-8 bytes (what the envelope carries).
+ * The count is read out with the field, not at every key; going over the limit is announced once.
+ */
 export function NoteField({ label, defaultValue = "", maxBytes, placeholder, rows = 4, className }: NoteFieldProps) {
   const id = useId();
   const [value, setValue] = useState(defaultValue);
@@ -78,10 +81,15 @@ export function NoteField({ label, defaultValue = "", maxBytes, placeholder, row
         aria-describedby={`${id}-count`}
         aria-invalid={over || undefined}
       />
-      <p id={`${id}-count`} className={styles.count} aria-live="polite">
+      <p id={`${id}-count`} className={styles.count}>
         {formatBytes(bytes)}
         {maxBytes !== undefined && <> of {formatBytes(maxBytes)}</>}
       </p>
+      {maxBytes !== undefined && (
+        <p className="visually-hidden" role="status">
+          {over ? `The note is over its limit of ${formatBytes(maxBytes)}.` : ""}
+        </p>
+      )}
     </div>
   );
 }
