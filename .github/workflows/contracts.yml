@@ -40,10 +40,16 @@ jobs:
         run: forge build --sizes
 
       # Unit, fuzz, invariant, deploy and gas tests, plus the Monad mainnet fork tests (they skip, with the RPC error,
-      # if rpc.monad.xyz is unreachable). --gas-snapshot-check compares every value in snapshots/Letterlock.json and
-      # fails on any change, instead of rewriting the file.
+      # if rpc.monad.xyz is unreachable). --gas-snapshot-check fails only when an entry that is both in
+      # snapshots/Letterlock.json and produced by this run has a different value. An entry the run does not produce
+      # is dropped from the file, and a new one is added, with exit 0: the next step catches those.
       - name: Test
         run: forge test -vvv --gas-snapshot-check true
+
+      # Fails on any added, removed or rewritten gas snapshot entry (a deleted or renamed benchmark, or a committed
+      # snapshot cut down by a filtered run).
+      - name: Gas snapshot unchanged
+        run: git diff --exit-code -- snapshots/
 
       - uses: actions/setup-node@v7
         with:
