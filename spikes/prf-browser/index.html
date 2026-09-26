@@ -2,22 +2,121 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Letterlock · PRF spike</title>
-  <style>
-    body { font: 17px/1.5 "Helvetica Neue", Arial, sans-serif; background: #F3EEE3; color: #1E1B16; max-width: 640px; margin: 32px auto; padding: 0 16px; }
-    button { font: inherit; padding: 12px 18px; margin: 4px 4px 4px 0; border: 1px solid #1E1B16; background: #F8F4EB; border-radius: 6px; min-height: 48px; }
-    pre { font: 13px/1.45 ui-monospace, Menlo, monospace; background: #F8F4EB; border: 1px solid #CFC4AF; padding: 12px; white-space: pre-wrap; word-break: break-all; }
-    h1 { font-family: "Bodoni 72", Didot, serif; font-weight: 700; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="noindex" />
+  <meta name="description" content="Letterlock spike: does one passkey give the same encryption key on your Mac and your iPad?" />
+  <title>Letterlock · passkey test</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <h1>Letterlock — day-1 PRF spike</h1>
-  <p>Step 1 on the first device, step 2 on a second device where the same passkey synced (iPad). The two fingerprints must match.</p>
-  <button id="create">1 · Create passkey → key</button>
-  <button id="derive">2 · Use my passkey → key</button>
-  <button id="p256">3 · P256 binding check</button>
-  <pre id="log">ready</pre>
+  <main>
+    <header class="masthead">
+      <p class="eyebrow">Letterlock · cross-device passkey test</p>
+      <h1>One passkey, two devices, <span class="nowrap">one key</span></h1>
+      <p class="lede">Your Mac makes a passkey and seals a short note to the key it gives. Your iPad, holding the same
+        passkey through iCloud Keychain, must show the <strong>same key</strong> and open that note.</p>
+    </header>
+
+    <section class="facts" aria-label="About this page">
+      <div class="fact">
+        <span class="fact-label">Passkey address (rpId)</span>
+        <strong id="rpid" class="mono">…</strong>
+        <span class="fact-note">This test page uses <code>location.hostname</code> as the rpId. Passkeys made here work only at this exact address — both devices must show the same one.</span>
+      </div>
+      <div class="fact">
+        <span class="fact-label">This device</span>
+        <strong id="device">…</strong>
+        <span class="fact-note">Passkey PRF support: <span id="prfcap">checking…</span></span>
+      </div>
+    </section>
+
+    <section id="incoming" class="banner" hidden aria-live="polite">
+      <p class="banner-title">A sealed note is in this link</p>
+      <p>It was sealed to key <strong id="incoming-kid" class="mono">…</strong><span id="incoming-who-wrap" hidden> — made by the passkey named <strong id="incoming-who">…</strong></span>.
+        Only that passkey can open it. Tap <strong>2 · Use my passkey</strong> below.</p>
+    </section>
+
+    <section id="error" class="alert" hidden role="alert">
+      <p id="error-title" class="alert-title">Something went wrong</p>
+      <p id="error-text"></p>
+      <p class="raw"><span class="fact-label">Details</span> <code id="error-raw"></code></p>
+      <div class="row">
+        <button id="copy-error" type="button" class="secondary">Copy details</button>
+        <span id="copy-error-status" class="muted" role="status"></span>
+      </div>
+      <textarea id="copy-error-fallback" class="copy-fallback" readonly hidden aria-label="Error details text"></textarea>
+    </section>
+
+    <ol class="steps">
+      <li id="step-create" class="step">
+        <p class="where">On your Mac</p>
+        <button id="create" type="button" class="action">1 · Create</button>
+        <p class="step-help">Touch ID asks to save a new passkey to iCloud Keychain. The page then seals a note to
+          your new key and shows a QR code for the iPad.</p>
+        <label class="note-field" for="note">Note to seal <span class="muted">(optional, up to 120 characters)</span></label>
+        <input id="note" type="text" maxlength="120" autocomplete="off" spellcheck="false" value="the dentist moved to Thursday 10:40" />
+      </li>
+      <li id="step-derive" class="step">
+        <p class="where">On your iPad</p>
+        <button id="derive" type="button" class="action">2 · Use my passkey</button>
+        <p class="step-help">First open this page from the Mac's QR code, so the sealed note comes with it. Then tap
+          and choose the passkey. Nothing from the Mac is stored on the iPad: the passkey is found by name.</p>
+      </li>
+    </ol>
+
+    <p id="saved" class="saved" hidden></p>
+
+    <section id="result" class="card result" hidden aria-live="polite">
+      <p id="result-title" class="card-kicker">Key fingerprint</p>
+      <p id="fp" class="fingerprint" aria-label="Key fingerprint"></p>
+      <p id="verdict" class="verdict" hidden></p>
+      <figure id="letter" class="letter" hidden>
+        <figcaption>The note, opened on this device</figcaption>
+        <blockquote id="opened"></blockquote>
+      </figure>
+      <dl id="facts" class="details"></dl>
+      <div class="row">
+        <button id="copy" type="button" class="secondary">Copy result</button>
+        <span id="copy-status" class="muted" role="status"></span>
+      </div>
+      <textarea id="copy-fallback" class="copy-fallback" readonly hidden aria-label="Result text"></textarea>
+    </section>
+
+    <section id="handoff" class="card handoff" hidden>
+      <h2>Now take the note to your iPad</h2>
+      <ol class="handoff-steps">
+        <li>Wait until the passkey reaches the iPad: open the <strong>Passwords</strong> app there and search
+          <strong id="handoff-host">…</strong> (iCloud Keychain usually syncs within a minute).</li>
+        <li>Point the iPad camera at this code and open the link in Safari.</li>
+        <li>Tap <strong>2 · Use my passkey</strong> and choose <strong id="handoff-who">…</strong>.</li>
+        <li>The iPad must show this same fingerprint: <strong id="handoff-fp" class="mono">…</strong></li>
+      </ol>
+      <div class="qr-frame"><canvas id="qr" role="img" aria-label="QR code of the link that carries the sealed note"></canvas></div>
+      <p class="muted small">The code holds only the sealed note, never the key. You can also send the link:</p>
+      <p class="link-line"><a id="link" href="#" class="mono small">…</a></p>
+      <div class="row">
+        <button id="copy-link" type="button" class="secondary">Copy link</button>
+        <button id="share-link" type="button" class="secondary" hidden>Share…</button>
+        <span id="link-status" class="muted" role="status"></span>
+      </div>
+    </section>
+
+    <details class="dev">
+      <summary>Developer checks and raw log</summary>
+      <p class="muted small">The P256 check creates a <em>second</em> passkey named “maya-bind”. Skip it during the Mac → iPad
+        test so the iPad does not offer two passkeys.</p>
+      <div class="row">
+        <button id="p256" type="button" class="secondary">3 · P256 binding check</button>
+        <button id="forget" type="button" class="secondary">Forget this device's saved passkey</button>
+        <button id="reset" type="button" class="secondary">Start a new test</button>
+      </div>
+      <p class="muted small">Spike only: the note's header (chain 10143, directory 0x…aa, recipient 0x…01) is a
+        placeholder — this page reads nothing from and writes nothing to Monad. Build <code id="build">…</code>.</p>
+      <pre id="log">ready</pre>
+    </details>
+  </main>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>
