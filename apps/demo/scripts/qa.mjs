@@ -54,6 +54,16 @@ if (selected && CHECKS.length !== selected.length) {
 const slug = (r) => (r === "/" ? "home" : r.slice(1));
 mkdirSync(join(out, "html"), { recursive: true });
 
+// A server already answering on the port (an earlier `next start`, possibly of an older build) would be checked in
+// place of this build, and a build replaced under a running server serves pages whose stylesheets no longer exist.
+try {
+  await fetch(base, { signal: AbortSignal.timeout(1500) });
+  console.error(`something already answers on ${base}: stop it, or pass --port to check this build on a free port`);
+  process.exit(2);
+} catch {
+  // nothing there: start this build's server below
+}
+
 const server = spawn(join(here, "node_modules/.bin/next"), ["start", "-p", String(port), "-H", "127.0.0.1"], {
   cwd: here,
   stdio: ["ignore", "pipe", "pipe"],
