@@ -45,7 +45,9 @@ old logic. Three guards, all part of the steps below:
 - Step 1 rebuilds every artifact (`forge build --force`) and runs `test_scriptArtifactDeploysTheCurrentSource`
   (`test/Deploy.t.sol`), which fails when the script artifact deploys other code than the current source.
 - Step 2 compares the dry run's transaction input with `forge inspect Letterlock bytecode` plus the constructor
-  argument before anything is sent, and step 3 compares the transaction that was sent.
+  argument before anything is sent. Step 3 repeats every check in the same command as the broadcast, because
+  `forge script --broadcast` recompiles from the working tree (see step 3), then compares the transaction that was
+  sent.
 
 ## 0. Deployer (once)
 
@@ -106,6 +108,7 @@ PASSWORD_FILE=~/.config/monad/letterlock-mainnet.password
 
 ```sh
 git diff --quiet HEAD -- src/Letterlock.sol foundry.toml && echo "source committed"   # Sourcify matches this text
+echo $(git rev-parse HEAD:./src/Letterlock.sol HEAD:./foundry.toml)   # PINNED for step 3: copy this line
 forge build --force   # rebuild every artifact: never deploy from the cache
 test "$(cast chain-id --rpc-url "$MONAD_MAINNET_RPC")" = 143 && echo "chain ok"
 test "$(cast wallet address --account letterlock-mainnet --password-file "$PASSWORD_FILE" | tr A-F a-f)" = \
@@ -134,9 +137,12 @@ Then check that the transaction is the source as compiled now, byte for byte, an
 
 ```sh
 ARGS=$(cast abi-encode 'constructor(address)' 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432)
-EXPECTED="$(forge inspect Letterlock bytecode)${ARGS#0x}"
+CODE=$(forge inspect Letterlock bytecode)
+EXPECTED="$CODE${ARGS#0x}"
 DRY=broadcast/Deploy.s.sol/143/dry-run/run-latest.json
-test "$(jq -r '.transactions[0].transaction.input' "$DRY")" = "$EXPECTED" && echo "dry run deploys the compiled source"
+test -n "$ARGS" && test -n "$CODE" && test "$CODE" != 0x &&
+  test "$(jq -r '.transactions[0].transaction.input' "$DRY")" = "$EXPECTED" &&
+  echo "dry run deploys the compiled source"
 jq -r '.transactions[0].transaction.gas' "$DRY" | cast to-dec   # the gas limit
 ```
 
@@ -145,25 +151,70 @@ script artifact of 2026-09-26, this check fails.)
 
 ## 3. Broadcast
 
+`forge script --broadcast` recompiles from the working tree, so step 2 alone does not cover what is sent: an edit
+to `src/Letterlock.sol` or `foundry.toml` after step 2, committed or not, would be compiled and deployed, and only
+the check after the send would notice. Other agents commit in this tree while a deploy runs. So the broadcast is
+one `&&` chain that relies on no earlier shell state and sends only when every check passes in that same command:
+the source is committed and is the text step 1 tested (`PINNED`), `forge build` compiles nothing, a fresh dry run
+sends exactly `EXPECTED`, which must not be empty, and the send follows at once. Paste the line step 1 printed
+between the quotes:
+
 ```sh
+PINNED="<the two ids step 1 printed>" &&
+test -f script/Deploy.s.sol && test -n "$PINNED" &&
+set -a && . ~/.config/monad/mainnet-deployer.env && set +a &&
+PASSWORD_FILE=~/.config/monad/letterlock-mainnet.password &&
+REGISTRY=0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 &&
+git diff --quiet HEAD -- src/Letterlock.sol foundry.toml &&
+test "$(echo $(git rev-parse HEAD:./src/Letterlock.sol HEAD:./foundry.toml))" = "$PINNED" &&
+forge build | grep -F "No files changed" &&
+ARGS=$(cast abi-encode 'constructor(address)' "$REGISTRY") &&
+CODE=$(forge inspect Letterlock bytecode) &&
+EXPECTED="$CODE${ARGS#0x}" &&
+test -n "$ARGS" && test -n "$CODE" && test "$CODE" != 0x &&
+forge script script/Deploy.s.sol:Deploy --rpc-url "$MONAD_MAINNET_RPC" --sender "$MONAD_MAINNET_ADDRESS" \
+  > /dev/null &&
+test "$(jq -r '.transactions[0].transaction.input' broadcast/Deploy.s.sol/143/dry-run/run-latest.json)" \
+  = "$EXPECTED" &&
+echo "checks passed; sending" &&
 forge script script/Deploy.s.sol:Deploy --rpc-url "$MONAD_MAINNET_RPC" \
-  --account letterlock-mainnet --password-file "$PASSWORD_FILE" --sender "$MONAD_MAINNET_ADDRESS" --broadcast
+  --account letterlock-mainnet --password-file "$PASSWORD_FILE" --sender "$MONAD_MAINNET_ADDRESS" --broadcast &&
+test -n "$EXPECTED" &&
+test "$(jq -r '.transactions[0].transaction.input' broadcast/Deploy.s.sol/143/run-latest.json)" = "$EXPECTED" &&
+echo "sent the compiled source"
 ```
+
+It sends only after `checks passed; sending`, and the deploy is good only if it ends with
+`sent the compiled source`. The one gap left is the few seconds between the fresh dry run and the broadcast's own
+compile; the last check covers it, after the fact. After (a), drop `--password-file "$PASSWORD_FILE"` as above.
 
 The address, tx hash and block are in `broadcast/Deploy.s.sol/143/run-latest.json` (safe to commit; the RPC
 URL and other sensitive values go to `cache/`, which is git-ignored).
 
 ```sh
 RUN=broadcast/Deploy.s.sol/143/run-latest.json
-test "$(jq -r '.transactions[0].transaction.input' "$RUN")" = "$EXPECTED" && echo "sent the compiled source"
 ADDR=$(jq -r '.transactions[0].contractAddress' "$RUN")
 TX=$(jq -r '.transactions[0].hash' "$RUN")
 cast receipt "$TX" --rpc-url "$MONAD_MAINNET_RPC" --json | jq '{status, blockNumber, gasUsed}'
 ```
 
+To repeat the sent-code check in another shell, recompute `ARGS`, `CODE` and `EXPECTED` as in step 2 and keep the
+guard, so that an empty `EXPECTED` cannot pass against a missing run file:
+
+```sh
+test -n "$ARGS" && test -n "$CODE" && test "$CODE" != 0x &&
+  test "$(jq -r '.transactions[0].transaction.input' "$RUN")" = "$EXPECTED" && echo "sent the compiled source"
+```
+
 The non-interactive path was run end to end on 2026-09-27 against a local `anvil` chain (31337, so the registry
 argument is `address(0)`) with a random test key imported through (b): the key-matches-address check, the broadcast
 with `--account` and `--password-file`, and `sent the compiled source` all passed, and the receipt had status 1.
+The step-3 chain above was then run as written, in a committed copy of `contracts/` against `anvil` (the only
+substitutions: environment and password files, registry `address(0)`, `31337` in the broadcast paths, and
+`--keystore` for `--account`). Clean, it sent (status 1) and printed `sent the compiled source`, under both bash
+and zsh. It sent nothing (the nonce did not move) after each of: changing `+ 1` to `+ 2` in `_checkNextEpoch`
+without committing; committing that change; and pinning the new commit without rebuilding. The earlier post-send
+check, run with `EXPECTED` unset and no run file, printed `sent the compiled source`; the guarded one prints nothing.
 
 ## 4. Verify the source (MonadVision, through Sourcify)
 
