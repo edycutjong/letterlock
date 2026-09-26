@@ -1,19 +1,22 @@
 // Visual and accessibility QA of the production build, written to qa/ (git-ignored):
-//   - a full-page and an above-the-fold screenshot of every route at 1280, 1024 (iPad landscape), 820 (iPad
-//     portrait) and 390 (phone) px;
+//   - a full-page and an above-the-fold screenshot of every route at 1280, 1024 (iPad landscape), 820 (iPad Air
+//     portrait), 768 (iPad and iPad mini portrait) and 390 (phone) px;
 //   - axe-core on every route at 1280 and 390 px (fails on any serious or critical violation);
 //   - no horizontal overflow at any width;
 //   - the colour law, measured in the browser: no element outside the wax (the seal, the wordmark's "lock") may
 //     paint text, background, border, outline, fill or stroke in a wax colour;
 //   - frames of the seal-and-open replay on /kit, and the reduced-motion path (the seal state changes at once);
-//   - each route's HTML with its CSS inlined, for linting.
+//   - each route's HTML with its CSS inlined, for linting;
+//   - the layout and behaviour checks in scripts/checks/ (one file per check; each names what it guards).
 //
-//   pnpm build && node scripts/qa.mjs [--port 3217] [--only /kit]
+//   pnpm build && node scripts/qa.mjs [--port 3217] [--only /kit] [--check header-fit,hover-feedback] [--fast]
+//   --check runs only the named checks (and loads only the pages they need); --fast skips screenshots and axe.
 import AxeBuilder from "@axe-core/playwright";
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
+import { installHelpers } from "./checks/_lib.mjs";
 
 const here = join(import.meta.dirname, "..");
 const out = join(here, "qa");
@@ -24,14 +27,30 @@ const arg = (name) => {
 const port = Number(arg("--port") ?? 3217);
 const only = arg("--only");
 const base = `http://127.0.0.1:${port}`;
+const selected = arg("--check")?.split(",").filter(Boolean);
+// the page-level QA (screenshots, axe, overflow, colour law, replay) runs unless only named checks were asked for
+const full = !selected;
+const captures = full && !process.argv.includes("--fast");
 
 const ROUTES = ["/", "/seal", "/open", "/register", "/judge", "/kit"].filter((r) => !only || r === only);
 const WIDTHS = [
   { w: 1280, h: 800 },
   { w: 1024, h: 768 },
   { w: 820, h: 1180 },
+  { w: 768, h: 1024 },
   { w: 390, h: 844 },
 ];
+
+const checksDir = join(import.meta.dirname, "checks");
+const CHECKS = [];
+for (const f of readdirSync(checksDir).filter((f) => f.endsWith(".mjs") && !f.startsWith("_")).sort()) {
+  const check = await import(join(checksDir, f));
+  if (!selected || selected.includes(check.name)) CHECKS.push(check);
+}
+if (selected && CHECKS.length !== selected.length) {
+  console.error(`unknown check in --check ${selected.join(",")}; known: ${readdirSync(checksDir).filter((f) => !f.startsWith("_")).map((f) => f.replace(/\.mjs$/, "")).join(", ")}`);
+  process.exit(2);
+}
 const slug = (r) => (r === "/" ? "home" : r.slice(1));
 mkdirSync(join(out, "html"), { recursive: true });
 
@@ -55,7 +74,7 @@ const waitForServer = async () => {
   throw new Error(`server did not start:\n${serverLog}`);
 };
 
-const report = { base, routes: {}, replay: [], reducedMotion: null, failures: [] };
+const report = { base, routes: {}, replay: [], reducedMotion: null, checks: {}, failures: [] };
 const fail = (msg) => {
   report.failures.push(msg);
   console.log(`FAIL ${msg}`);
@@ -103,7 +122,14 @@ try {
   await waitForServer();
   const browser = await chromium.launch();
 
-  for (const route of ROUTES) {
+  const pageChecks = CHECKS.filter((c) => c.page);
+  for (const c of CHECKS) report.checks[c.name] = { about: c.about, failures: 0 };
+  const checkFail = (c, msg) => {
+    report.checks[c.name].failures++;
+    fail(`${c.name}: ${msg}`);
+  };
+
+  for (const route of full || pageChecks.length ? ROUTES : []) {
     const r = (report.routes[route] = { screenshots: [], overflow: [], axe: {}, colourLaw: [], fonts: null });
     for (const { w, h } of WIDTHS) {
       const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
@@ -114,11 +140,20 @@ try {
       await page.goto(base + route, { waitUntil: "networkidle" });
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(250);
+      await installHelpers(page);
+
+      for (const c of pageChecks) await c.page(page, { route, width: w, height: h, fail: (m) => checkFail(c, `${route} @${w}: ${m}`) });
+      if (!full) {
+        await context.close();
+        continue;
+      }
 
       const name = `${slug(route)}-${w}`;
-      await page.screenshot({ path: join(out, `${name}.png`), fullPage: true });
-      await page.screenshot({ path: join(out, `${name}-fold.png`) });
-      r.screenshots.push(`qa/${name}.png`, `qa/${name}-fold.png`);
+      if (captures) {
+        await page.screenshot({ path: join(out, `${name}.png`), fullPage: true });
+        await page.screenshot({ path: join(out, `${name}-fold.png`) });
+        r.screenshots.push(`qa/${name}.png`, `qa/${name}-fold.png`);
+      }
 
       const overflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
       if (overflow.scroll > overflow.client) {
@@ -132,7 +167,7 @@ try {
 
       if (errors.length) fail(`${route} @${w}: console errors: ${errors.join(" | ")}`);
 
-      if (w === 1280 || w === 390) {
+      if (captures && (w === 1280 || w === 390)) {
         const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]).analyze();
         const byImpact = {};
         for (const v of axe.violations) byImpact[v.impact] = [...(byImpact[v.impact] ?? []), `${v.id} (${v.nodes.length})`];
@@ -142,16 +177,19 @@ try {
             fail(`${route} @${w}: axe ${v.impact} ${v.id}: ${v.help} — ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(", ")}`);
       }
 
-      if (w === 1280) {
+      if (captures && w === 1280) {
         r.fonts = await page.evaluate(() => [...document.fonts].filter((f) => f.status === "loaded").map((f) => `${f.family} ${f.style} ${f.weight}`));
         writeFileSync(join(out, "html", `${slug(route)}.html`), await inlineCss(await page.content()));
       }
       await context.close();
     }
-    console.log(`${route}: ${r.screenshots.length} screenshots · axe ${JSON.stringify(r.axe)} · overflow ${r.overflow.length} · colour law ${r.colourLaw.length}`);
+    if (full) console.log(`${route}: ${r.screenshots.length} screenshots · axe ${JSON.stringify(r.axe)} · overflow ${r.overflow.length} · colour law ${r.colourLaw.length}`);
   }
 
-  if (!only || only === "/kit") {
+  for (const c of CHECKS.filter((c) => c.run)) await c.run({ browser, base, routes: ROUTES, fail: (m) => checkFail(c, m) });
+  for (const c of CHECKS) console.log(`check ${c.name}: ${report.checks[c.name].failures === 0 ? "pass" : `${report.checks[c.name].failures} failure(s)`}`);
+
+  if (full && (!only || only === "/kit")) {
     // the seal-and-open replay, frame by frame, and the same controls with reduced motion
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await context.newPage();
