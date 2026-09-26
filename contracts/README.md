@@ -106,6 +106,7 @@ node script/mutate.mjs   # mutation check; exits 1 if a mutant not marked equiva
 node script/export-abi.mjs --check
 node --test script/keystore-from-env.test.mjs   # the keystore import for a deploy without a terminal
 node --test script/outside-repo.test.mjs   # smoke.mjs never writes its key file inside the repository
+node --test script/records.test.mjs   # this README's deploy gas numbers match deployments/*.json
 ```
 
 `foundry.toml` sets `dynamic_test_linking = false`: with Foundry 1.8's default, an edit inside a function body of
@@ -178,12 +179,20 @@ proxy and costs more.
 - The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails. Turning dynamic
   test linking off left every entry unchanged too.
 
-Mainnet receipts (commit `56e3d95`), each equal to its transaction's gas limit: deploy 1,201,505 (the limit the
-read-only simulation set) · `publish` 70,863 · `publishForAgent` 108,799 against the live registry (89,198 against the
-test double above) · `drop` (490-byte envelope) 45,780; registering the agent (the registry's `register(string)`)
-took 224,739. At the 102 gwei every one of them paid, the five cost 0.168471972 MON, exactly the deployer's balance
-change. Testnet receipts (same commit): deploy 1,187,921 (the zero-address constructor argument is cheaper calldata)
-· `publish` 70,863 · `drop` (492-byte envelope) 45,804.
+Mainnet receipts (commit `56e3d95`), each equal to its transaction's gas limit: deploy 1,201,505 · `publish` 70,863 ·
+`publishForAgent` 108,799 against the live registry (89,198 against the test double above) · `drop` (490-byte
+envelope) 45,780; registering the agent (the registry's `register(string)`) took 224,739. At the 102 gwei every one of
+them paid, the five cost 0.168471972 MON, exactly the deployer's balance change. Testnet receipts (same commit): deploy
+1,187,921 · `publish` 70,863 · `drop` (492-byte envelope) 45,804.
+
+Both deploy limits were set by `forge script`, whose default margin is 1.3 × `eth_estimateGas`, rounded down:
+1.3 × 924,235 = 1,201,505 on mainnet and 1.3 × 913,786 = 1,187,921 on testnet (both creation transactions estimated
+again on 2026-09-27, each on its own network and from its deployer). The registry argument adds 10,449 gas to the
+estimate: 10,100 is the constructor's `registry.code.length` check, a cold `EXTCODESIZE` that `address(0)` skips
+(Monad prices a cold account access at 10,100 gas, Ethereum at 2,600), and 240 is calldata (the address's 20
+non-zero bytes cost 16 gas each, a zero byte 4); the other 109 is not broken down here. Monad charges the gas limit,
+so the margin cost 277,270 gas of the mainnet deploy, 0.02828154 MON at 102 gwei (`--gas-estimate-multiplier` sets
+it). `records.test.mjs` checks these numbers against the records.
 
 Check that no number moved:
 

@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - "contracts/**"
+      - "deployments/**"
       - "packages/letterlock/src/abi.ts"
       - ".github/workflows/contracts.yml"
   pull_request:
     paths:
       - "contracts/**"
+      - "deployments/**"
       - "packages/letterlock/src/abi.ts"
       - ".github/workflows/contracts.yml"
   workflow_dispatch:
@@ -69,6 +71,10 @@ jobs:
       # does not install the SDK's dependencies).
       - name: Smoke key files stay out of the repository
         run: node --test script/outside-repo.test.mjs
+
+      # What contracts/README.md and the smoke script say about the deploys must match deployments/*.json.
+      - name: README matches the deployment records
+        run: node --test script/records.test.mjs
 
       # A raw key on a command line is visible in the process list: documented commands use a keystore (--account).
       - name: No private key on a documented command line
