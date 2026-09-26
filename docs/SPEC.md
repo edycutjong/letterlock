@@ -125,11 +125,12 @@ agent path only, which the testnet directory disables, so it never calls a regis
 - Registry-call rule: only the registry's `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`: the
   agent was never minted, or was burned) means "no owner". Any other failure of its `ownerOf`, running out of gas
   included, reverts `RegistryCallFailed(agentId)`, unless the read then runs out of gas in Letterlock itself, which
-  reverts with no data (after a starved registry call only 1/64 of the gas it was given is left). Zeros from
-  `keyOfAgent` therefore always mean that no key resolves, never that the read was starved of gas, and any revert
-  means "unknown", never "no key": a contract must not treat only `RegistryCallFailed` as unknown. `publishForAgent`
-  and a drop to an agent follow the same rule. A contract that reads `keyOfAgent` must forward enough gas to get an
-  answer: on a mainnet fork, read cold, every budget from 46,620 gas up returned the key and every smaller one
+  reverts with no data (after a starved registry call only 1/64 of the gas available at the call is left; the call
+  got the other 63/64). Zeros from `keyOfAgent` therefore always mean that no key resolves, never that the read was
+  starved of gas, and any revert means "unknown", never "no key": a contract must not treat only
+  `RegistryCallFailed` as unknown. `publishForAgent` and a drop to an agent follow the same rule. A contract that
+  reads `keyOfAgent` must forward enough gas to get an answer: on a mainnet fork, read cold at every budget from
+  5,000 to 80,000 gas in steps of 20, every budget from 46,620 gas up returned the key and every smaller one
   reverted, 767 with `RegistryCallFailed` and 1,314 with no data. An `eth_call` is never starved.
 - `agentKeyRecord(agentId)` returns the raw record `(pub, epoch, updatedAt, publisher)`, whether or not it still
   resolves. It is for indexers, and for a new owner reading the next epoch. Never seal to it.
