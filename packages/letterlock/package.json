@@ -1,0 +1,27 @@
+{
+  "name": "letterlock",
+  "version": "0.0.0",
+  "description": "A passkey becomes an encryption address on Monad: keyOf(address) lets any app seal data only you can open.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@category-labs/mera": "0.2.0",
+    "@hpke/chacha20poly1305": "^1.8.0",
+    "@hpke/core": "^1.9.0",
+    "@hpke/dhkem-x25519": "^1.8.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.2"
+  }
+}
