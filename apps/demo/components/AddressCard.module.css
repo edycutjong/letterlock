@@ -115,7 +115,10 @@
   color: var(--ink);
 }
 
+/* a block, so a wrapped line keeps its own 1.4 pitch rather than the 19 px value's line box (scripts/checks/
+   line-pitch.mjs) */
 .muted {
+  display: block;
   color: var(--muted);
   font-size: var(--fs-small);
   line-height: 1.4;

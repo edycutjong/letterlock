@@ -120,8 +120,11 @@
   gap: 6px 14px;
 }
 
+/* a block, so a wrapped line keeps its own pitch rather than the cell's line box */
 .muted {
+  display: block;
   font-size: var(--fs-small);
+  line-height: 1.4;
   color: var(--muted);
 }
 
