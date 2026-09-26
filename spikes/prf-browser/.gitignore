@@ -1,0 +1,4 @@
+dist/
+.vercel/
+spike-result.json
+page-check-result.json
