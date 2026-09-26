@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 /// @notice The one ERC-721 read Letterlock makes on the ERC-8004 IdentityRegistry (each agent is an ERC-721 token).
 interface IERC721 {
+    /// @notice The owner of `tokenId` (an ERC-8004 agent id); reverts when the token does not exist.
     function ownerOf(uint256 tokenId) external view returns (address owner);
 }
 
