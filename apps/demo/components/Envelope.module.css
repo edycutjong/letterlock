@@ -5,6 +5,10 @@
    seal keep their proportions from a 160 px inbox thumbnail to a 640 px letter on an iPad. */
 
 .envelope {
+  /* the flap is 55% of the pocket's height (240/380 of its width): folded back, it rises 34.8% of the envelope's
+     width above the pocket. A bare number, so it can be a length in the envelope's own units (cqi) inside the stage
+     and a percentage on the stage itself. */
+  --flap-rise: 34.8;
   margin: 0;
   width: 100%;
 }
@@ -43,6 +47,9 @@
   --pitch: calc(var(--note) * 1.62);
   --pad-top: calc(var(--pitch) * 0.95);
   width: 84%;
+  /* a sheet is never shorter than the folded-back flap standing behind it, so the flap stays inside the figure over
+     a one-line note too (scripts/checks/envelope-flap.mjs): the flap's rise plus the part tucked into the pocket */
+  min-height: calc(var(--flap-rise) * 1cqi + var(--overlap));
   margin-bottom: calc(-1 * var(--overlap));
   padding: var(--pad-top) 6.5cqi calc(var(--overlap) + var(--pitch) * 0.6);
   background-color: var(--bg-elevated);
@@ -286,7 +293,7 @@
 /* an open flap with no letter in front of it stands above the envelope: keep it inside the figure. (A percentage,
    not cqi: container units on the container itself would resolve against the page, not the envelope.) */
 .envelope[data-flap="open"]:not([data-letter]) .stage {
-  padding-top: 34.8%;
+  padding-top: calc(var(--flap-rise) * 1%);
 }
 
 @media (prefers-reduced-motion: reduce) {
