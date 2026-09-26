@@ -5,6 +5,8 @@
 // CDP cannot give a second virtual authenticator the passkey's hmac-secret (see run-spike.mjs), so the real
 // cross-device leg stays the human Safari → iPad run. What this proves is everything around it: the link and its
 // QR code, a discoverable lookup with fresh storage, the verdicts, the error states, "Copy result", the layout.
+// The page's own prompt count is checked against an independent oracle: Chromium's authenticator log (the CDP
+// events WebAuthn.credentialAdded / credentialAsserted), not against the page's own list of ceremonies.
 import { build, preview } from "vite";
 import { chromium } from "playwright";
 import jsQR from "jsqr";
@@ -32,6 +34,7 @@ const origin = new URL(PAGE).origin;
 const host = new URL(PAGE).hostname;
 const browser = await chromium.launch();
 const errors = [];
+const IPAD_SAFARI = "Mozilla/5.0 (iPad; CPU OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1";
 
 // Chromium's virtual authenticator always returns PRF at creation. To reach mera's fallback path, `simulate`
 // emulates (test-only) an authenticator that enables PRF at creation without evaluating it, and can block the
@@ -41,6 +44,15 @@ const simulateAuthenticator = () => {
   const proto = CredentialsContainer.prototype;
   const create = proto.create;
   const get = proto.get;
+  const flipFirstPrfBit = (cred) => {
+    const results = cred.getClientExtensionResults.bind(cred);
+    cred.getClientExtensionResults = () => {
+      const r = results();
+      const first = r.prf?.results?.first;
+      if (first) { const b = new Uint8Array(first).slice(); b[0] ^= 1; r.prf.results.first = b.buffer; }
+      return r;
+    };
+  };
   proto.create = async function (o) {
     if (window.__simCancelNextCreate) { window.__simCancelNextCreate = false; throw new DOMException("simulated: user cancelled", "NotAllowedError"); }
     const cred = await create.call(this, o);
@@ -48,41 +60,44 @@ const simulateAuthenticator = () => {
       const results = cred.getClientExtensionResults.bind(cred);
       cred.getClientExtensionResults = () => { const r = results(); if (r.prf) r.prf = { enabled: true }; return r; };
     }
+    // an authenticator whose PRF output at creation differs from its output at sign-in, for the same salt
+    if (window.__simCreatePrfDiffers && cred) { window.__simCreatePrfDiffers = false; flipFirstPrfBit(cred); }
     return cred;
   };
   proto.get = function (o) {
     if (window.__simBlockNextGet) { window.__simBlockNextGet = false; return Promise.reject(new DOMException("simulated: second prompt blocked", "NotAllowedError")); }
     const pending = get.call(this, o);
-    if (!window.__simHybridNextGet) return pending;
+    const hybrid = window.__simHybridNextGet ? "other-prf" : window.__simHybridSamePrfNextGet ? "same-prf" : null;
+    if (!hybrid) return pending;
     window.__simHybridNextGet = false;
-    // hybrid (another device over QR/Bluetooth) whose PRF output differs from on-device, as Safari 18.x has done
+    window.__simHybridSamePrfNextGet = false;
+    // hybrid (another device over QR/Bluetooth); its PRF output may differ from on-device, as Safari 18.x has done
     return pending.then((cred) => {
       Object.defineProperty(cred, "authenticatorAttachment", { value: "cross-platform" });
-      const results = cred.getClientExtensionResults.bind(cred);
-      cred.getClientExtensionResults = () => {
-        const r = results();
-        const first = r.prf?.results?.first;
-        if (first) { const b = new Uint8Array(first).slice(); b[0] ^= 1; r.prf.results.first = b.buffer; }
-        return r;
-      };
+      if (hybrid === "other-prf") flipFirstPrfBit(cred);
       return cred;
     });
   };
 };
 
-const device = async ({ hasPrf = true, viewport = { width: 1280, height: 900 }, label, simulate = false }) => {
-  const ctx = await browser.newContext({ viewport });
+const device = async ({ hasPrf = true, viewport = { width: 1280, height: 900 }, label, simulate = false, userAgent, clock }) => {
+  const ctx = await browser.newContext({ viewport, ...(userAgent ? { userAgent, hasTouch: true } : {}) });
   await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
   if (simulate) await ctx.addInitScript(simulateAuthenticator);
   const page = await ctx.newPage();
+  if (clock) await page.clock.setFixedTime(clock);
   const cdp = await ctx.newCDPSession(page);
+  // the oracle: Chromium's own record of every ceremony its virtual authenticator answered
+  const authLog = [];
+  cdp.on("WebAuthn.credentialAdded", () => authLog.push("create"));
+  cdp.on("WebAuthn.credentialAsserted", () => authLog.push("get"));
   await cdp.send("WebAuthn.enable");
   const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", { options: {
     protocol: "ctap2", ctap2Version: "ctap2_1", transport: "internal", hasResidentKey: true,
     hasUserVerification: true, isUserVerified: true, hasPrf, automaticPresenceSimulation: true } });
   page.on("pageerror", (e) => errors.push(`${label} pageerror: ${e}`));
   page.on("console", (m) => { if (m.type() === "error") errors.push(`${label} console: ${m.text()}`); });
-  return { ctx, page, cdp, authenticatorId };
+  return { ctx, page, cdp, authenticatorId, authLog };
 };
 const load = async (page, url) => {
   const res = await page.goto(url);
@@ -90,7 +105,10 @@ const load = async (page, url) => {
   return res;
 };
 const fpOf = (page) => page.evaluate(() => [...document.querySelectorAll("#fp span")].map((s) => s.textContent).join(""));
-const text = (page, sel) => page.locator(sel).innerText();
+// missing elements read as "" (a FAIL line), not a 30 s timeout: an old or broken build still gets a full report
+const text = (page, sel) => page.locator(sel).innerText({ timeout: 3000 }).catch(() => "");
+const raw = (page, sel) => page.locator(sel).textContent({ timeout: 3000 }).then((t) => t ?? "", () => ""); // DOM text, before CSS text-transform
+const attr = (page, sel, name) => page.locator(sel).getAttribute(name, { timeout: 3000 }).catch(() => null);
 const fact = (page, label) => page.evaluate((l) => {
   const dt = [...document.querySelectorAll("#facts dt")].find((d) => d.textContent === l);
   return dt?.nextElementSibling?.textContent ?? null;
@@ -107,21 +125,52 @@ const tap = async (page, id) => {
   await page.click(id);
   await page.waitForFunction((b) => !document.querySelector(b).disabled, id); // busy state ends
 };
+/** Decodes the hand-off QR code from the canvas pixels. */
+const qrOf = async (page) => {
+  const px = await page.evaluate(() => {
+    const c = document.getElementById("qr");
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let s = "";
+    for (let i = 0; i < d.length; i += 0x8000) s += String.fromCharCode.apply(null, d.subarray(i, i + 0x8000));
+    return { w: c.width, h: c.height, b64: btoa(s), cssW: c.getBoundingClientRect().width };
+  });
+  const qr = jsQR(new Uint8ClampedArray(Buffer.from(px.b64, "base64")), px.w, px.h);
+  return { data: qr?.data ?? null, version: qr?.version, drawnPx: px.w, shownCssPx: Math.round(px.cssW) };
+};
+/** Waits (bounded, so a missing panel is a FAIL, not a timeout) until the hand-off panel shows a drawn QR code. */
+const handoffShown = (page) => page.waitForFunction(
+  () => !document.getElementById("handoff").hidden && document.getElementById("qr").width > 300, null, { timeout: 5000 },
+).then(() => true, () => false);
+/** Waits until the authenticator log has at least n entries (CDP events arrive asynchronously), then returns it. */
+const authLogAt = async (dev, n) => {
+  for (let i = 0; i < 40 && dev.authLog.length < n; i++) await new Promise((r) => setTimeout(r, 50));
+  return dev.authLog.slice();
+};
+/** The page's successful ceremonies, as kinds, against the authenticator's log since `mark`. */
+const oracle = async (dev, mark, pageCeremonies) => {
+  const pageKinds = pageCeremonies.filter((c) => c.ok).map((c) => c.kind);
+  const log = (await authLogAt(dev, mark + pageKinds.length)).slice(mark);
+  return { ok: JSON.stringify(pageKinds) === JSON.stringify(log), page: pageKinds, authenticator: log };
+};
 
 try {
   // ---------- device A ("Mac"): a fresh page ----------
   const mac = await device({ label: "A" });
   const res = await load(mac.page, PAGE);
   check("page loads over " + new URL(PAGE).protocol.replace(":", "") + " and its JS runs", res.ok() && (await mac.page.evaluate(() => typeof window.spike.create)) === "function",
-    { status: res.status(), build: await mac.page.locator("#build").textContent() });
+    { status: res.status(), build: await raw(mac.page, "#build") });
   if (PAGE.startsWith("https:")) check("deployed page sends a Content-Security-Policy", !!res.headers()["content-security-policy"], res.headers()["content-security-policy"]);
   check("page states the rpId = location.hostname", (await text(mac.page, "#rpid")) === host, host);
+  const rpidNote = await text(mac.page, "#rpid-note");
+  check("page says on screen that a hostname rpId is acceptable only for this test (production pins one rpId)",
+    rpidNote.includes("acceptable only for this test") && rpidNote.includes("production app pins one fixed rpId"), rpidNote.slice(0, 90));
   check("page shows browser/OS and the PRF support line", !(await text(mac.page, "#device")).includes("…") && (await text(mac.page, "#prfcap")) !== "", `${await text(mac.page, "#device")} · PRF ${await text(mac.page, "#prfcap")}`);
   check("no note in the link → step 1 is the highlighted step", await mac.page.locator("#step-create.is-next").count() === 1);
 
   // ---------- 1 · Create ----------
   const note = "iPad test note " + Date.now().toString(36);
   await mac.page.fill("#note", note);
+  const markA = mac.authLog.length;
   await tap(mac.page, "#create");
   const fpA = await fpOf(mac.page);
   const link = await mac.page.locator("#link").getAttribute("href");
@@ -135,29 +184,41 @@ try {
     { chars: link.length, who: frag.get("who") });
   const fpPx = await mac.page.evaluate(() => parseFloat(getComputedStyle(document.getElementById("fp")).fontSize));
   check("fingerprint is LARGE (≥ 32 px)", fpPx >= 32, fpPx + "px");
-  const prompts = await fact(mac.page, "Passkey prompts");
-  check("ceremonies counted: prompts = ceremonies observed, PRF arrival named (create | fallback)",
-    cA.json.prompts === cA.json.ceremonies.length && cA.json.prompts >= 1 && ["create", "fallback"].includes(cA.json.prfAt), prompts);
+  const oA = await oracle(mac, markA, cA.json.ceremonies);
+  check("prompt count = Chromium's authenticator log (CDP credentialAdded/credentialAsserted), PRF arrival named (create | fallback)",
+    oA.ok && cA.json.prompts === oA.authenticator.length && cA.json.prompts >= 1 && ["create", "fallback"].includes(cA.json.prfAt),
+    { page: cA.json.prompts, ...oA, line: await fact(mac.page, "Passkey prompts") });
   check("Copy result: fingerprint, verdict, rpId and navigator.userAgent are in the copied text",
     cA.text.includes(group(fpA)) && cA.text.includes("Result: INFO") && cA.text.includes(host) && cA.text.includes(await mac.page.evaluate(() => navigator.userAgent)), cA.text.split("\n")[0]);
 
   // ---------- the QR code must decode to exactly the link ----------
-  const px = await mac.page.evaluate(() => {
-    const c = document.getElementById("qr");
-    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
-    let s = "";
-    for (let i = 0; i < d.length; i += 0x8000) s += String.fromCharCode.apply(null, d.subarray(i, i + 0x8000));
-    return { w: c.width, h: c.height, b64: btoa(s), cssW: c.getBoundingClientRect().width };
-  });
-  const qr = jsQR(new Uint8ClampedArray(Buffer.from(px.b64, "base64")), px.w, px.h);
-  check("QR code decodes (jsQR) to exactly the hand-off link", qr?.data === link, { version: qr?.version, drawnPx: px.w, shownCssPx: Math.round(px.cssW) });
+  const qr = await qrOf(mac.page);
+  check("QR code decodes (jsQR) to exactly the hand-off link", qr.data === link, { version: qr.version, drawnPx: qr.drawnPx, shownCssPx: qr.shownCssPx });
 
-  // ---------- 2 · Use my passkey on the same device: credential hint ----------
+  // ---------- 2 · Use my passkey on the same device: credential hint = the self-check ----------
+  const markA2 = mac.authLog.length;
   await tap(mac.page, "#derive");
   const cA2 = await copied(mac.page);
   check("A, same device: credential-hint lookup, same fingerprint, the note opens (PASS verdict)",
     cA2.json.path === "credential-hint" && cA2.json.ceremonies[0]?.lookup === "credential-hint" && (await fpOf(mac.page)) === fpA
       && (await text(mac.page, "#opened")) === note && cA2.json.verdict === "pass", cA2.json.ceremonies.map((c) => `${c.kind}:${c.lookup}:${c.prf}`));
+  const oA2 = await oracle(mac, markA2, cA2.json.ceremonies);
+  const qrA2 = await qrOf(mac.page);
+  check("A, self-check: the verdict says so, 1 prompt = 1 authenticator assertion, and the hand-off QR code stays on screen",
+    (await text(mac.page, "#verdict")).startsWith("Self-check passed") && oA2.ok && cA2.json.prompts === 1
+      && (await mac.page.locator("#handoff").isVisible()) && qrA2.data === link, { ...oA2, handoff: await mac.page.locator("#handoff").isVisible() });
+
+  // ---------- A, reloaded with its own link: the QR comes back without another passkey ----------
+  const markReload = mac.authLog.length;
+  await mac.page.reload();
+  await mac.page.waitForFunction(() => "spike" in window);
+  const shownAfterReload = await handoffShown(mac.page);
+  const qrReload = await qrOf(mac.page);
+  const { credentials: credsA } = await mac.cdp.send("WebAuthn.getCredentials", { authenticatorId: mac.authenticatorId });
+  check("A, reloaded with its own link: the hand-off panel and a QR code of the same link are back, with no prompt and no new passkey",
+    shownAfterReload && qrReload.data === link && (await text(mac.page, "#handoff-fp")) === group(fpA)
+      && (await authLogAt(mac, markReload)).length === markReload && credsA.length === 1,
+    { handoff: await mac.page.locator("#handoff").isVisible(), banner: await mac.page.locator("#incoming").isVisible(), passkeys: credsA.length });
 
   // ---------- A': storage wiped, page opened from the link (what the iPad does) ----------
   await mac.page.evaluate(() => localStorage.clear());
@@ -172,11 +233,38 @@ try {
     cA3.json.path === "discoverable" && cA3.json.ceremonies[0]?.lookup === "discoverable" && cA3.json.attachment === "platform" && (await fpOf(mac.page)) === fpA
       && cA3.json.sameCredential === true && (await text(mac.page, "#opened")) === note && (await mac.page.locator("#verdict.pass").count()) === 1,
     await text(mac.page, "#verdict"));
+  const lookup = await fact(mac.page, "Lookup");
+  const usedFrom = await fact(mac.page, "Passkey used from");
+  check("A', discoverable: the Lookup line says no hint is saved in this browser, without contradicting 'Passkey used from: this device'",
+    lookup?.includes("no passkey hint saved in this browser") && !lookup.includes("on this device") && usedFrom?.startsWith("this device")
+      && !(await mac.page.locator("#handoff").isVisible()), { lookup, usedFrom });
 
-  // ---------- layout: iPad portrait/landscape and phone, with the result + hand-off on screen ----------
+  // ---------- note field: the limit is in bytes, shown live, enforced before any prompt ----------
+  const dash = await device({ label: "D", hasPrf: false });
+  await load(dash.page, PAGE);
+  const cjk = "字".repeat(70);
+  await dash.page.fill("#note", cjk);
+  const over = { label: await text(dash.page, "label[for=note]"), maxlength: await attr(dash.page, "#note", "maxlength"), count: await text(dash.page, "#note-bytes"),
+    flagged: await dash.page.locator("#note-bytes.over").count(), invalid: await attr(dash.page, "#note", "aria-invalid") };
+  const markD = dash.authLog.length;
+  await dash.page.click("#create");
+  await dash.page.locator("#error").waitFor({ state: "visible" });
+  const tooLong = { title: await text(dash.page, "#error-title"), help: await text(dash.page, "#error-text") };
+  await dash.page.fill("#note", "a".repeat(200));
+  const at200 = { value: (await dash.page.inputValue("#note")).length, count: await text(dash.page, "#note-bytes"), flagged: await dash.page.locator("#note-bytes.over").count() };
+  check("note field: limit stated in bytes (200) with a live count; 70 CJK characters = 210 bytes are flagged before tapping and refused with no prompt; 200 Latin letters fit",
+    over.label.includes("up to 200 bytes") && over.maxlength === "200" && over.count.startsWith("210 / 200 bytes: too long") && over.flagged === 1 && over.invalid === "true"
+      && tooLong.title.includes("NOTE_TOO_LONG") && tooLong.help.includes("200 bytes or fewer") && (await authLogAt(dash, markD)).length === markD
+      && at200.value === 200 && at200.count === "200 / 200 bytes" && at200.flagged === 0, { over, tooLong: tooLong.title, at200 });
+
+  // ---------- layout: iPad portrait/landscape and phone, with the densest note (200 bytes) on screen ----------
   await mac.page.goto("about:blank");
   await load(mac.page, PAGE);
+  await mac.page.fill("#note", "Q".repeat(200));
   await tap(mac.page, "#create");
+  const dense = { link: await mac.page.locator("#link").getAttribute("href"), qr: await qrOf(mac.page) };
+  check("a 200-byte note (the maximum) still seals, and its denser QR code decodes to exactly the link",
+    dense.qr.data === dense.link, { linkChars: dense.link.length, version: dense.qr.version });
   for (const [name, vp] of [["ipad-portrait", { width: 820, height: 1180 }], ["ipad-landscape", { width: 1180, height: 820 }], ["phone", { width: 390, height: 844 }]]) {
     await mac.page.setViewportSize(vp);
     const m = await mac.page.evaluate(() => ({
@@ -190,6 +278,17 @@ try {
       m.overflow <= 0 && m.create >= 56 && m.derive >= 56 && m.fp >= 32 && m.qr >= 240, m);
     if (shots) await mac.page.screenshot({ path: join(shots, `page-${name}.png`), fullPage: true });
   }
+
+  // ---------- two passkeys made in the same second must not share a name ----------
+  const twice = await device({ label: "N", clock: new Date("2026-09-26T13:48:05Z") });
+  await load(twice.page, PAGE);
+  await tap(twice.page, "#create");
+  await tap(twice.page, "#create");
+  const { credentials: made2 } = await twice.cdp.send("WebAuthn.getCredentials", { authenticatorId: twice.authenticatorId });
+  const names = made2.map((c) => c.userName);
+  const whoN = new URLSearchParams(new URL(await twice.page.locator("#link").getAttribute("href")).hash.slice(1)).get("who");
+  check("two 1 · Create taps at the same instant → two passkeys with different names; the link names the newer one",
+    names.length === 2 && new Set(names).size === 2 && names.every((n) => /^maya \d\d:\d\d · [a-z2-9]{3}$/.test(n)) && names.includes(whoN), { names, who: whoN });
 
   // ---------- wrong passkey: another device's passkey opens the link → "choose the other passkey" ----------
   const other = await device({ label: "C" });
@@ -219,12 +318,26 @@ try {
   if (shots) await ipad.page.screenshot({ path: join(shots, "page-error.png"), fullPage: true });
 
   // ---------- authenticator without PRF: 1 · Create fails in words ----------
-  const dash = await device({ label: "D", hasPrf: false });
   await load(dash.page, PAGE);
   await dash.page.click("#create");
   await dash.page.locator("#error").waitFor({ state: "visible" });
   check("no-PRF authenticator: 1 · Create explains PRF_UNSUPPORTED and names the passkey left behind",
     (await text(dash.page, "#error-text")).includes("was still saved"), await text(dash.page, "#error-title"));
+
+  // ---------- an iPad (Safari user agent) without a link: the reverse run is allowed and hands off to the Mac ----------
+  const tablet = await device({ label: "I", viewport: { width: 820, height: 1180 }, userAgent: IPAD_SAFARI });
+  await load(tablet.page, PAGE);
+  const tabletIdle = { device: await text(tablet.page, "#device"), saved: await text(tablet.page, "#saved"), where: await raw(tablet.page, "#where-create") };
+  await tap(tablet.page, "#create");
+  const tabletLink = await tablet.page.locator("#link").getAttribute("href");
+  const toMac = { h2: await text(tablet.page, "#handoff h2"), scan: await tablet.page.locator("#handoff-scan").isVisible(), send: await tablet.page.locator("#handoff-send").isVisible(),
+    targets: await tablet.page.evaluate(() => [...document.querySelectorAll("#handoff .handoff-target")].map((e) => e.textContent)) };
+  await load(other.page, tabletLink);                       // the Mac opens the iPad's link (reverse run)
+  const macWhere = await raw(other.page, "#where-derive");
+  check("iPad, no link: the optional reverse run is offered (no 'Don't create a passkey here'); its hand-off targets the Mac (send the link, no camera); the Mac labels step 2 'On your Mac'",
+    tabletIdle.device.endsWith("on iPad") && tabletIdle.saved.includes("optional reverse run") && !tabletIdle.saved.includes("Don't create") && tabletIdle.where.includes("reverse run")
+      && toMac.h2 === "Now take the note to your Mac" && !toMac.scan && toMac.send && toMac.targets.every((t) => t === "Mac") && macWhere === "On your Mac",
+    { ...tabletIdle, ...toMac, macWhere });
 
   // ---------- simulated: PRF enabled at creation but not evaluated → mera's fallback assertion (2 prompts) ----------
   const late = await device({ label: "E", simulate: true });
@@ -234,11 +347,13 @@ try {
   const cE = await copied(late.page);
   const fpE = await fpOf(late.page);
   const promptsE = await fact(late.page, "Passkey prompts");
+  const oE = await oracle(late, 0, cE.json.ceremonies);
   await tap(late.page, "#derive");
   const cE2 = await copied(late.page);
-  check("simulated late PRF: 2 prompts (create, then a credential-hint assertion), reported as 'fallback'; the key re-derives",
-    cE.json.prompts === 2 && cE.json.prfAt === "fallback" && cE.json.ceremonies.map((c) => `${c.kind}:${c.lookup ?? "-"}:${c.prf}`).join() === "create:-:enabled-only,get:credential-hint:output"
-      && (await fpOf(late.page)) === fpE && cE2.json.verdict === "pass", promptsE);
+  check("simulated late PRF: 2 prompts (create, then a credential-hint assertion) = 2 authenticator events, reported as 'fallback'; the key re-derives",
+    cE.json.prompts === 2 && oE.ok && oE.authenticator.join() === "create,get" && cE.json.prfAt === "fallback"
+      && cE.json.ceremonies.map((c) => `${c.kind}:${c.lookup ?? "-"}:${c.prf}`).join() === "create:-:enabled-only,get:credential-hint:output"
+      && (await fpOf(late.page)) === fpE && cE2.json.verdict === "pass", { line: promptsE, authenticator: oE.authenticator });
 
   // ---------- simulated: the passkey is used over hybrid and returns another PRF value ----------
   const linkE = await late.page.locator("#link").getAttribute("href");
@@ -251,6 +366,16 @@ try {
   check("simulated hybrid use with a different PRF value → diagnosed as 'used from ANOTHER device', not as a same-passkey FAIL",
     cH.json.verdict === "retry" && cH.json.attachment === "cross-platform" && (await text(late.page, "#verdict")).includes("ANOTHER device")
       && (await fact(late.page, "Passkey used from"))?.startsWith("ANOTHER device"), await text(late.page, "#verdict"));
+
+  // ---------- simulated: hybrid use that DOES open the note → still not a PASS (the synced copy was not tested) ----------
+  await late.page.goto("about:blank");
+  await load(late.page, linkE);
+  await late.page.evaluate(() => { window.__simHybridSamePrfNextGet = true; });
+  await tap(late.page, "#derive");
+  const cH2 = await copied(late.page);
+  check("simulated hybrid use with the SAME PRF value → the note opens but the verdict is RETRY ('does not test the sync'), never PASS",
+    cH2.json.verdict === "retry" && cH2.json.opened !== null && cH2.text.split("\n")[1].startsWith("Result: RETRY — The note opened, but through ANOTHER device")
+      && (await text(late.page, "#verdict")).includes("does not test the sync") && (await late.page.locator("#verdict.pass").count()) === 0, cH2.text.split("\n")[1]);
 
   // ---------- simulated: ...and the second prompt is blocked → the passkey is kept, one more tap finishes ----------
   const blocked = await device({ label: "F", simulate: true });
@@ -272,6 +397,19 @@ try {
     stuck.title.includes("one more tap") && stuck.next === 1 && cF.json.path === "credential-hint" && /^[0-9a-f]{16}$/.test(fpF)
       && cF2.json.path === "discoverable" && cF2.json.verdict === "pass" && (await fpOf(blocked.page)) === fpF, stuck.title);
 
+  // ---------- simulated: creation and sign-in give different PRF outputs on the creating device ----------
+  const drift = await device({ label: "H", simulate: true });
+  await load(drift.page, PAGE);
+  await drift.page.evaluate(() => { window.__simCreatePrfDiffers = true; });
+  await tap(drift.page, "#create");
+  const linkH = await drift.page.locator("#link").getAttribute("href");
+  await tap(drift.page, "#derive");
+  const cD = await copied(drift.page);
+  const driftVerdict = await text(drift.page, "#verdict");
+  check("simulated creation-vs-sign-in PRF mismatch on the creating device → FAIL 'not a sync problem' (not 'across devices'), and its QR code stays",
+    cD.json.verdict === "fail" && cD.json.path === "credential-hint" && driftVerdict.includes("on the device that made it") && driftVerdict.includes("not a sync problem")
+      && !driftVerdict.includes("across devices") && (await drift.page.locator("#handoff").isVisible()) && (await qrOf(drift.page)).data === linkH, driftVerdict);
+
   // ---------- the Mac tester cancels Touch ID during 1 · Create → a Mac-side message ----------
   const cancel = await device({ label: "G", simulate: true });
   await load(cancel.page, PAGE);
@@ -291,7 +429,7 @@ try {
   check("a garbage or truncated #env link → 'damaged link' message, no banner, no prompt", damaged1 && damaged2);
 
   check("no uncaught page errors or console errors (incl. CSP violations)", errors.length === 0, errors);
-  writeFileSync(join(here, "page-check-result.json"), JSON.stringify({ page: PAGE, chromium: browser.version(), when: new Date().toISOString(), checks, fingerprint: fpA, linkChars: link.length, qrVersion: qr?.version }, null, 1));
+  writeFileSync(join(here, "page-check-result.json"), JSON.stringify({ page: PAGE, chromium: browser.version(), when: new Date().toISOString(), checks, fingerprint: fpA, linkChars: link.length, qrVersion: qr.version, denseNote: { linkChars: dense.link.length, qrVersion: dense.qr.version } }, null, 1));
 } finally {
   await browser.close();
   if (server) await (typeof server.close === "function" ? server.close() : new Promise((r) => server.httpServer.close(r)));
