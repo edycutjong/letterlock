@@ -31,9 +31,11 @@ export default function SealANote() {
 
           <RegisterTable
             className={styles.found}
-            caption="The line keyOf found for this address"
+            caption="The line a keyOf lookup of this address returns"
             layout="compact"
-            rows={[{ id: "found", addressee: maya.address, epoch: key.epoch, fingerprint: key.fingerprint, posted: { kind: "example" }, state: "found" }]}
+            rows={[
+              { id: "found", addressee: maya.address, epoch: key.epoch, fingerprint: key.fingerprint, posted: { kind: "example" }, state: "found", example: true },
+            ]}
           />
 
           <NoteField label="Note" defaultValue={note.text} rows={4} />
@@ -77,7 +79,7 @@ export default function SealANote() {
           </div>
           <details className={styles.json}>
             <summary>
-              <span>Envelope as sent</span>
+              <span>Envelope as it would be sent</span>
               <span className={styles.jsonMeta}>JSON · {formatBytes(note.bytes)}</span>
             </summary>
             <pre className="data">{JSON.stringify(note.envelope, null, 2)}</pre>
