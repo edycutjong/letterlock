@@ -236,8 +236,8 @@ contract Letterlock {
         if (pub == bytes32(0)) revert ZeroKey();
         bytes32 m = pub & ~bytes32(U_BIT_255);
         if (
-            m == SMALL_ORDER_0 || m == SMALL_ORDER_1 || m == SMALL_ORDER_2 || m == SMALL_ORDER_3
-                || m == SMALL_ORDER_4 || m == SMALL_ORDER_5 || m == SMALL_ORDER_6
+            m == SMALL_ORDER_0 || m == SMALL_ORDER_1 || m == SMALL_ORDER_2 || m == SMALL_ORDER_3 || m == SMALL_ORDER_4
+                || m == SMALL_ORDER_5 || m == SMALL_ORDER_6
         ) revert LowOrderKey(pub);
         uint256 w = uint256(pub);
         if (w & U_BIT_255 != 0 || (w & KEY_BYTES_1_TO_31 == P_BYTES_1_TO_31 && uint8(pub[0]) >= 0xed)) {

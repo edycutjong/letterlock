@@ -570,9 +570,7 @@ contract LetterlockTest is Test {
         }
     }
 
-    function testFuzz_publishForAgent_epochMustStrictlyIncrease(uint256 agentId, uint32 first, uint32 second)
-        public
-    {
+    function testFuzz_publishForAgent_epochMustStrictlyIncrease(uint256 agentId, uint32 first, uint32 second) public {
         vm.assume(agentId != NO_AGENT);
         first = uint32(bound(first, 1, type(uint32).max));
         _mintAndPublishAgent(agentId, carol, SDK_E1, first);
