@@ -296,7 +296,7 @@ export const letterlockAbi = [
   },
   {
     "type": "error",
-    "name": "EpochNotIncreasing",
+    "name": "EpochNotNext",
     "inputs": [
       {
         "name": "current",

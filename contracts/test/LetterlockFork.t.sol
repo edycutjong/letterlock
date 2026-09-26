@@ -4,6 +4,11 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Letterlock, IERC721} from "../src/Letterlock.sol";
 
+/// @notice The ERC-721 transfer the fork test uses to move a real agent (Letterlock itself never transfers).
+interface IERC721Transfer {
+    function transferFrom(address from, address to, uint256 tokenId) external;
+}
+
 /// @notice Monad MAINNET fork against the real ERC-8004 IdentityRegistry (no mock). Forks the latest block of
 ///         MONAD_MAINNET_RPC (default https://rpc.monad.xyz), deploys Letterlock on the fork, and reads ownerOf live.
 ///         If the RPC is unreachable every test here is SKIPPED with a message; nothing is faked.
@@ -135,6 +140,34 @@ contract LetterlockMainnetForkTest is Test {
         emit KeyPublished(ownerOfZero, NO_AGENT, SDK_E2, 1);
         vm.prank(ownerOfZero);
         ll.publish(SDK_E2, 1);
+    }
+
+    /// Regression, audit A finding 1, against the live registry: the owner of a real agent cannot use up its epochs and
+    /// then sell it. When any higher epoch was accepted, a publish at 2^32 - 1 followed by the registry's own
+    /// transferFrom left the buyer reverting EpochNotIncreasing(4294967295, 1) forever.
+    function test_fork_sellerCannotBrickBuyerThroughRealTransfer() public onlyFork {
+        address buyer = makeAddr("buyer");
+        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotNext.selector, uint32(0), type(uint32).max));
+        vm.prank(owner);
+        ll.publishForAgent(agentId, SDK_E1, type(uint32).max);
+        vm.prank(owner);
+        ll.publishForAgent(agentId, SDK_E1, 1);
+
+        vm.prank(owner);
+        IERC721Transfer(IDENTITY_REGISTRY).transferFrom(owner, buyer, agentId);
+        assertEq(registry.ownerOf(agentId), buyer, "the live registry moved the agent");
+        (bytes32 pub, uint32 epoch,) = ll.keyOfAgent(agentId);
+        assertEq(pub, 0, "the seller's key no longer resolves");
+
+        vm.prank(buyer);
+        ll.publishForAgent(agentId, SDK_E2, 2);
+        (pub, epoch,) = ll.keyOfAgent(agentId);
+        assertEq(pub, SDK_E2);
+        assertEq(epoch, 2);
+        bytes memory envelope = bytes("{}");
+        vm.expectEmit(true, true, false, true, address(ll));
+        emit Dropped(address(0), agentId, envelope);
+        ll.drop(address(0), agentId, envelope);
     }
 
     function test_fork_dropToRealAgent() public onlyFork {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {Letterlock} from "../src/Letterlock.sol";
 import {MockIdentityRegistry} from "./mocks/MockIdentityRegistry.sol";
 import {X25519Ref} from "./utils/X25519Ref.sol";
@@ -69,6 +69,34 @@ contract LetterlockTest is Test {
         registry.mint(owner, agentId);
         vm.prank(owner);
         ll.publishForAgent(agentId, pub, epoch);
+    }
+
+    function _epochErr(uint32 current, uint32 given) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(Letterlock.EpochNotNext.selector, current, given);
+    }
+
+    /// Publish epochs 1..n for `who`, alternating two real keys.
+    function _publishUpTo(address who, uint32 n) internal {
+        for (uint32 e = 1; e <= n; e++) {
+            vm.prank(who);
+            ll.publish(e % 2 == 1 ? SDK_E1 : SDK_E2, e);
+        }
+    }
+
+    /// Publish epochs 1..n for an agent that `owner` already owns.
+    function _publishAgentUpTo(uint256 agentId, address owner, uint32 n) internal {
+        for (uint32 e = 1; e <= n; e++) {
+            vm.prank(owner);
+            ll.publishForAgent(agentId, e % 2 == 1 ? SDK_E1 : SDK_E2, e);
+        }
+    }
+
+    /// Overwrite the stored epoch of an address slot (storage: `_keys` at slot 0; `epoch` is the low 4 bytes of the
+    /// struct's second word), for the one state no test can reach by publishing: epoch 2^32 - 1.
+    function _storeAddressEpoch(address who, uint32 epoch) internal {
+        bytes32 word = bytes32(uint256(keccak256(abi.encode(who, uint256(0)))) + 1);
+        uint256 v = uint256(vm.load(address(ll), word));
+        vm.store(address(ll), word, bytes32((v & ~uint256(type(uint32).max)) | epoch));
     }
 
     /// Expect `pub` to be rejected with the right error on BOTH publish paths.
@@ -157,13 +185,17 @@ contract LetterlockTest is Test {
         _assertKey(alice, SDK_E1, 1, 1_790_000_000);
     }
 
-    function test_publish_firstKeyMayStartAboveOne() public {
-        vm.prank(alice);
-        ll.publish(SDK_E1, 7);
-        _assertKey(alice, SDK_E1, 7, uint64(vm.getBlockTimestamp()));
+    function test_publish_firstKeyMustBeEpochOne() public {
+        uint32[4] memory wrong = [uint32(0), 2, 7, type(uint32).max];
+        for (uint256 i = 0; i < wrong.length; i++) {
+            vm.expectRevert(_epochErr(0, wrong[i]));
+            vm.prank(alice);
+            ll.publish(SDK_E1, wrong[i]);
+        }
+        _assertKey(alice, 0, 0, 0);
     }
 
-    function test_publish_rotateToHigherEpoch() public {
+    function test_publish_rotateToNextEpoch() public {
         vm.prank(alice);
         ll.publish(SDK_E1, 1);
         vm.warp(vm.getBlockTimestamp() + 1 days);
@@ -174,16 +206,20 @@ contract LetterlockTest is Test {
         _assertKey(alice, SDK_E2, 2, uint64(vm.getBlockTimestamp()));
     }
 
-    function test_publish_mayRotateSkippingEpochs() public {
-        vm.startPrank(alice);
+    function test_publish_revertsOnEpochJump() public {
+        vm.prank(alice);
         ll.publish(SDK_E1, 1);
+        vm.expectRevert(_epochErr(1, 3));
+        vm.prank(alice);
+        ll.publish(SDK_E2, 3);
+        vm.expectRevert(_epochErr(1, 40));
+        vm.prank(alice);
         ll.publish(SDK_E2, 40);
-        vm.stopPrank();
-        _assertKey(alice, SDK_E2, 40, uint64(vm.getBlockTimestamp()));
+        _assertKey(alice, SDK_E1, 1, uint64(vm.getBlockTimestamp()));
     }
 
     function test_publish_revertsOnEpochZero() public {
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(0), uint32(0)));
+        vm.expectRevert(_epochErr(0, 0));
         vm.prank(alice);
         ll.publish(SDK_E1, 0);
     }
@@ -191,28 +227,51 @@ contract LetterlockTest is Test {
     function test_publish_revertsOnSameEpoch() public {
         vm.prank(alice);
         ll.publish(SDK_E1, 1);
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(1), uint32(1)));
+        vm.expectRevert(_epochErr(1, 1));
         vm.prank(alice);
         ll.publish(SDK_E2, 1);
         _assertKey(alice, SDK_E1, 1, uint64(vm.getBlockTimestamp()));
     }
 
     function test_publish_revertsOnLowerEpoch() public {
-        vm.prank(alice);
-        ll.publish(SDK_E1, 5);
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(5), uint32(4)));
+        _publishUpTo(alice, 5);
+        vm.expectRevert(_epochErr(5, 4));
         vm.prank(alice);
         ll.publish(SDK_E2, 4);
+        _assertKey(alice, SDK_E1, 5, uint64(vm.getBlockTimestamp()));
     }
 
-    function test_publish_maxEpochIsFinal() public {
+    /// Regression, audit A finding 1 (address path): one publish, mistaken or phished, cannot move a slot to the last
+    /// epoch. When any higher epoch was accepted, publish(pub, 2^32 - 1) succeeded and no later key could follow it.
+    function test_publish_oneCallCannotUseUpTheEpochs() public {
+        vm.expectRevert(_epochErr(0, type(uint32).max));
         vm.prank(alice);
         ll.publish(SDK_E1, type(uint32).max);
-        vm.expectRevert(
-            abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, type(uint32).max, type(uint32).max)
-        );
+
+        vm.prank(alice);
+        ll.publish(SDK_E1, 1);
+        vm.expectRevert(_epochErr(1, type(uint32).max));
         vm.prank(alice);
         ll.publish(SDK_E2, type(uint32).max);
+
+        vm.prank(alice);
+        ll.publish(SDK_E2, 2); // the slot still rotates
+        _assertKey(alice, SDK_E2, 2, uint64(vm.getBlockTimestamp()));
+    }
+
+    /// A slot at 2^32 - 1 is 4,294,967,295 publishes away, so it is never reached; set it directly. It is final, and
+    /// the + 1 does not overflow: every epoch reverts EpochNotNext, never Panic(0x11).
+    function test_publish_slotAtMaxEpochIsFinalWithoutOverflow() public {
+        vm.prank(alice);
+        ll.publish(SDK_E1, 1);
+        _storeAddressEpoch(alice, type(uint32).max);
+        _assertKey(alice, SDK_E1, type(uint32).max, uint64(vm.getBlockTimestamp()));
+        uint32[3] memory tries = [uint32(0), 1, type(uint32).max];
+        for (uint256 i = 0; i < tries.length; i++) {
+            vm.expectRevert(_epochErr(type(uint32).max, tries[i]));
+            vm.prank(alice);
+            ll.publish(SDK_E2, tries[i]);
+        }
     }
 
     function test_publish_writesOnlyTheCallersSlot() public {
@@ -220,9 +279,9 @@ contract LetterlockTest is Test {
         ll.publish(SDK_E1, 1);
         _assertKey(bob, 0, 0, 0);
         vm.prank(bob);
-        ll.publish(RFC7748_BOB, 3);
+        ll.publish(RFC7748_BOB, 1);
         _assertKey(alice, SDK_E1, 1, uint64(vm.getBlockTimestamp()));
-        _assertKey(bob, RFC7748_BOB, 3, uint64(vm.getBlockTimestamp()));
+        _assertKey(bob, RFC7748_BOB, 1, uint64(vm.getBlockTimestamp()));
     }
 
     function test_publish_acceptsRealX25519Keys() public {
@@ -231,10 +290,10 @@ contract LetterlockTest is Test {
         vm.prank(bob);
         ll.publish(RFC7748_BOB, 1);
         vm.prank(carol);
-        ll.publish(SDK_E2, 2);
+        ll.publish(SDK_E2, 1);
         _assertKey(alice, RFC7748_ALICE, 1, uint64(vm.getBlockTimestamp()));
         _assertKey(bob, RFC7748_BOB, 1, uint64(vm.getBlockTimestamp()));
-        _assertKey(carol, SDK_E2, 2, uint64(vm.getBlockTimestamp()));
+        _assertKey(carol, SDK_E2, 1, uint64(vm.getBlockTimestamp()));
     }
 
     // ---------------------------------------------------------------- key rules: zero, small order, canonical
@@ -354,30 +413,70 @@ contract LetterlockTest is Test {
     }
 
     function test_publishForAgent_epochRules() public {
-        _mintAndPublishAgent(5, carol, SDK_E1, 3);
+        _mintAndPublishAgent(5, carol, SDK_E1, 1);
         vm.startPrank(carol);
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(3), uint32(3)));
+        vm.expectRevert(_epochErr(1, 1));
+        ll.publishForAgent(5, SDK_E2, 1);
+        vm.expectRevert(_epochErr(1, 0));
+        ll.publishForAgent(5, SDK_E2, 0);
+        vm.expectRevert(_epochErr(1, 3));
         ll.publishForAgent(5, SDK_E2, 3);
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(3), uint32(2)));
         ll.publishForAgent(5, SDK_E2, 2);
-        ll.publishForAgent(5, SDK_E2, 4);
         vm.stopPrank();
-        _assertAgentKey(5, SDK_E2, 4, uint64(vm.getBlockTimestamp()));
+        _assertAgentKey(5, SDK_E2, 2, uint64(vm.getBlockTimestamp()));
     }
 
     function test_publishForAgent_revertsOnEpochZero() public {
         registry.mint(carol, 5);
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(0), uint32(0)));
+        vm.expectRevert(_epochErr(0, 0));
         vm.prank(carol);
         ll.publishForAgent(5, SDK_E1, 0);
     }
 
-    function test_publishForAgent_doesNotTouchAddressKeys() public {
+    function test_publishForAgent_firstKeyMustBeEpochOne() public {
+        registry.mint(carol, 5);
+        vm.expectRevert(_epochErr(0, 2));
         vm.prank(carol);
-        ll.publish(RFC7748_BOB, 9);
-        _mintAndPublishAgent(5, carol, SDK_E1, 1);
-        _assertKey(carol, RFC7748_BOB, 9, uint64(vm.getBlockTimestamp()));
-        _assertAgentKey(5, SDK_E1, 1, uint64(vm.getBlockTimestamp()));
+        ll.publishForAgent(5, SDK_E1, 2);
+        vm.expectRevert(_epochErr(0, type(uint32).max));
+        vm.prank(carol);
+        ll.publishForAgent(5, SDK_E1, type(uint32).max);
+        _assertAgentKey(5, 0, 0, 0);
+    }
+
+    /// Regression, audit A finding 1: a seller cannot brick the buyer's agent key slot. When any higher epoch was
+    /// accepted, the seller published at 2^32 - 1 and transferred the agent; the buyer's publishForAgent then
+    /// reverted for every epoch, keyOfAgent returned zeros forever and every drop to the agent reverted.
+    function test_publishForAgent_sellerCannotBrickTheBuyersSlot() public {
+        address seller = makeAddr("seller");
+        address buyer = makeAddr("buyer");
+        registry.mint(seller, 42);
+        vm.expectRevert(_epochErr(0, type(uint32).max));
+        vm.prank(seller);
+        ll.publishForAgent(42, SDK_E1, type(uint32).max);
+        vm.prank(seller);
+        ll.publishForAgent(42, SDK_E1, 1);
+        vm.expectRevert(_epochErr(1, type(uint32).max));
+        vm.prank(seller);
+        ll.publishForAgent(42, SDK_E2, type(uint32).max);
+
+        registry.transfer(42, buyer);
+        _assertAgentKey(42, 0, 0, 0);
+        (, uint32 stored,,) = ll.agentKeyRecord(42);
+        assertEq(stored, 1);
+        vm.prank(buyer);
+        ll.publishForAgent(42, RFC7748_BOB, stored + 1);
+        _assertAgentKey(42, RFC7748_BOB, 2, uint64(vm.getBlockTimestamp()));
+        vm.expectEmit(true, true, false, true, address(ll));
+        emit Dropped(address(0), 42, ENVELOPE);
+        ll.drop(address(0), 42, ENVELOPE);
+    }
+
+    function test_publishForAgent_doesNotTouchAddressKeys() public {
+        _publishUpTo(carol, 3);
+        _mintAndPublishAgent(5, carol, RFC7748_BOB, 1);
+        _assertKey(carol, SDK_E1, 3, uint64(vm.getBlockTimestamp()));
+        _assertAgentKey(5, RFC7748_BOB, 1, uint64(vm.getBlockTimestamp()));
     }
 
     function test_keyOfAgent_isZeroWhenNothingPublished() public {
@@ -393,8 +492,9 @@ contract LetterlockTest is Test {
         assertEq(t, 0);
     }
 
-    function test_keyOfAgent_stopsResolvingAfterTransfer_newOwnerMustExceedEpoch() public {
-        _mintAndPublishAgent(5, carol, SDK_E1, 3);
+    function test_keyOfAgent_stopsResolvingAfterTransfer_newOwnerContinuesEpochs() public {
+        registry.mint(carol, 5);
+        _publishAgentUpTo(5, carol, 3);
         uint64 publishedAt = uint64(vm.getBlockTimestamp());
         registry.transfer(5, bob);
 
@@ -411,10 +511,13 @@ contract LetterlockTest is Test {
         vm.prank(carol);
         ll.publishForAgent(5, SDK_E2, 4);
 
-        // the new owner continues the epoch sequence
-        vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, uint32(3), uint32(1)));
+        // the new owner continues the agent's epoch sequence: the stored epoch + 1, nothing else
+        vm.expectRevert(_epochErr(3, 1));
         vm.prank(bob);
         ll.publishForAgent(5, RFC7748_BOB, 1);
+        vm.expectRevert(_epochErr(3, 5));
+        vm.prank(bob);
+        ll.publishForAgent(5, RFC7748_BOB, 5);
         vm.warp(vm.getBlockTimestamp() + 1 hours);
         vm.prank(bob);
         ll.publishForAgent(5, RFC7748_BOB, 4);
@@ -433,6 +536,25 @@ contract LetterlockTest is Test {
         _mintAndPublishAgent(5, carol, SDK_E1, 1);
         registry.burn(5);
         _assertAgentKey(5, 0, 0, 0);
+    }
+
+    /// A reverting ownerOf (nonexistent or burned agent) means "no owner" for every caller, tx.origin included:
+    /// nobody publishes for such an agent, and a burned agent's key does not resolve for its last publisher.
+    function test_agentWithoutOwner_noCallerIsItsOwner_evenTxOrigin() public {
+        vm.expectRevert(abi.encodeWithSelector(Letterlock.NotAgentOwner.selector, uint256(99), alice));
+        vm.prank(alice, alice);
+        ll.publishForAgent(99, SDK_E1, 1);
+
+        _mintAndPublishAgent(5, carol, SDK_E1, 1);
+        registry.burn(5);
+        vm.prank(carol, carol);
+        (bytes32 p, uint32 e, uint64 t) = ll.keyOfAgent(5);
+        assertEq(p, 0);
+        assertEq(e, 0);
+        assertEq(t, 0);
+        vm.expectRevert(abi.encodeWithSelector(Letterlock.NoKeyPublished.selector, address(0), uint256(5)));
+        vm.prank(carol, carol);
+        ll.drop(address(0), 5, ENVELOPE);
     }
 
     function test_agentKeyRecord_isZeroWhenNothingPublished() public view {
@@ -537,52 +659,120 @@ contract LetterlockTest is Test {
         assertEq(writes.length, 0);
     }
 
+    /// Audit A finding 3: `drop` guarantees a recipient with a live key and nothing about the envelope. Bytes that no
+    /// HPKE open accepts, such as a single zero byte, are dropped like a sealed envelope (NatSpec and README say so).
+    function test_drop_doesNotValidateTheEnvelope() public {
+        vm.prank(alice);
+        ll.publish(SDK_E1, 1);
+        vm.expectEmit(true, true, false, true, address(ll));
+        emit Dropped(alice, NO_AGENT, hex"00");
+        ll.drop(alice, NO_AGENT, hex"00");
+    }
+
+    /// Audit A finding 4: a KeyPublished log is history, not liveness. After a transfer the only Letterlock log for
+    /// the agent still carries the previous owner's key while keyOfAgent returns zeros, so an indexer must confirm
+    /// agent keys with keyOfAgent before anyone seals (event NatSpec, README, docs/SPEC.md §8).
+    function test_keyPublishedLogIsHistoryNotLiveness() public {
+        registry.mint(carol, 42);
+        vm.recordLogs();
+        vm.prank(carol);
+        ll.publishForAgent(42, SDK_E1, 1);
+        registry.transfer(42, bob); // the test-double registry emits no logs, like any registry Letterlock cannot see
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 1);
+        assertEq(logs[0].emitter, address(ll));
+        assertEq(logs[0].topics[0], Letterlock.KeyPublished.selector);
+        assertEq(logs[0].topics[1], bytes32(uint256(uint160(carol))));
+        assertEq(logs[0].topics[2], bytes32(uint256(42)));
+        (bytes32 loggedPub, uint32 loggedEpoch) = abi.decode(logs[0].data, (bytes32, uint32));
+        assertEq(loggedPub, SDK_E1);
+        assertEq(loggedEpoch, 1);
+        _assertAgentKey(42, 0, 0, 0);
+    }
+
     // ---------------------------------------------------------------- funds
 
-    function test_holdsNoFunds() public {
+    /// Every entry point rejects value, including the calls that would succeed without it.
+    function test_acceptsNoValue() public {
+        registry.mint(alice, 7);
         vm.deal(alice, 1 ether);
         vm.startPrank(alice);
         (bool ok,) = address(ll).call{value: 1}("");
         assertFalse(ok, "plain transfer must fail");
         (ok,) = address(ll).call{value: 1}(abi.encodeCall(Letterlock.publish, (SDK_E1, 1)));
         assertFalse(ok, "publish must not accept value");
+        (ok,) = address(ll).call{value: 1}(abi.encodeCall(Letterlock.publishForAgent, (7, SDK_E1, 1)));
+        assertFalse(ok, "publishForAgent must not accept value");
+        ll.publish(SDK_E1, 1);
+        ll.publishForAgent(7, SDK_E2, 1);
         (ok,) = address(ll).call{value: 1}(abi.encodeCall(Letterlock.drop, (alice, NO_AGENT, ENVELOPE)));
-        assertFalse(ok, "drop must not accept value");
+        assertFalse(ok, "drop to an address must not accept value");
+        (ok,) = address(ll).call{value: 1}(abi.encodeCall(Letterlock.drop, (address(0), 7, ENVELOPE)));
+        assertFalse(ok, "drop to an agent must not accept value");
         vm.stopPrank();
         assertEq(address(ll).balance, 0);
     }
 
     // ---------------------------------------------------------------- fuzz
 
-    function testFuzz_publish_epochMustStrictlyIncrease(uint32 first, uint32 second) public {
-        first = uint32(bound(first, 1, type(uint32).max));
+    /// After `steps` publishes only steps + 1 is accepted, whatever epoch is tried. `useNext` forces the accepted
+    /// case, which a random uint32 would almost never hit.
+    function testFuzz_publish_epochMustBeNext(uint8 steps, uint32 given, bool useNext) public {
+        uint32 n = uint32(bound(steps, 0, 24));
+        _publishUpTo(alice, n);
+        if (useNext) given = n + 1;
         vm.prank(alice);
-        ll.publish(SDK_E1, first);
-        if (second > first) {
-            vm.prank(alice);
-            ll.publish(SDK_E2, second);
-            _assertKey(alice, SDK_E2, second, uint64(vm.getBlockTimestamp()));
+        if (uint256(given) == uint256(n) + 1) {
+            ll.publish(RFC7748_ALICE, given);
+            _assertKey(alice, RFC7748_ALICE, given, uint64(vm.getBlockTimestamp()));
         } else {
-            vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, first, second));
-            vm.prank(alice);
-            ll.publish(SDK_E2, second);
-            _assertKey(alice, SDK_E1, first, uint64(vm.getBlockTimestamp()));
+            vm.expectRevert(_epochErr(n, given));
+            ll.publish(RFC7748_ALICE, given);
+            (, uint32 e,) = ll.keyOf(alice);
+            assertEq(e, n);
         }
     }
 
-    function testFuzz_publishForAgent_epochMustStrictlyIncrease(uint256 agentId, uint32 first, uint32 second) public {
+    function testFuzz_publishForAgent_epochMustBeNext(uint256 agentId, uint8 steps, uint32 given, bool useNext) public {
         vm.assume(agentId != NO_AGENT);
-        first = uint32(bound(first, 1, type(uint32).max));
-        _mintAndPublishAgent(agentId, carol, SDK_E1, first);
-        if (second > first) {
-            vm.prank(carol);
-            ll.publishForAgent(agentId, SDK_E2, second);
-            _assertAgentKey(agentId, SDK_E2, second, uint64(vm.getBlockTimestamp()));
+        registry.mint(carol, agentId);
+        uint32 n = uint32(bound(steps, 0, 24));
+        _publishAgentUpTo(agentId, carol, n);
+        if (useNext) given = n + 1;
+        vm.prank(carol);
+        if (uint256(given) == uint256(n) + 1) {
+            ll.publishForAgent(agentId, RFC7748_ALICE, given);
+            _assertAgentKey(agentId, RFC7748_ALICE, given, uint64(vm.getBlockTimestamp()));
         } else {
-            vm.expectRevert(abi.encodeWithSelector(Letterlock.EpochNotIncreasing.selector, first, second));
-            vm.prank(carol);
-            ll.publishForAgent(agentId, SDK_E2, second);
+            vm.expectRevert(_epochErr(n, given));
+            ll.publishForAgent(agentId, RFC7748_ALICE, given);
+            (, uint32 e,,) = ll.agentKeyRecord(agentId);
+            assertEq(e, n);
         }
+    }
+
+    /// Regression, audit A finding 1, as a property: whatever the previous owner published or tried to publish
+    /// before a transfer, the new owner can publish the stored epoch + 1, and the agent then resolves to that key.
+    function testFuzz_newAgentOwnerCanAlwaysPublish(uint256 agentId, uint8 sellerSteps, uint32 sellerTry, address buyer)
+        public
+    {
+        assumeNotForgeAddress(buyer);
+        vm.assume(agentId != NO_AGENT && buyer != carol && buyer != address(0));
+        registry.mint(carol, agentId);
+        uint32 n = uint32(bound(sellerSteps, 0, 24));
+        _publishAgentUpTo(agentId, carol, n);
+        if (uint256(sellerTry) != uint256(n) + 1) {
+            vm.expectRevert(_epochErr(n, sellerTry));
+            vm.prank(carol);
+            ll.publishForAgent(agentId, SDK_E1, sellerTry);
+        }
+        registry.transfer(agentId, buyer);
+
+        (, uint32 stored,,) = ll.agentKeyRecord(agentId);
+        assertEq(stored, n);
+        vm.prank(buyer);
+        ll.publishForAgent(agentId, RFC7748_BOB, stored + 1);
+        _assertAgentKey(agentId, RFC7748_BOB, stored + 1, uint64(vm.getBlockTimestamp()));
     }
 
     function testFuzz_keyRules_matchReference(bytes32 pub) public {

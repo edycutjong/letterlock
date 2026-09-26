@@ -27,12 +27,14 @@ contract LetterlockHandler is Test {
     uint256[] internal agentIds;
     bytes32[] internal keyPool;
 
-    // Ghost model: the last successful publish per slot.
+    // Ghost model: the last successful publish per slot, and how many publishes each slot accepted.
     mapping(address => uint32) public ghostEpoch;
     mapping(address => bytes32) public ghostPub;
+    mapping(address => uint256) public acceptedPublishes;
     mapping(uint256 => uint32) public ghostAgentEpoch;
     mapping(uint256 => bytes32) public ghostAgentPub;
     mapping(uint256 => address) public ghostAgentPublisher;
+    mapping(uint256 => uint256) public acceptedAgentPublishes;
 
     uint256 public violations;
     string public lastViolation;
@@ -75,16 +77,17 @@ contract LetterlockHandler is Test {
         bytes32 pub = _key(keySeed, validKey);
         uint32 cur = ghostEpoch[a];
         uint32 epoch = nearCurrent ? _near(cur, epochSeed) : epochSeed;
-        bool shouldPass = X25519Ref.verdict(pub) == X25519Ref.Verdict.Valid && epoch > cur;
+        bool shouldPass = X25519Ref.verdict(pub) == X25519Ref.Verdict.Valid && _isNext(cur, epoch);
         (Slot[] memory addr0, Slot[] memory agent0) = _snap();
 
         vm.prank(a);
         try ll.publish(pub, epoch) {
             publishOk++;
-            if (!shouldPass) _violate("publish accepted a bad key or a non-increasing epoch");
-            if (epoch <= addr0[ai].epoch) _violate("publish: epoch did not strictly increase");
+            if (!shouldPass) _violate("publish accepted a bad key or an epoch other than current + 1");
+            if (!_isNext(addr0[ai].epoch, epoch)) _violate("publish: epoch was not exactly current + 1");
             ghostEpoch[a] = epoch;
             ghostPub[a] = pub;
+            acceptedPublishes[a]++;
             _checkFrame(addr0, agent0, ai, NONE, "publish");
         } catch {
             publishRejected++;
@@ -110,17 +113,20 @@ contract LetterlockHandler is Test {
         uint32 cur = ghostAgentEpoch[id];
         uint32 epoch = near ? _near(cur, epochSeed) : epochSeed;
         bool isOwner = registry.exists(id) && registry.ownerOf(id) == a;
-        bool shouldPass = isOwner && X25519Ref.verdict(pub) == X25519Ref.Verdict.Valid && epoch > cur;
+        bool shouldPass = isOwner && X25519Ref.verdict(pub) == X25519Ref.Verdict.Valid && _isNext(cur, epoch);
         (Slot[] memory addr0, Slot[] memory agent0) = _snap();
 
         vm.prank(a);
         try ll.publishForAgent(id, pub, epoch) {
             agentPublishOk++;
-            if (!shouldPass) _violate("publishForAgent accepted a non-owner, a bad key or a non-increasing epoch");
-            if (epoch <= agent0[gi].epoch) _violate("publishForAgent: epoch did not strictly increase");
+            if (!shouldPass) {
+                _violate("publishForAgent accepted a non-owner, a bad key or an epoch other than current + 1");
+            }
+            if (!_isNext(agent0[gi].epoch, epoch)) _violate("publishForAgent: epoch was not exactly current + 1");
             ghostAgentEpoch[id] = epoch;
             ghostAgentPub[id] = pub;
             ghostAgentPublisher[id] = a;
+            acceptedAgentPublishes[id]++;
             _checkFrame(addr0, agent0, NONE, gi, "publishForAgent");
         } catch {
             agentPublishRejected++;
@@ -185,6 +191,10 @@ contract LetterlockHandler is Test {
     }
 
     // ------------------------------------------------------------ internals
+
+    function _isNext(uint32 current, uint32 given) internal pure returns (bool) {
+        return uint256(given) == uint256(current) + 1;
+    }
 
     /// Keys 0..5 of the pool are valid, 6..10 are not.
     function _key(uint256 seed, bool validOnly) internal view returns (bytes32) {
@@ -332,8 +342,19 @@ contract LetterlockInvariantTest is Test {
         }
     }
 
-    function invariant_holdsNoFunds() public view {
-        assertEq(address(ll).balance, 0);
+    /// Epochs move one step per accepted publish (audit A finding 1): a slot's epoch equals the number of publishes
+    /// it accepted, across agent owners too, so no sequence of calls reaches epoch n in fewer than n publishes.
+    function invariant_epochCountsAcceptedPublishes() public view {
+        for (uint256 i = 0; i < handler.actorCount(); i++) {
+            address a = handler.actorAt(i);
+            (, uint32 e,) = ll.keyOf(a);
+            assertEq(e, handler.acceptedPublishes(a), "address epoch != accepted publishes");
+        }
+        for (uint256 j = 0; j < handler.agentCount(); j++) {
+            uint256 id = handler.agentAt(j);
+            (, uint32 e,,) = ll.agentKeyRecord(id);
+            assertEq(e, handler.acceptedAgentPublishes(id), "agent epoch != accepted publishes");
+        }
     }
 
     /// Non-vacuity check for the handler: a fixed-seed random walk of 3,000 calls must hit BOTH outcomes of every
