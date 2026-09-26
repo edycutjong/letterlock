@@ -1,0 +1,37 @@
+.wordmark {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+
+.letter {
+  fill: var(--ink);
+}
+
+.sheen {
+  stop-color: var(--wax-sheen);
+}
+
+.body {
+  stop-color: var(--after);
+}
+
+.deep {
+  stop-color: var(--wax-deep);
+}
+
+.cast {
+  fill: var(--ink);
+  opacity: 0.26;
+}
+
+.edge {
+  fill: var(--wax-deep);
+}
+
+.rim {
+  fill: none;
+  stroke: var(--bg-elevated);
+  stroke-opacity: 0.4;
+  stroke-width: 0.9;
+}

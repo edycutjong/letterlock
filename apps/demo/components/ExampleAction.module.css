@@ -1,0 +1,22 @@
+.action {
+  display: inline-grid;
+  justify-items: start;
+}
+
+.block {
+  display: grid;
+  width: 100%;
+  justify-items: stretch;
+}
+
+/* the live region stays rendered (empty, no height) so the message is announced when it appears */
+.note {
+  max-width: 44ch;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.note:not(:empty) {
+  margin-top: 10px;
+}

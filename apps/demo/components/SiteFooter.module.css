@@ -1,0 +1,33 @@
+.footer {
+  margin-top: auto;
+  padding: clamp(48px, 7vw, 88px) 0 28px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 32px;
+  padding-top: 16px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.directory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+
+.addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.875rem;
+}
+
+.links a {
+  color: var(--ink);
+}

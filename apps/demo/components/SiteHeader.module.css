@@ -1,0 +1,186 @@
+.header {
+  padding-top: clamp(14px, 2.2vw, 24px);
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "home nav network";
+  align-items: center;
+  column-gap: clamp(16px, 3vw, 40px);
+  padding-bottom: 12px;
+}
+
+.home {
+  grid-area: home;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding-right: 4px;
+  text-decoration: none;
+  border-radius: 2px;
+}
+
+.wordmark {
+  height: 30px;
+  width: auto;
+}
+
+.nav {
+  grid-area: nav;
+  justify-self: end;
+}
+
+.nav ul {
+  display: flex;
+  align-items: center;
+  gap: clamp(2px, 1.2vw, 14px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 10px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.nav a::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 9px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform var(--transition-normal);
+}
+
+@media (hover: hover) {
+  .nav a:hover {
+    color: var(--before);
+  }
+  .nav a:hover::after {
+    transform: scaleX(1);
+  }
+}
+
+/* the page you are on is underlined in ink, the way a clerk rules the current line */
+.nav a[aria-current="page"] {
+  font-weight: 600;
+}
+
+.nav a[aria-current="page"]::after {
+  height: 2px;
+  transform: scaleX(1);
+  background: var(--ink);
+}
+
+.network {
+  grid-area: network;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 10px 5px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  border-radius: 2px;
+}
+
+/* a scrap of airmail edge: blue chevrons with manila gaps, the franking label's mark */
+.frank {
+  width: 20px;
+  height: 10px;
+  background-image: repeating-linear-gradient(135deg, var(--before) 0 3.5px, transparent 3.5px 6.5px);
+}
+
+.chain {
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav a::after {
+    transition: none;
+  }
+}
+
+/* tablets: the chain id goes to the footer, the routes close up */
+@media (max-width: 1023.98px) {
+  .chain {
+    display: none;
+  }
+  .nav a {
+    padding: 0 8px;
+  }
+  .nav a::after {
+    left: 8px;
+    right: 8px;
+  }
+}
+
+/* phones and small tablets: letterhead on one line, the five routes on the next */
+@media (max-width: 759.98px) {
+  .bar {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "home network"
+      "nav nav";
+    row-gap: 2px;
+    padding-bottom: 6px;
+  }
+  .network {
+    justify-self: end;
+  }
+  .nav {
+    justify-self: stretch;
+    margin-inline: -10px;
+  }
+  .nav ul {
+    justify-content: space-between;
+    gap: 0;
+  }
+}
+
+@media (max-width: 479.98px) {
+  .wordmark {
+    height: 26px;
+  }
+  .network {
+    padding: 4px 8px 4px 6px;
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+  }
+  .chain {
+    display: none;
+  }
+  .nav a {
+    padding: 0 9px;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .frank {
+    display: none;
+  }
+  .nav a {
+    padding: 0 7px;
+    font-size: 0.875rem;
+  }
+}

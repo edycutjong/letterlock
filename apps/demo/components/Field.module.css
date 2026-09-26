@@ -1,0 +1,109 @@
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  font-size: 1.0625rem;
+  color: var(--ink);
+  background-color: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule) 95%, var(--muted));
+  border-bottom: 1.5px solid var(--ink);
+  border-radius: 2px 2px 0 0;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.data {
+  font-family: var(--font-data);
+  font-size: 0.9375rem;
+  font-variant-ligatures: none;
+  letter-spacing: 0.01em;
+}
+
+.input:hover,
+.note:hover {
+  border-color: color-mix(in srgb, var(--muted) 70%, var(--rule));
+  border-bottom-color: var(--ink);
+}
+
+.input:focus-visible,
+.note:focus-visible {
+  outline: 2px solid var(--before);
+  outline-offset: 2px;
+  border-bottom-color: var(--before);
+  background-color: var(--bg-elevated);
+}
+
+.hint,
+.count {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.count {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.error::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border: 1.5px solid var(--ink);
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.field[data-invalid] .input,
+.field[data-invalid] .note {
+  border-bottom-width: 2.5px;
+  border-bottom-style: double;
+}
+
+.field[data-invalid] .count {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* the note is written on a ruled letter sheet, in the address italic */
+.note {
+  --pitch: 36px;
+  width: 100%;
+  min-height: calc(var(--pitch) * 3 + 20px);
+  padding: 10px 16px;
+  resize: vertical;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.3125rem;
+  line-height: var(--pitch);
+  color: var(--ink);
+  background-color: var(--bg-elevated);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--pitch) - 1px),
+    color-mix(in srgb, var(--rule) 85%, transparent) calc(var(--pitch) - 1px) var(--pitch)
+  );
+  background-attachment: local;
+  background-position: 0 calc(10px - 6px);
+  border: 1px solid color-mix(in srgb, var(--rule) 95%, var(--muted));
+  border-bottom: 1.5px solid var(--ink);
+  border-radius: 2px 2px 0 0;
+}
+
+.note::placeholder {
+  color: var(--muted);
+}

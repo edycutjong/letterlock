@@ -1,0 +1,36 @@
+/* Stamped, not printed: a double-ruled frame in ink, set slightly off square. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 3px 7px 2px;
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background-color: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  border: 1.25px solid currentColor;
+  outline: 0.75px solid currentColor;
+  outline-offset: 1.5px;
+  border-radius: 1px;
+  transform: rotate(-1.5deg);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  max-width: 70ch;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.note .badge {
+  margin-top: 2px;
+}
