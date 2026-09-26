@@ -3,6 +3,7 @@ import { addressLine, addressSpoken } from "@/lib/format.ts";
 import { PostedValue, type Posted } from "./AddressCard";
 import { ExampleBadge } from "./ExampleBadge";
 import { FingerprintText, KeyStrip } from "./KeyStrip";
+import { ScrollFrame } from "./ScrollFrame";
 import styles from "./RegisterTable.module.css";
 
 export type RegisterRow = {
@@ -40,15 +41,9 @@ export type RegisterTableProps = {
 
 export function RegisterTable({ caption, captionHidden, rows, layout = "auto", empty, className }: RegisterTableProps) {
   return (
-    // on the narrowest phones the register slides sideways inside its own frame, so the frame is a named,
-    // keyboard-reachable region
-    <div
-      className={[styles.wrap, className].filter(Boolean).join(" ")}
-      data-layout={layout}
-      role="region"
-      aria-label={typeof caption === "string" ? caption : "Register"}
-      tabIndex={0}
-    >
+    // on the narrowest phones the register slides sideways inside its own frame, which is then a named,
+    // keyboard-reachable region (and only then: a frame that fits is no Tab stop)
+    <ScrollFrame className={[styles.wrap, className].filter(Boolean).join(" ")} data-layout={layout} label={typeof caption === "string" ? caption : "Register"}>
       <table className={styles.table}>
         <caption className={captionHidden ? "visually-hidden" : styles.caption}>{caption}</caption>
         <thead>
@@ -103,6 +98,6 @@ export function RegisterTable({ caption, captionHidden, rows, layout = "auto", e
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollFrame>
   );
 }
