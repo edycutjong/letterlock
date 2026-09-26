@@ -2,9 +2,10 @@
 out/
 cache/
 
-# Simulated (not broadcast) script runs
+# Simulated (not broadcast) script runs, and the timestamped copies of run-latest.json
 broadcast/*/dry-run/
 broadcast/**/dry-run/
+broadcast/**/run-[0-9]*.json
 
 # Coverage reports
 lcov.info

@@ -1,0 +1,53 @@
+{
+  "chainId": 10143,
+  "network": "Monad testnet",
+  "contract": "Letterlock",
+  "address": "0x311921118F2D40f37e554516069A918bA290e75C",
+  "deployTx": "0x6897ebbdaad88004f077d5048e7c78940b161e51d46ede22a173e3b21c69b9fd",
+  "block": 65862938,
+  "deployer": "0xb7A232dfA12e636ad9A951503c25aBA188c9f062",
+  "identityRegistry": "0x0000000000000000000000000000000000000000",
+  "agentPath": "disabled: the ERC-8004 IdentityRegistry exists on Monad mainnet only, so this testnet deployment has identityRegistry = address(0) and publishForAgent / drop-to-agent revert AgentPathDisabled",
+  "verified": true,
+  "verification": {
+    "verifier": "sourcify",
+    "verifierUrl": "https://sourcify-api-monad.blockvision.org/",
+    "match": "exact_match (runtime bytecode); creationMatch null",
+    "check": "https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x311921118F2D40f37e554516069A918bA290e75C",
+    "monadscan": "not verified (the Etherscan-family verifier needs an API key)"
+  },
+  "publishTx": "0x7e4e34353d33f88f1685682c40fb02455b4cda1b0d06475368044d191a75dadc",
+  "dropTx": "0x6bf4e64f855c8d28389c34feb17cbcc5bd285dcd286505023aaab6ddf77c8d68",
+  "abiPath": "contracts/abi/Letterlock.json",
+  "sdkAbiPath": "packages/letterlock/src/abi.ts",
+  "source": {
+    "path": "contracts/src/Letterlock.sol",
+    "commit": "7f31f33",
+    "compiler": "solc 0.8.33",
+    "evmVersion": "osaka",
+    "optimizerRuns": 10000
+  },
+  "smokeTest": {
+    "label": "TEST KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used",
+    "publishedKey": "0x257aff8f2d11c83daa1e47e2d8693bc8e7d043dac1e383f40907cbecb6fd471e",
+    "epoch": 1,
+    "kid": "60968878410cd578",
+    "publishBlock": 65863393,
+    "dropBlock": 65863426,
+    "envelopeBytes": 484,
+    "result": "keyOf(deployer) returned the test key at epoch 1; the Dropped envelope read back from the drop receipt opened with the re-derived test key (contracts/script/testnet-smoke.mjs verify)"
+  },
+  "gasUsed": {
+    "deploy": 1098346,
+    "publish": 70753,
+    "drop": 45708,
+    "note": "receipt gasUsed, equal to each tx's gas limit (Monad charges the gas limit)"
+  },
+  "explorer": {
+    "contract": "https://testnet.monadvision.com/address/0x311921118F2D40f37e554516069A918bA290e75C",
+    "deployTx": "https://testnet.monadvision.com/tx/0x6897ebbdaad88004f077d5048e7c78940b161e51d46ede22a173e3b21c69b9fd",
+    "publishTx": "https://testnet.monadvision.com/tx/0x7e4e34353d33f88f1685682c40fb02455b4cda1b0d06475368044d191a75dadc",
+    "dropTx": "https://testnet.monadvision.com/tx/0x6bf4e64f855c8d28389c34feb17cbcc5bd285dcd286505023aaab6ddf77c8d68",
+    "monadscan": "https://testnet.monadscan.com/address/0x311921118F2D40f37e554516069A918bA290e75C"
+  }
+}
