@@ -63,20 +63,20 @@ both with `node script/export-abi.mjs`).
 - **Indexers.** A `KeyPublished` log is history, not liveness: no Letterlock event marks the registry transfer or
   burn that stops an agent key from resolving. Confirm an agent key with `keyOfAgent` when sealing (or join the
   registry's `Transfer` events). Never seal from indexed events alone, or the note can go to the previous owner.
-- **Registry calls fail closed.** `keyOfAgent`, `publishForAgent` and a drop to an agent call the registry's
-  `ownerOf` in a `try`. Only its `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`: the agent was never
-  minted, or was burned) reads as "no owner". Any other failure (no revert data, which is what running out of gas
-  returns; another error; a panic) reverts `RegistryCallFailed(agentId)`, unless the read then runs out of gas in
-  Letterlock itself, which reverts with no data: after a starved registry call only 1/64 of the gas it was given is
-  left, which may not pay for the `RegistryCallFailed` revert. So zeros from `keyOfAgent` always mean that no key
-  resolves, never that the call was starved of gas, and a contract reading it needs no workaround beyond forwarding
-  enough gas and reading any revert, not only `RegistryCallFailed`, as "unknown". On a Monad mainnet fork (block
-  108279356, agent 10259), a contract read `keyOfAgent` at every gas budget from 5,000 to 80,000 (step 20), each
-  read cold: every budget from 46,620 up returned the key, every smaller one reverted (767 with
-  `RegistryCallFailed`, 1,314 with no data, out of gas inside Letterlock), and none returned zeros (the same counts
-  as at block 108228758). Under the rule the testnet deployment was built with, which read any failure as "no
-  owner", the same sweep returned zeros at 527 budgets (35,920 to 46,440 gas; block 108228931). An `eth_call` from
-  an app is never starved.
+- **Registry calls fail closed.** `keyOfAgent`, `publishForAgent` and a drop to an agent call the registry's `ownerOf`
+  in a `try`. Only its `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`: the agent was never minted, or
+  was burned) reads as "no owner". Any other failure (no revert data, which is what running out of gas returns;
+  another error; a panic) reverts `RegistryCallFailed(agentId)`, unless the read then runs out of gas in Letterlock
+  itself, which reverts with no data: after a starved registry call only 1/64 of the gas available at the call is left
+  (the call got the other 63/64), which may not pay for the `RegistryCallFailed` revert. So zeros from `keyOfAgent`
+  always mean that no key resolves, never that the call was starved of gas, and a contract reading it needs no
+  workaround beyond forwarding enough gas and reading any revert, not only `RegistryCallFailed`, as "unknown". On a
+  Monad mainnet fork (block 108279356, agent 10259), a contract read `keyOfAgent` at every gas budget from 5,000 to
+  80,000 (step 20), each read cold: every budget from 46,620 up returned the key, every smaller one reverted (767 with
+  `RegistryCallFailed`, 1,314 with no data, out of gas inside Letterlock), and none returned zeros (the same counts as
+  at block 108228758). Under the rule the testnet deployment was built with, which read any failure as "no owner", the
+  same sweep returned zeros at 527 budgets (35,920 to 46,440 gas; block 108228931). An `eth_call` from an app is never
+  starved.
 - **Trust.** The agent path is only as trustworthy as the ERC-8004 registry, which is an upgradeable proxy on
   mainnet. If an upgrade changed its revert for a missing agent, reads and drops for such an agent would revert
   `RegistryCallFailed` instead of returning zeros or `NoKeyPublished`: they fail closed. Anyone may `drop` (HPKE
@@ -105,8 +105,8 @@ code, kept deploying the previous code (`script/DeployMainnet.md`, "Build").
 
 Measured on 2026-09-27 (Foundry 1.8.3, `network = "monad"`):
 
-- `LETTERLOCK_REQUIRE_FORK=true forge test -vvv`: 110 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz
-  tests (11 fuzz tests, 1,024 runs each), 10 registry-call tests, 9 mainnet-fork tests, 2 fork-gate tests, 7
+- `LETTERLOCK_REQUIRE_FORK=true forge test -vvv`: 111 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz
+  tests (11 fuzz tests, 1,024 runs each), 10 registry-call tests, 9 mainnet-fork tests, 3 fork-gate tests, 7
   deploy-script tests, 8 gas benchmarks, and 2 in the invariant suite: 5 invariants over 256 runs × 128 calls
   (32,768 calls), plus a fixed-seed 3,000-call walk that reaches every accept and reject path.
 - The deploy-script tests include `test_scriptArtifactDeploysTheCurrentSource`: the script artifact that
@@ -133,8 +133,9 @@ Measured on 2026-09-27 (Foundry 1.8.3, `network = "monad"`):
   checks that the live registry reverts `ERC721NonexistentToken` for an unregistered id. One is the gas-budget sweep
   of the registry-call rule above, which fails if any budget returns zeros. When the RPC is unreachable they are
   skipped, with the RPC error, unless `LETTERLOCK_REQUIRE_FORK=true` is set: then they fail (the mainnet deploy
-  pre-flight sets it). The 2 fork-gate tests (`test/MainnetForkGate.t.sol`) check both behaviours offline, against
-  a refused connection.
+  pre-flight sets it). The flag is parsed strictly: `true`, `1` and `false`, `0` in any case; any other value (`yes`,
+  `on`, a typo, empty) fails setUp rather than reading as false and skipping. The 3 fork-gate tests
+  (`test/MainnetForkGate.t.sol`) check both behaviours offline, against a refused connection, and the strict parse.
 
 ## Gas
 

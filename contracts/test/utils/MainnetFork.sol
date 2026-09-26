@@ -10,9 +10,16 @@ abstract contract MainnetFork is Test {
     string internal constant FORK_REQUIRED_PREFIX =
         "LETTERLOCK_REQUIRE_FORK is set and the Monad mainnet fork failed: ";
 
-    /// True when LETTERLOCK_REQUIRE_FORK=true. Any other value than true or false fails the run (vm.envOr).
+    /// False when LETTERLOCK_REQUIRE_FORK is unset; otherwise its value parsed strictly by vm.envBool (true, false,
+    /// 1, 0, any case). A value it cannot parse (yes, on, a typo, an empty string) reverts, so setUp fails closed
+    /// rather than turning the requirement off. (vm.envOr would read such a value as false and skip.)
     function _forkRequired() internal view returns (bool) {
-        return vm.envOr("LETTERLOCK_REQUIRE_FORK", false);
+        return _strictFlag("LETTERLOCK_REQUIRE_FORK");
+    }
+
+    /// False when `name` is unset, else vm.envBool(name), which reverts on a value it cannot parse.
+    function _strictFlag(string memory name) internal view returns (bool) {
+        return vm.envExists(name) && vm.envBool(name);
     }
 
     /// Forks `rpc` and selects it. If that fails: reverts when `required`, else returns (false, the RPC error).
