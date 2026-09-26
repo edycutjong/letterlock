@@ -97,6 +97,19 @@ describe("passkey → encryption address (via mera)", () => {
     expect(await openWithPasskey(env, { rpId: rp.id, credential: second.credential, webAuthnClient: dev })).toEqual(utf8("hi"));
   });
 
+  it("a malformed envelope is rejected before any passkey prompt", async () => {
+    const dev = softAuthenticator();
+    const { keys, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+    const env = await seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
+      to: { recipient: "agent:7", publicKey: keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
+    const before = dev.calls.get;
+    for (const bad of [{ ...env, ct: "not base64!" }, { ...env, chainId: 0 }]) {
+      const e = await openWithPasskey(bad, { rpId: rp.id, credential, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
+      expect(isLetterlockError(e)).toBe(true);
+    }
+    expect(dev.calls.get).toBe(before);
+  });
+
   it("openWithPasskey derives the envelope's own epoch, so notes sealed before a rotation still open", async () => {
     const dev = softAuthenticator();
     const { credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });

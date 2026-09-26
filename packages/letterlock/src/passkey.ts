@@ -6,7 +6,7 @@ import {
   type WebAuthnClient,
 } from "@category-labs/mera";
 import { deriveKeyPair, prfSaltFor, type EncryptionKeyPair } from "./derive.ts";
-import { open, type Envelope } from "./envelope.ts";
+import { open, parseEnvelope, type Envelope } from "./envelope.ts";
 import { LetterlockError } from "./errors.ts";
 
 /** Every failure leaves the SDK as a LetterlockError with a documented code (docs/SPEC.md §5). */
@@ -60,9 +60,11 @@ export type OpenWithPasskeyOptions = Omit<DeriveOptions, "epoch">;
 
 /**
  * One passkey prompt → plaintext. Derives the key for the envelope's own epoch (old notes keep opening after
- * a rotation), opens, then wipes the derived secret key (best effort: JS cannot guarantee erasure).
+ * a rotation), opens, then zeroes its copy of the secret key (best effort: library-internal copies and the
+ * PRF output held by mera are outside our reach, and JS cannot guarantee erasure).
  */
 export const openWithPasskey = async (env: Envelope, o: OpenWithPasskeyOptions): Promise<Uint8Array> => {
+  parseEnvelope(env); // a malformed envelope must not cost the user a passkey prompt
   const keys = await deriveFromPasskey({ ...o, epoch: env.epoch });
   try { return await open(env, keys); }
   finally { keys.secretKey.fill(0); }

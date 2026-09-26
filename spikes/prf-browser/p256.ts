@@ -70,8 +70,14 @@ const u64 = (n: number) => cat(u32(Math.floor(n / 2 ** 32)), u32(n >>> 0));
 
 export type BindContext = { chainId: number; directory: `0x${string}`; owner: `0x${string}` };
 
-export const bindChallenge = (c: BindContext, x25519pk: Uint8Array, epoch: number) =>
-  sha256(cat(new TextEncoder().encode("letterlock/bind/v1"), u64(c.chainId), fromHex(c.directory), fromHex(c.owner), x25519pk, u32(epoch)));
+export const bindChallenge = (c: BindContext, x25519pk: Uint8Array, epoch: number) => {
+  // fixed widths = Solidity abi.encodePacked(string, uint64, address, address, bytes32, uint32) when ported
+  const dir = fromHex(c.directory), owner = fromHex(c.owner);
+  if (dir.length !== 20 || owner.length !== 20 || x25519pk.length !== 32) throw new Error("bindChallenge: bad field width");
+  if (!Number.isSafeInteger(c.chainId) || c.chainId < 1 || !Number.isInteger(epoch) || epoch < 1 || epoch > 0xffffffff)
+    throw new Error("bindChallenge: chainId/epoch out of range");
+  return sha256(cat(new TextEncoder().encode("letterlock/bind/v1"), u64(c.chainId), dir, owner, x25519pk, u32(epoch)));
+};
 
 export const p256BindingCheck = async (rp: { id: string; name: string }, ctx: BindContext) => {
   const cap: Captured = {};

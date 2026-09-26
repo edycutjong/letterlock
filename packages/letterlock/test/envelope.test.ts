@@ -68,6 +68,15 @@ describe("tamper and misuse surface as named errors", () => {
   it("a different person's key (same epoch) → WRONG_KEY before any crypto", async () =>
     rejects(open(await seal(base), nadia), "WRONG_KEY"));
 
+  it("an edited kid can never make the RIGHT key fail (decrypt first, kid only explains failures)", async () => {
+    const env = await seal(base);
+    expect(await open({ ...env, kid: "0000000000000000" }, maya)).toEqual(note);
+  });
+
+  it.each([["a string", "hello, this is a secret note"], ["undefined", undefined], ["an object", { a: 1 }]])(
+    "seal refuses %s as plaintext instead of sealing zero bytes", async (_, pt) =>
+      rejects(seal({ ...base, plaintext: pt as never }), "INPUT_INVALID"));
+
   it("wrong key with the kid hint stripped → TAMPERED (authentication still holds)", async () => {
     const { kid: _kid, ...noKid } = await seal(base);
     await rejects(open(noKid as Envelope, nadia), "TAMPERED");
