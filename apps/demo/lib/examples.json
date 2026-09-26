@@ -1,0 +1,163 @@
+{
+  "directory": {
+    "chainId": 10143,
+    "directory": "0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4"
+  },
+  "personas": [
+    {
+      "name": "Maya",
+      "address": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
+      "keys": [
+        {
+          "epoch": 1,
+          "publicKey": "0x08d8daecb07365d4cc4d0f0f9e1e3178fa1dd2c91867f67e939893121b40c858",
+          "fingerprint": "6b5286d1ad2708a1"
+        }
+      ]
+    },
+    {
+      "name": "Nadia",
+      "address": "0xd6c94ca947d4bb713647b92cea04082fe0f2078a",
+      "keys": [
+        {
+          "epoch": 1,
+          "publicKey": "0x026cd2e606de0294a1fbd0560b4d871ef8e7f8920000b25ef4b08e5e5dbd855d",
+          "fingerprint": "593013e05c26c52f"
+        }
+      ]
+    },
+    {
+      "name": "Kai",
+      "address": "0x2cb6230026b0bd54a44fc92b501526e5351c7d02",
+      "keys": [
+        {
+          "epoch": 1,
+          "publicKey": "0x6a399e7339fdd864ac569d12f3f46d604fbb33e65e3788dec7103a4e2ce1c847",
+          "fingerprint": "bf315c86ef04fff7"
+        },
+        {
+          "epoch": 2,
+          "publicKey": "0x8979edc4c347bfa0b91711ba14eea3864ae04a81fe5f7340d322cee857d12274",
+          "fingerprint": "895c500f4d5eb78b"
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "recipient": "agent:4412",
+      "keys": [
+        {
+          "epoch": 1,
+          "publicKey": "0x04470314f908cc5073b4a0eda1079071637c8af519605216663272f027d4853c",
+          "fingerprint": "2f78ce25123c663a"
+        }
+      ]
+    }
+  ],
+  "letters": [
+    {
+      "id": "maya-dentist",
+      "to": "Maya",
+      "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
+      "epoch": 1,
+      "text": "Maya, the dentist moved to Thursday at 10:40. I will remind you on Wednesday evening.",
+      "bytes": 367,
+      "envelope": {
+        "v": 1,
+        "chainId": 10143,
+        "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+        "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
+        "epoch": 1,
+        "kid": "6b5286d1ad2708a1",
+        "enc": "mZPH5lcLs6KT0xiJVoVpiL9dETe8h1oekaewvEQT6Ac",
+        "ct": "DdBtglJA4HaG7vwOrtn7VV_6Vbki6HgWRdxhcGBU5DP1AbpP6K2M23KWCM_xkT8ihhHsytsQEkha3uSc6ufB3sankFlZDMRoE4jL9W8uvTuxMnQdiFkbGbDA51k1Klit77gB4pU"
+      }
+    },
+    {
+      "id": "maya-flight",
+      "to": "Maya",
+      "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
+      "epoch": 1,
+      "text": "Your flight changed to the evening departure, so I moved the car pickup to match.",
+      "bytes": 362,
+      "envelope": {
+        "v": 1,
+        "chainId": 10143,
+        "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+        "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
+        "epoch": 1,
+        "kid": "6b5286d1ad2708a1",
+        "enc": "MPQPcJG87blZduyeNQ8rTKcFAj_LKL5AZB5nxlpFRFA",
+        "ct": "a_hAVPmX6e6jyXWldyk0kt96IUG_dB7hETfAoJZsmIr64HOVW2bKAl8hqn1Uz5zXNSr1JLTKmUYSle6i8W42rAn59Fwg7eXqpxtvoCTGLtKlpJgHWDQqhyASOT3XFI1mlg"
+      }
+    },
+    {
+      "id": "kai-lease",
+      "to": "Kai",
+      "recipient": "0x2cb6230026b0bd54a44fc92b501526e5351c7d02",
+      "epoch": 1,
+      "text": "Kai, the landlord accepted the new lease terms. Sign before the 30th.",
+      "bytes": 346,
+      "envelope": {
+        "v": 1,
+        "chainId": 10143,
+        "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+        "recipient": "0x2cb6230026b0bd54a44fc92b501526e5351c7d02",
+        "epoch": 1,
+        "kid": "bf315c86ef04fff7",
+        "enc": "IhMjXkpqjnZ5g3kHW8wjTF8qYXTktY9QiiQUfOAItSo",
+        "ct": "vjuJ_2V-YvUxF9cGmZHhTPzOvzrXiycUz4UcQR3_sfU38jofG66DCRCM0Rj3OJHaXWwXP-v8tYHpWJ-viYFfY0zxRyxz5U4yJyVlT3GgiXS8rlNv8g"
+      }
+    }
+  ],
+  "tampered": {
+    "from": "maya-dentist",
+    "ctByte": 12,
+    "envelope": {
+      "v": 1,
+      "chainId": 10143,
+      "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+      "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
+      "epoch": 1,
+      "kid": "6b5286d1ad2708a1",
+      "enc": "mZPH5lcLs6KT0xiJVoVpiL9dETe8h1oekaewvEQT6Ac",
+      "ct": "DdBtglJA4HaG7vwOr9n7VV_6Vbki6HgWRdxhcGBU5DP1AbpP6K2M23KWCM_xkT8ihhHsytsQEkha3uSc6ufB3sankFlZDMRoE4jL9W8uvTuxMnQdiFkbGbDA51k1Klit77gB4pU"
+    }
+  },
+  "failures": [
+    {
+      "code": "TAMPERED",
+      "letter": "tampered",
+      "key": {
+        "name": "Maya",
+        "epoch": 1
+      },
+      "values": {}
+    },
+    {
+      "code": "WRONG_KEY",
+      "letter": "maya-dentist",
+      "key": {
+        "name": "Nadia",
+        "epoch": 1
+      },
+      "values": {
+        "sealedTo": "6b5286d1ad2708a1",
+        "derived": "593013e05c26c52f"
+      }
+    },
+    {
+      "code": "EPOCH_MISMATCH",
+      "letter": "kai-lease",
+      "key": {
+        "name": "Kai",
+        "epoch": 2
+      },
+      "values": {
+        "envelopeEpoch": 1,
+        "keyEpoch": 2
+      }
+    }
+  ]
+}
