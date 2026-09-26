@@ -111,11 +111,12 @@ Until that ships, the binding is `msg.sender` = the passkey-derived mera account
 
 | Network | Directory | Agent path |
 |---|---|---|
-| Monad testnet (10143) | `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` | disabled: ERC-8004 has no registry on testnet |
+| Monad testnet (10143) | `0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a` | disabled: ERC-8004 has no registry on testnet |
 | Monad mainnet (143) | not deployed yet | ERC-8004 IdentityRegistry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 
-The testnet directory was built from commit `d15fe63`, before the registry-call rule below. That rule is on the
-agent path only, which the testnet directory disables, so it never calls a registry.
+The testnet directory is built from commit `56e3d95`, which includes the registry-call rule below. The rule is on the
+agent path only, which the testnet directory disables, so it never calls a registry. The earlier testnet directory
+`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before the rule) is superseded.
 
 **Reading keys**
 - `keyOf(address)` and `keyOfAgent(agentId)` return `(pub, epoch, updatedAt)`. All zeros means no key

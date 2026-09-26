@@ -9,19 +9,18 @@ upgrade path, and no function accepts value.
 
 | Network | Address | Registry | Source |
 |---|---|---|---|
-| Monad testnet (10143) | [`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`](https://testnet.monadvision.com/address/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4) | none: agent path disabled | commit `d15fe63`, Sourcify `exact_match` |
+| Monad testnet (10143) | [`0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a`](https://testnet.monadvision.com/address/0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a) | none: agent path disabled | commit `56e3d95`, Sourcify `exact_match` |
 | Monad mainnet (143) | not deployed yet ([script/DeployMainnet.md](script/DeployMainnet.md)) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | the current `src/Letterlock.sol` |
 
 The testnet record, including a real `publish` and a real `drop`, is in [`deployments/10143.json`](../deployments/10143.json).
 The published key there is a TEST KEY: the SDK's `deriveKeyPair()` over 32 random bytes standing in for a
 passkey PRF output. The ERC-8004 IdentityRegistry exists only on mainnet, so testnet runs with the agent path
-disabled. The first testnet deployment, `0x311921118F2D40f37e554516069A918bA290e75C`, predates the epoch rule
-below (it accepted any higher epoch) and is superseded.
-
-The source changed after the testnet deployment (commit `d15fe63`): the registry-call rule below, the `drop`
-NatSpec, which in `d15fe63` says the SDK drops the envelope (it has no drop helper yet), and the `keyOfAgent`
-NatSpec on starved reads (commit `56e3d95`). The rule is on the agent path only, which the testnet deployment
-disables, so there it behaves as the current source would.
+disabled. Two earlier testnet deployments are superseded (both listed under `previous` in the record):
+`0x311921118F2D40f37e554516069A918bA290e75C` predates the epoch rule below (it accepted any higher epoch), and
+`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`) predates the registry-call rule and the current
+`drop` and `keyOfAgent` NatSpec. The current testnet directory is the current `src/Letterlock.sol` (commit
+`56e3d95`), deployed with the same checks as the mainnet runbook: its deploy transaction's input was compared with
+`forge inspect Letterlock bytecode` plus the constructor argument before and after sending.
 
 ## Interface
 
@@ -169,8 +168,8 @@ proxy and costs more.
 - The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails. Turning dynamic
   test linking off left every entry unchanged too.
 
-Testnet receipts of the deployed contract (commit `d15fe63`), each equal to its transaction's gas limit: deploy
-1,104,026 · `publish` 70,863 · `drop` (484-byte envelope) 45,708. A read-only simulation of the mainnet deploy,
+Testnet receipts of the deployed contract (commit `56e3d95`), each equal to its transaction's gas limit: deploy
+1,187,921 · `publish` 70,863 · `drop` (492-byte envelope) 45,804. A read-only simulation of the mainnet deploy,
 after `forge build --force` on 2026-09-27, set a gas limit of 1,201,505 (`script/DeployMainnet.md`).
 
 Check that no number moved:
@@ -195,5 +194,8 @@ benchmark passes. The `git diff` catches both; CI runs it after the tests.
 - `script/export-abi.mjs`: forge artifact → `abi/Letterlock.json` + `packages/letterlock/src/abi.ts` (`--check`).
 - `script/mutate.mjs`: the mutation check. It holds the mutant list, and runs each mutant in a scratch copy of
   `contracts/`, never in this tree (`--only 1,4`, `--jobs 8`, `--verbose`).
-- `script/testnet-smoke.mjs`: derives a TEST KEY and seals a note with the SDK (`prepare`), then after
-  `cast send publish` / `cast send drop` it reads both back from the chain and opens the envelope (`verify`).
+- `script/smoke.mjs`: derives a key that is nobody's (the SDK's `deriveKeyPair()` over 32 random bytes in place of a
+  passkey PRF output; labelled TEST KEY, or DEMO KEY on mainnet) and seals a note to it with `seal()` (`prepare`).
+  After `cast send publish` / `publishForAgent` / `drop` it reads the key back with `keyOf` or `keyOfAgent`, and
+  with `--drop-tx` reads the `Dropped` envelope from the receipt, checks its chain, directory and recipient, and
+  opens it (`verify`).
