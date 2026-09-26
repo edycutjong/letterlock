@@ -1,6 +1,7 @@
 import { AddressCard } from "@/components/AddressCard";
 import { ExampleNote } from "@/components/ExampleBadge";
 import { ExampleAction } from "@/components/ExampleAction";
+import { ArrowRightIcon } from "@/components/Icons";
 import { PageHead } from "@/components/PageHead";
 import { currentKey, persona } from "@/lib/examples.ts";
 import styles from "./home.module.css";
@@ -77,7 +78,13 @@ export default function YourAddress() {
             </span>
             <h3>Receive</h3>
             <p>Any app or agent looks you up and seals to that key without asking you. Opening it takes your passkey.</p>
-            <code className="data">keyOf(address) → seal()</code>
+            {/* the arrow is drawn: the mono face has no → glyph, and a fallback font would break the data line */}
+            <code className="data">
+              keyOf(address)
+              <ArrowRightIcon size={14} className={styles.then} />
+              <span className="visually-hidden"> then </span>
+              seal()
+            </code>
           </li>
         </ol>
       </section>

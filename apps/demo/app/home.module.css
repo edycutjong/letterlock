@@ -105,6 +105,13 @@
   border-radius: 2px;
 }
 
+/* the arrow between two calls, one character wide */
+.then {
+  display: inline-block;
+  margin: 0 0.3em;
+  vertical-align: -0.15em;
+}
+
 @media (max-width: 959.98px) {
   .hero {
     grid-template-columns: minmax(0, 1fr);
