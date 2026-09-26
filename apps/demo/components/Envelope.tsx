@@ -49,8 +49,9 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
   const hasLetter = children !== undefined && children !== null && children !== false;
   const full = variant === "full";
 
-  const airmail = (
-    <pattern id={id("airmail")} width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+  // the airmail chevrons, defined in each of the two SVGs that paint them, under its own id: ids are unique in a page
+  const airmail = (face: "flap" | "front") => (
+    <pattern id={id(`airmail-${face}`)} width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <rect width="11.6" height="20" className={styles.airmailInk} />
     </pattern>
   );
@@ -87,7 +88,7 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
           <div className={styles.flap}>
             <svg className={`${styles.face} ${styles.outer}`} viewBox={`0 0 ${W} 132`} overflow="visible" aria-hidden="true" focusable="false">
               <defs>
-                {airmail}
+                {airmail("flap")}
                 <linearGradient id={id("flap")} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="132">
                   <stop offset="0" className={styles.flapFold} />
                   <stop offset=".24" className={styles.flapMid} />
@@ -103,7 +104,7 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
               {/* the flap's shadow on the pocket, falling down-right */}
               <path className={styles.flapShadow} d="M0 0L190 131L380 0" transform="translate(2 5)" filter={url("flap-soft")} />
               <path d={FLAP} fill={url("flap")} />
-              <path d={AIRMAIL_RING} fill={url("airmail")} fillRule="evenodd" clipPath={url("flap-clip")} />
+              <path d={AIRMAIL_RING} fill={url("airmail-flap")} fillRule="evenodd" clipPath={url("flap-clip")} />
               <path className={styles.flapHighlight} d="M3 1L190 128.6L377 1" />
               <path className={styles.edge} d="M0 0L190 131L380 0" />
             </svg>
@@ -116,7 +117,7 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
           {/* the pocket's face: paper, airmail chevrons, the address rule, the ink outline */}
           <svg className={styles.front} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" focusable="false">
             <defs>
-              {airmail}
+              {airmail("front")}
               <linearGradient id={id("paper")} x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0" className={styles.paperLit} />
                 <stop offset=".6" className={styles.paperLit} />
@@ -131,7 +132,7 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
             </defs>
             <g clipPath={url("round")}>
               <path d={POCKET} fill={url("paper")} />
-              <path d={AIRMAIL_RING} fill={url("airmail")} fillRule="evenodd" clipPath={url("pocket")} />
+              <path d={AIRMAIL_RING} fill={url("airmail-front")} fillRule="evenodd" clipPath={url("pocket")} />
               <path className={styles.pocketEdge} d="M0 0L190 131L380 0" />
             </g>
             {full && <path className={styles.rule} d={ADDRESS_RULE} />}
