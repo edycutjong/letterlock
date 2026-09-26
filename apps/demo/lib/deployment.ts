@@ -17,8 +17,10 @@ export const DIRECTORY = {
 
 /**
  * The one key on the testnet directory so far: the deploy smoke test's TEST KEY (the SDK's derivation over 32
- * random bytes standing in for a passkey PRF output; no passkey was used). `keyOf(deployer)` returned this key,
- * epoch 1 and updatedAt 1790433335 when read with `cast call` on 2026-09-27; that is the timestamp of block 65875618.
+ * random bytes standing in for a passkey PRF output; no passkey was used). Every field is read from the record, the
+ * time too: `keyOf(deployer)` returned this key, epoch 1 and updatedAt 1790458753 when read with `cast call` on
+ * 2026-09-27, the timestamp of block 65957124, which holds the publish transaction. test/deployment.test.ts fails
+ * on any chain value typed into this file.
  */
 export const TESTNET_TEST_KEY = {
   address: testnet.deployer as `0x${string}`,
@@ -28,5 +30,5 @@ export const TESTNET_TEST_KEY = {
   block: testnet.smokeTest.publishBlock,
   txHash: testnet.publishTx as `0x${string}`,
   txUrl: testnet.explorer.publishTx,
-  updatedAt: 1790433335,
+  updatedAt: testnet.smokeTest.updatedAt,
 } as const;
