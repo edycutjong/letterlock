@@ -159,7 +159,7 @@ export const buildProgram = (io: CliIo): Command => {
       });
       if (o.json) { out(json(r)); return; }
       const n = r.envelopes.length;
-      out(`${n} envelope${n === 1 ? "" : "s"} for ${r.recipient} on ${where(ll)}, blocks ${r.fromBlock}..${r.toBlock} (${r.requests} eth_getLogs request${r.requests === 1 ? "" : "s"}, ${r.blockRange} blocks each)\n`);
+      out(`${n} envelope${n === 1 ? "" : "s"} for ${r.recipient} on ${where(ll)}, blocks ${r.fromBlock}..${r.toBlock} (${r.requests} eth_getLogs request${r.requests === 1 ? "" : "s"}, up to ${r.blockRange} blocks each)\n`);
       for (const e of r.envelopes)
         out(`  block ${e.blockNumber}  tx ${e.transactionHash}  epoch ${e.envelope.epoch}  kid ${e.envelope.kid}  ${e.bytes} bytes\n`);
       if (r.rejected.length) {

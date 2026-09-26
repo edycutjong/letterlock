@@ -146,7 +146,7 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     expect(j.envelopes.map((e) => e.transactionHash)).toEqual([tx]);
     expect(text(await open(decodeEnvelope(JSON.stringify(j.envelopes[0]!.envelope)), keys))).toBe("dropped by the CLI");
     const human = await cli(["inbox", recipient, "--from-block", block!, ...chain()]);
-    expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, 10000 blocks each\)/);
+    expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)/);
   });
 
   it("drop refuses an envelope for another chain before sending", async () => {
