@@ -1,26 +1,37 @@
-.grid {
+/* Wide screens: the page head and the inbox on the left, the open letter on the right from the top, level with the
+   title, so the cracked seal is in the first screen of a laptop or an iPad on its side (scripts/checks/open-fold.mjs;
+   under the page head it fell below the fold). Narrow screens: the page head, the letter, the inbox. */
+.main {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  /* the letter spans both rows; the flexible second row takes its extra height, so the page head's row stays its own */
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "head reader"
+    "inbox reader";
   align-items: start;
   column-gap: clamp(32px, 5.5vw, 80px);
-  row-gap: 56px;
+}
+
+.head {
+  grid-area: head;
 }
 
 .reader {
+  grid-area: reader;
   display: grid;
   gap: 20px;
   min-width: 0;
-  padding-top: 8px;
+  /* level with the title: the page head's own top padding */
+  padding-top: clamp(32px, 5.5vw, 64px);
 }
 
 .caption {
-  max-width: 58ch;
-  font-size: var(--fs-small);
-  line-height: 1.5;
-  color: var(--muted);
+  max-width: 62ch;
 }
 
 .inbox {
+  grid-area: inbox;
   display: grid;
   gap: 24px;
   min-width: 0;
@@ -107,13 +118,22 @@
 }
 
 @media (max-width: 959.98px) {
-  .grid {
+  .main {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      "head"
+      "reader"
+      "inbox";
   }
   .reader {
     max-width: 640px;
     width: 100%;
     justify-self: center;
+    padding-top: 8px;
+  }
+  .inbox {
+    margin-top: 56px;
   }
 }
 
