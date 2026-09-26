@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Letterlock, IERC721} from "../src/Letterlock.sol";
 import {KeyOfAgentGasSweep} from "./utils/KeyOfAgentGasSweep.sol";
+import {MainnetFork} from "./utils/MainnetFork.sol";
 
 /// @notice The ERC-721 transfer the fork test uses to move a real agent (Letterlock itself never transfers).
 interface IERC721Transfer {
@@ -11,11 +12,12 @@ interface IERC721Transfer {
 
 /// @notice Monad MAINNET fork against the real ERC-8004 IdentityRegistry (no mock). Forks the latest block of
 ///         MONAD_MAINNET_RPC (default https://rpc.monad.xyz), deploys Letterlock on the fork, and reads ownerOf live.
-///         If the RPC is unreachable every test here is SKIPPED with a message; nothing is faked.
+///         If the RPC is unreachable every test here is SKIPPED with a message; nothing is faked. With
+///         LETTERLOCK_REQUIRE_FORK=true (the mainnet deploy pre-flight) they FAIL instead, and nothing here skips.
 /// @dev Agent 10259 was registered on mainnet in tx 0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77
 ///      (block 107945312: Transfer from 0x0 + Registered, read with `cast receipt`). Agent 0 exists too. Override the
 ///      agent with LETTERLOCK_FORK_AGENT_ID.
-contract LetterlockMainnetForkTest is KeyOfAgentGasSweep {
+contract LetterlockMainnetForkTest is KeyOfAgentGasSweep, MainnetFork {
     event KeyPublished(address indexed who, uint256 indexed agentId, bytes32 pub, uint32 epoch);
     event Dropped(address indexed to, uint256 indexed toAgent, bytes envelope);
 
@@ -36,12 +38,8 @@ contract LetterlockMainnetForkTest is KeyOfAgentGasSweep {
     function setUp() public {
         string memory rpc = vm.envOr("MONAD_MAINNET_RPC", string("https://rpc.monad.xyz"));
         agentId = vm.envOr("LETTERLOCK_FORK_AGENT_ID", uint256(10259));
-        try vm.createSelectFork(rpc) {
-            forked = true;
-        } catch (bytes memory err) {
-            forkError = _reason(err);
-            return;
-        }
+        (forked, forkError) = _selectFork(rpc, _forkRequired());
+        if (!forked) return;
         // A reachable RPC that is not Monad mainnet is a misconfiguration, not an outage: fail, never skip.
         assertEq(block.chainid, MONAD_MAINNET, "MONAD_MAINNET_RPC must point at Monad mainnet (chain 143)");
         ll = new Letterlock(IDENTITY_REGISTRY);
@@ -52,16 +50,6 @@ contract LetterlockMainnetForkTest is KeyOfAgentGasSweep {
                 string.concat("agent ", vm.toString(agentId), " has no owner on mainnet; set LETTERLOCK_FORK_AGENT_ID")
             );
         }
-    }
-
-    /// Cheatcode failures revert with an ABI-encoded (selector, string) payload; show the string.
-    function _reason(bytes memory err) internal pure returns (string memory) {
-        if (err.length < 68) return "createSelectFork failed";
-        bytes memory payload = new bytes(err.length - 4);
-        for (uint256 i = 0; i < payload.length; i++) {
-            payload[i] = err[i + 4];
-        }
-        return abi.decode(payload, (string));
     }
 
     modifier onlyFork() {
@@ -114,6 +102,10 @@ contract LetterlockMainnetForkTest is KeyOfAgentGasSweep {
     function test_fork_ownerOfAnotherAgentCannotPublish() public onlyFork {
         address ownerOfZero = registry.ownerOf(0);
         if (ownerOfZero == owner) {
+            // A required run must exercise every check: pick another agent with LETTERLOCK_FORK_AGENT_ID.
+            if (_forkRequired()) {
+                revert("agent 0 and the test agent have the same owner; set LETTERLOCK_FORK_AGENT_ID");
+            }
             vm.skip(true, "SKIPPED: agent 0 and the test agent have the same owner at this block");
             return;
         }
