@@ -1,0 +1,112 @@
+/* Letterlock design tokens. Values are the brand's own and are copied, not invented: change them at the source and
+   re-copy, never here. The world is a post office register and the sealed letter, in daylight, so the page is LIGHT.
+
+   Colour law (enforced by test/colour-law.test.ts):
+   - wax red (--after and the wax-* tokens) appears ONLY on the wax seal and the wax "lock" of the wordmark;
+   - airmail blue (--before) is the open state: a readable letter, a public key, a key found in the register;
+   - everything else is ink, pencil and ruling on manila. No red buttons, no red error text. */
+
+:root {
+  /* ---- the world ---- */
+  --bg:      #F3EEE3;  /* manila envelope stock — the world's paper */
+  --ink:     #1E1B16;  /* iron-gall ink on stationery */
+  --muted:   #6E6556;  /* faded register-book pencil */
+  --before:  #2F5D9E;  /* state: open / unsealed — airmail blue, a letter still in transit and readable */
+  --after:   #A3261E;  /* state: sealed — sealing-wax red; fires only when a seal() completes or a seal is broken on open() */
+  --rule:    #CFC4AF;  /* register-book ruling */
+  --font-display: "Bodoni Moda", "Didot", "Bodoni 72", serif;  /* engraved-stationery Didone; true italic for address lines */
+  --font-body:    "Public Sans", "Helvetica Neue", Arial, sans-serif;  /* plain civil-service sans, like postal forms */
+  --font-data:    "IBM Plex Mono", ui-monospace, Menlo, monospace;  /* ONLY fingerprints, envelope JSON, tx hashes, bench numbers */
+
+  /* ---- brand names, bound to the two states ---- */
+  --primary: var(--before);   /* #2F5D9E */
+  --accent:  var(--after);    /* #A3261E */
+  --open:    var(--primary);  /* state: open — the letter is readable by whoever carries it */
+  --sealed:  var(--accent);   /* state: sealed — fires exactly when a wax seal presses shut; only the addressee's passkey breaks it */
+  --primary-glow: color-mix(in srgb, var(--primary) 18%, transparent);  /* light stock: glows stay low */
+  --accent-glow:  color-mix(in srgb, var(--accent) 22%, transparent);
+  --wax-deep:  #7A1B15;  /* shadow side of the pressed wax — --after darkened, used only inside the seal */
+  --wax-sheen: #C4483C;  /* lit edge of the pressed wax — used only inside the seal */
+
+  /* ---- surfaces (manila stock) ---- */
+  --bg-base:     var(--bg);
+  --bg-elevated: #F8F4EB;   /* the letter sheet lying on the envelope */
+  --bg-overlay:  color-mix(in srgb, var(--ink) 55%, transparent);
+  --bg-sunk:     #ECE6D9;   /* the envelope's inner fold */
+
+  /* ---- text ---- */
+  --text-hi:  var(--ink);    /* 14.8:1 on --bg */
+  --text-mid: var(--muted);  /* 4.96:1 on --bg */
+  --text-low: #8C8272;       /* decorative ruling labels only — 3.27:1, never body text */
+
+  /* ---- borders ---- */
+  --border-subtle:  color-mix(in srgb, var(--rule) 60%, transparent);
+  --border-default: var(--rule);
+
+  /* ---- status (mapped into the postal world) ---- */
+  --color-success: #3F6B3A;  /* franked / delivered */
+  --color-warning: #9A6A12;  /* postage due */
+  --color-error:   var(--after);  /* unused in this app: the colour law keeps red on the wax, so the slip is ink */
+  --color-info:    var(--before);
+  --color-success-glow: color-mix(in srgb, var(--color-success) 20%, transparent);
+  --color-warning-glow: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  --color-error-glow:   color-mix(in srgb, var(--color-error) 20%, transparent);
+  --color-info-glow:    color-mix(in srgb, var(--color-info) 20%, transparent);
+
+  /* ---- interactive ---- */
+  --color-hover:    color-mix(in srgb, var(--primary) 10%, transparent);
+  --color-focus:    color-mix(in srgb, var(--primary) 55%, transparent);
+  --color-disabled: color-mix(in srgb, var(--text-low) 50%, transparent);
+
+  /* ---- gradients (paper light, not neon) ---- */
+  --gradient-hero: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  --gradient-mesh: radial-gradient(60% 80% at 18% 20%, #FBF7EF 0%, transparent 60%),
+                   radial-gradient(50% 70% at 85% 90%, #E7DECC 0%, transparent 65%);
+  --gradient-text: linear-gradient(to right, var(--ink), var(--muted));
+  --gradient-wax:  radial-gradient(circle at 38% 32%, var(--wax-sheen) 0%, var(--after) 45%, var(--wax-deep) 100%);
+
+  /* ---- typography aliases ---- */
+  --font-ui:   var(--font-body);
+  --font-mono: var(--font-data);
+
+  /* ---- fluid scale ---- */
+  --text-xs:  clamp(0.625rem, 0.6rem + 0.15vw, 0.75rem);
+  --text-sm:  clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-base: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-lg:  clamp(1rem, 0.9rem + 0.5vw, 1.125rem);
+  --text-xl:  clamp(1.125rem, 1rem + 0.6vw, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1rem + 1.25vw, 1.5rem);
+  --text-3xl: clamp(1.5rem, 1.2rem + 1.5vw, 1.875rem);
+  --text-4xl: clamp(1.875rem, 1.5rem + 2vw, 2.25rem);
+  --text-5xl: clamp(2.25rem, 1.5rem + 3.75vw, 3rem);
+
+  /* ---- spacing ---- */
+  --spacing-4: 4px;  --spacing-8: 8px;  --spacing-12: 12px; --spacing-16: 16px; --spacing-24: 24px;
+  --spacing-32: 32px; --spacing-40: 40px; --spacing-64: 64px; --spacing-96: 96px;
+
+  /* ---- radius (stationery is nearly square) ---- */
+  --radius-4: 4px; --radius-8: 8px; --radius-12: 12px; --radius-16: 16px; --radius-20: 20px;
+  --radius-24: 24px; --radius-32: 32px; --radius-full: 9999px;
+
+  /* ---- z-index ---- */
+  --z-base: 0; --z-dropdown: 100; --z-sticky: 200; --z-modal: 300; --z-popover: 400; --z-toast: 500; --z-overlay: 999;
+
+  /* ---- effects ---- */
+  --noise-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  --grid-bg: repeating-linear-gradient(to bottom, transparent 0 39px, color-mix(in srgb, var(--rule) 70%, transparent) 39px 40px); /* register-book ruling */
+  --airmail-edge: repeating-linear-gradient(135deg, var(--before) 0 14px, transparent 14px 24px);  /* blue-only chevrons: red is reserved for the sealed state */
+  --blur-glass: blur(12px) saturate(1.1);
+  --shadow-sm: 0 1px 2px rgba(30, 27, 22, 0.08);
+  --shadow-md: 0 4px 14px rgba(30, 27, 22, 0.10);
+  --shadow-lg: 0 18px 44px rgba(30, 27, 22, 0.16);
+  --shadow-glow: 0 6px 18px var(--accent-glow), 0 1px 0 rgba(30, 27, 22, 0.25);  /* pressed-wax cast shadow */
+
+  /* ---- motion ---- */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 500ms ease;
+  --ease-press: cubic-bezier(.2, 1.4, .4, 1);  /* the seal settle — overshoot, ≤300 ms */
+}
+
+/* Breakpoints (reference only — use in media queries):
+   --bp-sm: 640px   --bp-md: 768px   --bp-lg: 1024px   --bp-xl: 1280px   --bp-2xl: 1536px */
