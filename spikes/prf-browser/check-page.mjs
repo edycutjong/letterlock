@@ -42,6 +42,7 @@ const simulateAuthenticator = () => {
   const create = proto.create;
   const get = proto.get;
   proto.create = async function (o) {
+    if (window.__simCancelNextCreate) { window.__simCancelNextCreate = false; throw new DOMException("simulated: user cancelled", "NotAllowedError"); }
     const cred = await create.call(this, o);
     if (window.__simPrfEnabledOnly && cred) {
       const results = cred.getClientExtensionResults.bind(cred);
@@ -270,6 +271,16 @@ try {
   check("simulated blocked 2nd prompt: 'one more tap' → 2 · Use my passkey finishes with the kept credential hint, and its new link opens discoverably",
     stuck.title.includes("one more tap") && stuck.next === 1 && cF.json.path === "credential-hint" && /^[0-9a-f]{16}$/.test(fpF)
       && cF2.json.path === "discoverable" && cF2.json.verdict === "pass" && (await fpOf(blocked.page)) === fpF, stuck.title);
+
+  // ---------- the Mac tester cancels Touch ID during 1 · Create → a Mac-side message ----------
+  const cancel = await device({ label: "G", simulate: true });
+  await load(cancel.page, PAGE);
+  await cancel.page.evaluate(() => { window.__simCancelNextCreate = true; });
+  await cancel.page.click("#create");
+  await cancel.page.locator("#error").waitFor({ state: "visible" });
+  check("simulated cancel of 1 · Create → 'tap 1 · Create to try again', not iPad sync advice",
+    (await text(cancel.page, "#error-text")).includes("Tap “1 · Create” to try again") && !(await text(cancel.page, "#error-text")).includes("iPad"),
+    await text(cancel.page, "#error-text"));
 
   // ---------- damaged links ----------
   await load(dash.page, PAGE + "#env=bm90LWpzb24");
