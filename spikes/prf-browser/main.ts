@@ -273,6 +273,7 @@ const create = async (text: string = noteText()) => {
     const cs = ceremonies.slice(mark);
     const result = { step: "create", fingerprint: fp, pk, credentialId: credential.credentialId, passkeyName: name, envelope: env, link, prompts: cs.length, prfAt: prfArrival(cs), ceremonies: cs };
     $("incoming").hidden = true;
+    $("step-create").classList.remove("is-quiet");
     setNext(null);
     renderSaved();
     renderReport({
