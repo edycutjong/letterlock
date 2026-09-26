@@ -64,6 +64,12 @@ jobs:
       - name: Keystore import from the environment
         run: node --test script/keystore-from-env.test.mjs
 
+      # smoke.mjs writes a PRF stand-in, which opens what is sealed to its key, to --out: any --out inside the
+      # repository is refused, after symlinks and letter case are resolved. Its end-to-end run skips here (this job
+      # does not install the SDK's dependencies).
+      - name: Smoke key files stay out of the repository
+        run: node --test script/outside-repo.test.mjs
+
       # A raw key on a command line is visible in the process list: documented commands use a keystore (--account).
       - name: No private key on a documented command line
         run: "! grep -rn -e '--private-key' README.md script src"

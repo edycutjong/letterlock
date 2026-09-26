@@ -105,6 +105,7 @@ forge coverage --no-match-path test/LetterlockGas.t.sol --no-match-coverage "tes
 node script/mutate.mjs   # mutation check; exits 1 if a mutant not marked equivalent survives
 node script/export-abi.mjs --check
 node --test script/keystore-from-env.test.mjs   # the keystore import for a deploy without a terminal
+node --test script/outside-repo.test.mjs   # smoke.mjs never writes its key file inside the repository
 ```
 
 `foundry.toml` sets `dynamic_test_linking = false`: with Foundry 1.8's default, an edit inside a function body of
@@ -211,3 +212,6 @@ benchmark passes. The `git diff` catches both; CI runs it after the tests.
   After `cast send publish` / `publishForAgent` / `drop` it reads the key back with `keyOf` or `keyOfAgent`, and
   with `--drop-tx` reads the `Dropped` envelope from the receipt, checks its chain, directory and recipient, and
   opens it (`verify`).
+- `script/outside-repo.mjs`: the check behind `smoke.mjs --out`. A path is compared with the repository after
+  symlinks and letter case are resolved on the part of it that exists, by whole segments, so `./..keys`, a link into
+  the tree and a dangling link are all refused (`outside-repo.test.mjs`).

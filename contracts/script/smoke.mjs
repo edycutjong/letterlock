@@ -15,11 +15,12 @@
 //          is read back from that receipt, must name this chain, directory and recipient, and is opened
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve, relative, isAbsolute } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   canonicalRecipient, deriveKeyPair, fingerprint, fromHex, open, seal, toHex,
 } from "../../packages/letterlock/src/index.ts";
+import { isOutside } from "./outside-repo.mjs";
 
 const contracts = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(contracts, "..");
@@ -51,8 +52,8 @@ async function prepare() {
   const chainId = Number(need("chain-id"));
   const label = args.label ?? "TEST KEY";
   const out = resolve(need("out"));
-  const rel = relative(repo, out);
-  if (!rel.startsWith("..") && !isAbsolute(rel)) throw new Error(`--out must be outside the repository (${repo})`);
+  // compared after symlinks and letter case are resolved, by whole segments: a folder named "..keys" is inside
+  if (!isOutside(repo, out)) throw new Error(`--out must be outside the repository (${repo})`);
   if (!isAddress(directory)) throw new Error("bad directory address");
   if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error("bad --chain-id");
   const network = NETWORKS[chainId] ?? `chain ${chainId}`;
