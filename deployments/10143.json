@@ -2,9 +2,9 @@
   "chainId": 10143,
   "network": "Monad testnet",
   "contract": "Letterlock",
-  "address": "0x311921118F2D40f37e554516069A918bA290e75C",
-  "deployTx": "0x6897ebbdaad88004f077d5048e7c78940b161e51d46ede22a173e3b21c69b9fd",
-  "block": 65862938,
+  "address": "0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4",
+  "deployTx": "0x2193d484408e016200f949b020683242b06e6ffae143ad807ad309bb84369689",
+  "block": 65875477,
   "deployer": "0xb7A232dfA12e636ad9A951503c25aBA188c9f062",
   "identityRegistry": "0x0000000000000000000000000000000000000000",
   "agentPath": "disabled: the ERC-8004 IdentityRegistry exists on Monad mainnet only, so this testnet deployment has identityRegistry = address(0) and publishForAgent / drop-to-agent revert AgentPathDisabled",
@@ -13,41 +13,48 @@
     "verifier": "sourcify",
     "verifierUrl": "https://sourcify-api-monad.blockvision.org/",
     "match": "exact_match (runtime bytecode); creationMatch null",
-    "check": "https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x311921118F2D40f37e554516069A918bA290e75C",
+    "check": "https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4",
     "monadscan": "not verified (the Etherscan-family verifier needs an API key)"
   },
-  "publishTx": "0x7e4e34353d33f88f1685682c40fb02455b4cda1b0d06475368044d191a75dadc",
-  "dropTx": "0x6bf4e64f855c8d28389c34feb17cbcc5bd285dcd286505023aaab6ddf77c8d68",
+  "publishTx": "0x4cb027dbb3c5da93f4709739ef404905a61fe34dee3bbbf606c53f30e06e72e1",
+  "dropTx": "0xfddd6beb1d28e812b2e55620c2b0435718f703c9c93fd9673cb277ba838b8194",
   "abiPath": "contracts/abi/Letterlock.json",
   "sdkAbiPath": "packages/letterlock/src/abi.ts",
   "source": {
     "path": "contracts/src/Letterlock.sol",
-    "commit": "7f31f33",
+    "commit": "d15fe63",
     "compiler": "solc 0.8.33",
     "evmVersion": "osaka",
     "optimizerRuns": 10000
   },
   "smokeTest": {
     "label": "TEST KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used",
-    "publishedKey": "0x257aff8f2d11c83daa1e47e2d8693bc8e7d043dac1e383f40907cbecb6fd471e",
+    "publishedKey": "0x3168353ad64ba73f409b7e10a8348e7154165f362c278c2339f003fd514f633b",
     "epoch": 1,
-    "kid": "60968878410cd578",
-    "publishBlock": 65863393,
-    "dropBlock": 65863426,
+    "kid": "22c8044f76d4e8e5",
+    "publishBlock": 65875618,
+    "dropBlock": 65875639,
     "envelopeBytes": 484,
-    "result": "keyOf(deployer) returned the test key at epoch 1; the Dropped envelope read back from the drop receipt opened with the re-derived test key (contracts/script/testnet-smoke.mjs verify)"
+    "result": "keyOf(deployer) returned the test key at epoch 1; the Dropped envelope read back from the drop receipt opened with the re-derived test key (contracts/script/testnet-smoke.mjs verify)",
+    "epochRule": "eth_call simulations from the deployer: publish at epoch 7 and at 4294967295 before any key reverted EpochNotNext(0, 7) and EpochNotNext(0, 4294967295); after the epoch-1 publish, epoch 3 reverted EpochNotNext(1, 3) and epoch 2 would succeed"
   },
   "gasUsed": {
-    "deploy": 1098346,
-    "publish": 70753,
+    "deploy": 1104026,
+    "publish": 70863,
     "drop": 45708,
     "note": "receipt gasUsed, equal to each tx's gas limit (Monad charges the gas limit)"
   },
   "explorer": {
-    "contract": "https://testnet.monadvision.com/address/0x311921118F2D40f37e554516069A918bA290e75C",
-    "deployTx": "https://testnet.monadvision.com/tx/0x6897ebbdaad88004f077d5048e7c78940b161e51d46ede22a173e3b21c69b9fd",
-    "publishTx": "https://testnet.monadvision.com/tx/0x7e4e34353d33f88f1685682c40fb02455b4cda1b0d06475368044d191a75dadc",
-    "dropTx": "https://testnet.monadvision.com/tx/0x6bf4e64f855c8d28389c34feb17cbcc5bd285dcd286505023aaab6ddf77c8d68",
-    "monadscan": "https://testnet.monadscan.com/address/0x311921118F2D40f37e554516069A918bA290e75C"
+    "contract": "https://testnet.monadvision.com/address/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4",
+    "deployTx": "https://testnet.monadvision.com/tx/0x2193d484408e016200f949b020683242b06e6ffae143ad807ad309bb84369689",
+    "publishTx": "https://testnet.monadvision.com/tx/0x4cb027dbb3c5da93f4709739ef404905a61fe34dee3bbbf606c53f30e06e72e1",
+    "dropTx": "https://testnet.monadvision.com/tx/0xfddd6beb1d28e812b2e55620c2b0435718f703c9c93fd9673cb277ba838b8194",
+    "monadscan": "https://testnet.monadscan.com/address/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4"
+  },
+  "supersedes": {
+    "address": "0x311921118F2D40f37e554516069A918bA290e75C",
+    "deployTx": "0x6897ebbdaad88004f077d5048e7c78940b161e51d46ede22a173e3b21c69b9fd",
+    "sourceCommit": "7f31f33",
+    "why": "deployed before audit A: any higher epoch was accepted, so one publish at 2^32 - 1 froze a slot (and a seller could freeze an agent's slot before a transfer). Superseded; do not publish to it."
   }
 }

@@ -9,13 +9,14 @@ upgrade path, and no function accepts value.
 
 | Network | Address | Registry | Source |
 |---|---|---|---|
-| Monad testnet (10143) | [`0x311921118F2D40f37e554516069A918bA290e75C`](https://testnet.monadvision.com/address/0x311921118F2D40f37e554516069A918bA290e75C) | none: agent path disabled | Sourcify `exact_match` |
+| Monad testnet (10143) | [`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`](https://testnet.monadvision.com/address/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4) | none: agent path disabled | Sourcify `exact_match` |
 | Monad mainnet (143) | not deployed yet ([script/DeployMainnet.md](script/DeployMainnet.md)) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | |
 
 The testnet record, including a real `publish` and a real `drop`, is in [`deployments/10143.json`](../deployments/10143.json).
 The published key there is a TEST KEY: the SDK's `deriveKeyPair()` over 32 random bytes standing in for a
 passkey PRF output. The ERC-8004 IdentityRegistry exists only on mainnet, so testnet runs with the agent path
-disabled.
+disabled. The first testnet deployment, `0x311921118F2D40f37e554516069A918bA290e75C`, predates the epoch rule
+below (it accepted any higher epoch) and is superseded.
 
 ## Interface
 
@@ -117,6 +118,9 @@ proxy and costs more.
 - At both measured sizes, a drop to an address pays exactly the floor, 24,060 + 40 gas per envelope byte: the
   envelope's size, not the contract's execution, sets the price.
 
+Testnet receipts of the deployed contract, each equal to its transaction's gas limit: deploy 1,104,026 ·
+`publish` 70,863 · `drop` (484-byte envelope) 45,708.
+
 Check that no number moved (exits 1 on any change):
 
 ```sh
@@ -128,5 +132,7 @@ forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true
 - `script/Deploy.s.sol`: deploy (testnet: registry `address(0)`; mainnet: the ERC-8004 registry is enforced).
 - `script/DeployMainnet.md`: exact mainnet steps. Not run yet.
 - `script/export-abi.mjs`: forge artifact → `abi/Letterlock.json` + `packages/letterlock/src/abi.ts` (`--check`).
+- `script/mutate.mjs`: the mutation check. It holds the mutant list, and runs each mutant in a scratch copy of
+  `contracts/`, never in this tree (`--only 1,4`, `--jobs 8`, `--verbose`).
 - `script/testnet-smoke.mjs`: derives a TEST KEY and seals a note with the SDK (`prepare`), then after
   `cast send publish` / `cast send drop` it reads both back from the chain and opens the envelope (`verify`).
