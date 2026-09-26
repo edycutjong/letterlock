@@ -114,16 +114,20 @@ Until that ships, the binding is `msg.sender` = the passkey-derived mera account
 | Monad testnet (10143) | `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` | disabled: ERC-8004 has no registry on testnet |
 | Monad mainnet (143) | not deployed yet | ERC-8004 IdentityRegistry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 
+The testnet directory was built from commit `d15fe63`, before the registry-call rule below. That rule is on the
+agent path only, which the testnet directory disables, so it never calls a registry.
+
 **Reading keys**
 - `keyOf(address)` and `keyOfAgent(agentId)` return `(pub, epoch, updatedAt)`. All zeros means no key
   (`NO_KEY_PUBLISHED`, §5); nothing is ever sealed to a zero key.
 - `keyOfAgent` resolves only while the agent's current `ownerOf` is the address that published the key. After a
   transfer or a burn it returns zeros, because the previous owner holds the passkey: the key follows the NFT.
-- A contract that reads `keyOfAgent` must forward enough gas. The deployed source reads any failure of the
-  registry's `ownerOf` as "no owner", including running out of gas, so a starved call can return zeros for a live
-  key (measured on a mainnet fork: 35,920 to 46,440 gas returns zeros, 46,620 or more returns the key). Forward at
-  least 100,000 gas. An `eth_call` is unaffected. The mainnet deploy fixes this: only the registry's
-  `ERC721NonexistentToken` revert means "no owner", anything else reverts.
+- Registry-call rule: only the registry's `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`: the
+  agent was never minted, or was burned) means "no owner". Any other failure of its `ownerOf`, running out of gas
+  included, reverts `RegistryCallFailed(agentId)`. Zeros from `keyOfAgent` therefore always mean that no key
+  resolves, never that the read was starved of gas. `publishForAgent` and a drop to an agent follow the same rule.
+  A contract that reads `keyOfAgent` must forward enough gas to get an answer: on a mainnet fork, read cold, every
+  budget from 46,620 gas up returned the key and every smaller one reverted. An `eth_call` is never starved.
 - `agentKeyRecord(agentId)` returns the raw record `(pub, epoch, updatedAt, publisher)`, whether or not it still
   resolves. It is for indexers, and for a new owner reading the next epoch. Never seal to it.
 - A `KeyPublished` log is history, not liveness: no Letterlock event marks an agent transfer or burn. The §3 `seal`
