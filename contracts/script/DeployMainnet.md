@@ -6,6 +6,22 @@ On mainnet the directory is deployed with the real ERC-8004 IdentityRegistry
 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, so the agent path is enabled. `script/Deploy.s.sol` picks that
 registry on chain 143 by default and refuses any other one there.
 
+## Before deploying: source changes held back from testnet
+
+These change `src/Letterlock.sol`, so they wait for this deploy: making them earlier would break the testnet
+deployment's Sourcify exact match.
+
+1. `_ownerOf`: read only the registry's `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`, the one the
+   live registry uses) as "no owner", and revert on any other failure, so a caller that forwards too little gas
+   gets a revert instead of all zeros from `keyOfAgent`. For example
+   `catch (bytes memory r) { if (r.length < 4 || bytes4(r) != bytes4(0x7e273289)) revert RegistryCallFailed(agentId); owner = address(0); }`.
+   Tried in a scratch copy on 2026-09-26: the existing 96 tests pass, and a mainnet-fork probe (static call of
+   `keyOfAgent` for agent 10259 at every gas budget from 5,000 to 80,000, step 20) found 0 budgets that return
+   zeros for the live key, against 527 with the current source. Add that probe as a fork regression test, then
+   regenerate the ABI (`node script/export-abi.mjs`) and the gas snapshot.
+2. `drop` NatSpec: say only that the docs/SPEC.md §3 envelope is UTF-8 JSON, not that the SDK drops it (the SDK
+   has no drop helper yet).
+
 ## 0. Deployer (once)
 
 Use a dedicated mainnet key, separate from the testnet deployer. Import it into Foundry's encrypted keystore

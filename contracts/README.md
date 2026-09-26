@@ -31,7 +31,8 @@ below (it accepted any higher epoch) and is superseded.
 
 Events: `KeyPublished(address indexed who, uint256 indexed agentId, bytes32 pub, uint32 epoch)`,
 `Dropped(address indexed to, uint256 indexed toAgent, bytes envelope)`. ABI: `abi/Letterlock.json`, and
-`packages/letterlock/src/abi.ts` for viem (regenerate with `node script/export-abi.mjs`).
+`letterlockAbi` for viem, exported by the `letterlock` package from `packages/letterlock/src/abi.ts` (regenerate
+both with `node script/export-abi.mjs`).
 
 ## Design decisions
 
@@ -49,13 +50,24 @@ Events: `KeyPublished(address indexed who, uint256 indexed agentId, bytes32 pub,
 - **Drop recipients.** Exactly one kind: `(to, NO_AGENT)` for an address, or `(address(0), agentId)` for an
   agent (`InvalidRecipient` otherwise). The envelope is 1 to 16,384 bytes (`EmptyEnvelope`, `EnvelopeTooLarge`).
   The recipient must have a key that resolves now (`NoKeyPublished`), so no drop can target a recipient without a
-  live key. The contract does not validate the envelope: any 1 to 16,384 bytes are accepted.
+  live key. The contract does not validate the envelope: any 1 to 16,384 bytes are accepted. The SDK has no drop
+  helper yet (planned): the testnet drop was sent with `cast send`. The `drop` NatSpec in the deployed source says
+  the SDK drops the envelope; it will be reworded at the next source change (the mainnet deploy), because editing it
+  now would break the testnet Sourcify exact match.
 - **Agent keys follow the NFT.** After a transfer or burn, `keyOfAgent` returns zeros, because the previous owner
   holds the passkey. The new owner publishes the stored epoch + 1 (read it with `agentKeyRecord`). A drop to an
   agent is sealed to the key that resolves at that moment, so after a transfer only the previous owner can open it.
 - **Indexers.** A `KeyPublished` log is history, not liveness: no Letterlock event marks the registry transfer or
   burn that stops an agent key from resolving. Confirm an agent key with `keyOfAgent` when sealing (or join the
   registry's `Transfer` events). Never seal from indexed events alone, or the note can go to the previous owner.
+- **On-chain readers of `keyOfAgent` need gas.** `keyOfAgent` (and `drop` / `publishForAgent` on the agent path)
+  calls the registry's `ownerOf` in a `try`, and the deployed source reads *any* failure of that call as "no owner",
+  including running out of gas. A contract that forwards too little gas can therefore get all zeros back for an
+  agent whose key is live. On a Monad mainnet fork (block 108209739, agent 10259, cold state) a static call with
+  35,920 to 46,440 gas returned zeros, and 46,620 or more returned the key. Forward at least 100,000 gas, or check
+  `agentKeyRecord` before treating zeros as "no key". An `eth_call` from an app is unaffected. The fix (read only
+  the registry's `ERC721NonexistentToken` revert as "no owner", revert on anything else) ships with the mainnet
+  deploy (`script/DeployMainnet.md`); the testnet deployment has the agent path disabled.
 - **Trust.** The agent path is only as trustworthy as the ERC-8004 registry, which is an upgradeable proxy on
   mainnet. Anyone may `drop` (HPKE base mode is anonymous), so recipients can be spammed and envelopes replayed:
   see the threat model in `docs/SPEC.md` §6.
@@ -68,6 +80,7 @@ cd contracts
 forge build
 forge test -vvv          # includes the Monad mainnet fork tests (network); set MONAD_MAINNET_RPC to override
 forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true   # exits 1 if a gas number moved
+git diff --exit-code -- snapshots/   # exits 1 if an entry was added, removed or rewritten
 forge coverage --no-match-path test/LetterlockGas.t.sol --no-match-coverage "test/" --report summary
 node script/mutate.mjs   # mutation check; exits 1 if a mutant not marked equivalent survives
 node script/export-abi.mjs --check
@@ -122,11 +135,17 @@ proxy and costs more.
 Testnet receipts of the deployed contract, each equal to its transaction's gas limit: deploy 1,104,026 ·
 `publish` 70,863 · `drop` (484-byte envelope) 45,708.
 
-Check that no number moved (exits 1 on any change):
+Check that no number moved:
 
 ```sh
 forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true
+git diff --exit-code -- snapshots/
 ```
+
+`--gas-snapshot-check true` exits 1 only when an entry that is both in the file and produced by the run has a
+different value. It rewrites the file with exit 0 when the run adds an entry or does not produce one, so a run
+filtered to part of `LetterlockGas.t.sol` (`--match-test`) cuts the committed file down, and a deleted or renamed
+benchmark passes. The `git diff` catches both; CI runs it after the tests.
 
 ## Scripts
 
