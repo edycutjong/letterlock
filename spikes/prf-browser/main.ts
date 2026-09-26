@@ -9,6 +9,7 @@ import {
 import { ceremonies, observeCeremonies, prfArrival, type Ceremony } from "./ceremonies.ts";
 import { KID, handoffUrl, readHandoff, type Handoff } from "./link.ts";
 import { passkeyName } from "./names.ts";
+import { MAX_NOTE_BYTES, noteBudget } from "./note.ts";
 import { p256BindingCheck } from "./p256.ts";
 import { HYBRID_HINT, deriveVerdict, type Verdict } from "./verdict.ts";
 
@@ -22,7 +23,6 @@ const BIND = { chainId: 143, directory: "0x0000000000000000000000000000000000000
 // Placeholder header for the self-addressed test note. This page reads nothing from and writes nothing to Monad.
 const NOTE_TO = { chainId: 10143, directory: "0x00000000000000000000000000000000000000aa", recipient: "0x0000000000000000000000000000000000000001" } as const;
 const DEFAULT_NOTE = "the dentist moved to Thursday 10:40";
-const MAX_NOTE_BYTES = 200; // keeps the hand-off QR code small enough to scan off a laptop screen
 
 const observing = observeCeremonies();
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -214,7 +214,7 @@ const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; 
     case "DAMAGED_LINK": return `The link is incomplete or was changed. Open it again from the ${other()}.`;
     case "TAMPERED": return `The note in this link was changed or cut off. Open the link from the ${other()} again.`;
     case "INPUT_INVALID": return "The note in this link is not a valid Letterlock note.";
-    case "NOTE_TOO_LONG": return `Keep the note under ${MAX_NOTE_BYTES} bytes so the QR code stays easy to scan.`;
+    case "NOTE_TOO_LONG": return `Keep the note to ${MAX_NOTE_BYTES} bytes or fewer so the QR code stays easy to scan. Emoji and Chinese, Japanese or Korean characters take 3–4 bytes each.`;
     default: return "An unexpected error happened. Tap “Copy result” (or “Copy details”) and send it along.";
   }
 };
@@ -269,6 +269,13 @@ const busy = (on: boolean, which?: (typeof ACTIONS)[number]) => {
 };
 
 const noteText = () => $<HTMLInputElement>("note").value.trim() || DEFAULT_NOTE;
+/** The live byte count under the note field: the limit is in bytes, so it is shown in bytes, before any prompt. */
+const renderNoteBudget = () => {
+  const b = noteBudget($<HTMLInputElement>("note").value.trim());
+  $("note-bytes").textContent = b.text;
+  $("note-bytes").classList.toggle("over", !b.ok);
+  $("note").setAttribute("aria-invalid", String(!b.ok));
+};
 
 const sealNote = (publicKey: Uint8Array, epoch: number, text: string) =>
   seal({ chainId: NOTE_TO.chainId, directory: NOTE_TO.directory, to: { recipient: NOTE_TO.recipient, publicKey, epoch }, plaintext: utf8(text) });
@@ -409,7 +416,7 @@ const derive = async (envJson?: string) => {
       fingerprint: fp,
       lines: [
         ...(env ? [["Note was sealed to", KID.test(env.kid) ? group(env.kid) : "(unknown)"] as [string, string]] : []),
-        ["Lookup", path === "discoverable" ? "discoverable — no saved passkey on this device; the passkey was found by name" : "credential hint — this device created the passkey"],
+        ["Lookup", path === "discoverable" ? "discoverable — no passkey hint saved in this browser; you picked the passkey by name" : "credential hint — this device created the passkey"],
         ["Passkey prompts", promptLine(cs)],
         ["Passkey used from", attachmentLine(attachment)],
         ["Same passkey as the link", sameCredential === null ? "unknown" : sameCredential ? "yes" : "no"],
@@ -492,11 +499,13 @@ $("reset").addEventListener("click", () => {
 });
 // hide the old run's panels first: loadHandoff brings the hand-off back when the new link is this device's own note
 window.addEventListener("hashchange", () => { $("result").hidden = true; $("handoff").hidden = true; loadHandoff(); });
+$("note").addEventListener("input", renderNoteBudget);
 
 $("rpid").textContent = rp.id;
 $("device").textContent = deviceLabel();
 $("build").textContent = BUILD;
 if (!observing) log({ warning: "navigator.credentials missing: passkeys are unavailable in this browser" });
+renderNoteBudget();
 loadHandoff();
 void checkPrfSupport().then((s) => { prfSupport = s; $("prfcap").textContent = s; });
 

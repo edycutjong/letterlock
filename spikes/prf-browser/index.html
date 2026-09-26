@@ -23,7 +23,9 @@
       <div class="fact">
         <span class="fact-label">Passkey address (rpId)</span>
         <strong id="rpid" class="mono">…</strong>
-        <span class="fact-note">This test page uses <code>location.hostname</code> as the rpId. Passkeys made here work only at this exact address — both devices must show the same one.</span>
+        <span id="rpid-note" class="fact-note">This test page uses <code>location.hostname</code> as the rpId, which is acceptable only for this test: the
+          production app pins one fixed rpId, and passkeys made here will not work there. Passkeys made here work only at
+          this exact address — both devices must show the same one.</span>
       </div>
       <div class="fact">
         <span class="fact-label">This device</span>
@@ -55,8 +57,9 @@
         <button id="create" type="button" class="action">1 · Create</button>
         <p class="step-help">Touch ID (or Face ID) asks to save a new passkey to iCloud Keychain. The page then seals a
           note to your new key and shows a QR code and a link for the other device.</p>
-        <label class="note-field" for="note">Note to seal <span class="muted">(optional, up to 120 characters)</span></label>
-        <input id="note" type="text" maxlength="120" autocomplete="off" spellcheck="false" value="the dentist moved to Thursday 10:40" />
+        <label class="note-field" for="note">Note to seal <span class="muted">(optional, up to 200 bytes)</span></label>
+        <input id="note" type="text" maxlength="200" autocomplete="off" spellcheck="false" aria-describedby="note-bytes" value="the dentist moved to Thursday 10:40" />
+        <p id="note-bytes" class="note-count" aria-live="polite"></p>
       </li>
       <li id="step-derive" class="step">
         <p id="where-derive" class="where">On your iPad</p>

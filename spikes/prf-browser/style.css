@@ -111,7 +111,10 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
 .step.is-next .action { background: var(--wax); border-color: var(--wax); color: var(--wax-ink); }
 /* opened from a note link: creating is the other device's job, so step 1 steps back */
 .step.is-quiet { gap: 8px; padding: 12px 18px; }
-.step.is-quiet .step-help, .step.is-quiet .note-field, .step.is-quiet input { display: none; }
+.step.is-quiet .step-help, .step.is-quiet .note-field, .step.is-quiet input, .step.is-quiet .note-count { display: none; }
+.note-count { font-size: 0.85rem; color: var(--muted); margin-top: -4px; }
+.note-count.over { color: var(--bad); font-weight: 600; }
+input[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
 .step.is-quiet .action { min-height: 52px; font-size: 1.05rem; border-width: 1.5px; }
 .secondary { min-height: 52px; padding: 10px 18px; font-size: 1.02rem; font-weight: 600; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); }
 
