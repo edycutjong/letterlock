@@ -99,11 +99,12 @@
   gap: 8px 14px;
 }
 
-/* roman, not italic: a lone italic Didone 1 reads as a capital I */
+/* numerals standing alone are set in the body face: Bodoni Moda's 1, roman or italic, reads as a capital I
+   (scripts/checks/numerals.mjs); the register's epoch column is set the same way */
 .epoch {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: 600;
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   line-height: 1;
   font-variant-numeric: lining-nums tabular-nums;
 }

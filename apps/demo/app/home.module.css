@@ -74,11 +74,13 @@
   padding-left: 0;
 }
 
+/* step numbers in the body face's light lining figures: a Bodoni 1 reads as a capital I */
 .no {
-  font-family: var(--font-display);
-  font-weight: 500;
+  font-family: var(--font-body);
+  font-weight: 300;
   font-size: 2rem;
   line-height: 1;
+  font-variant-numeric: lining-nums;
   color: var(--muted);
 }
 

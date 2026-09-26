@@ -52,11 +52,13 @@
   letter-spacing: 0.22em;
 }
 
+/* the centre mark is usually an epoch number: set in the body face, whose 1 cannot be read as a capital I */
 .center {
   fill: currentColor;
   stroke: none;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: 600;
-  font-size: 26px;
+  font-size: 24px;
+  font-variant-numeric: lining-nums tabular-nums;
   letter-spacing: 0;
 }
