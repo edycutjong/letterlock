@@ -9,8 +9,9 @@ import {KeyOfAgentGasSweep} from "./utils/KeyOfAgentGasSweep.sol";
 
 /// @notice The registry-call rule, with test doubles: only the registry's `ERC721NonexistentToken` revert means "no
 ///         owner". Every other failure of `ownerOf`, running out of gas included, reverts `RegistryCallFailed` on all
-///         three agent paths (`keyOfAgent`, `publishForAgent`, `drop`), so no failure ever reads as "no key". The live
-///         ERC-8004 registry is exercised in LetterlockFork.t.sol.
+///         three agent paths (`keyOfAgent`, `publishForAgent`, `drop`), or reverts with no data when too little gas
+///         is left for that revert, so no failure ever reads as "no key". The live ERC-8004 registry is exercised in
+///         LetterlockFork.t.sol.
 contract LetterlockRegistryCallTest is KeyOfAgentGasSweep {
     uint256 internal constant AGENT = 10259;
     bytes32 internal constant SDK_E1 = 0x7295e063d18fc5bd7f377d79a043ae5580f78f4be6d8586ea9df9d82e6604b5b;
@@ -64,6 +65,25 @@ contract LetterlockRegistryCallTest is KeyOfAgentGasSweep {
 
     function test_registryCall_outOfGasFails() public {
         _expectRegistryCallFailed(FaultyIdentityRegistry.Fault.OutOfGas);
+    }
+
+    /// The registry call runs out of gas, and the 1/64 of the gas kept back from it cannot pay for the
+    /// RegistryCallFailed revert: the read then reverts with no data. So RegistryCallFailed is not the only revert a
+    /// starved read can give, and a caller must read any revert as "unknown", never as "no key". With enough gas the
+    /// same fault reverts RegistryCallFailed (test_registryCall_outOfGasFails).
+    function test_registryCall_outOfGasWithTooLittleLeftRevertsWithoutData() public {
+        registry.setFault(FaultyIdentityRegistry.Fault.OutOfGas);
+        bytes memory read = abi.encodeCall(Letterlock.keyOfAgent, (AGENT));
+
+        // Two reads below, each with one ownerOf call at most: 2 calls means both reached the registry.
+        vm.expectCall(address(registry), abi.encodeCall(FaultyIdentityRegistry.ownerOf, (AGENT)), 2);
+        (bool ok, bytes memory ret) = address(ll).staticcall{gas: 20_000}(read);
+        assertFalse(ok, "a starved read must revert");
+        assertEq(ret.length, 0, "a read that runs out of gas in Letterlock itself reverts with no data");
+
+        (ok, ret) = address(ll).staticcall{gas: CALL_GAS}(read);
+        assertFalse(ok);
+        assertEq(ret, abi.encodeWithSelector(Letterlock.RegistryCallFailed.selector, AGENT));
     }
 
     function test_registryCall_errorStringFails() public {

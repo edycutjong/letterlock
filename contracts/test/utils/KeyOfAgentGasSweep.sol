@@ -96,11 +96,13 @@ abstract contract KeyOfAgentGasSweep is Test {
 
     /// Every budget returns the live key or reverts, and none returns zeros. The sweep must also reach budgets where
     /// the registry call itself runs out of gas with gas left over (the case the previous rule read as "no owner"),
-    /// and a larger budget must never fail where a smaller one returned the key.
+    /// and budgets where the read reverts with no data, the other revert a starved read gives (a caller must read
+    /// both as "unknown"). A larger budget must never fail where a smaller one returned the key.
     function _assertNoBudgetReadsZeros(Sweep memory s) internal pure {
         assertEq(s.zeros, 0, "a gas-starved read returned zeros for a live key");
         assertEq(s.other, 0, "a read returned or reverted with something unexpected");
         assertGt(s.registryCallFailed, 0, "no budget starved the registry call itself, so the sweep proves nothing");
+        assertGt(s.outOfGas, 0, "no budget reverted with no data, so the sweep does not cover that revert");
         assertGt(s.resolved, 0, "no budget was enough to read the key");
         assertEq(s.failedAboveFirstResolved, 0, "a larger budget failed where a smaller one returned the key");
         assertEq(s.budgets, s.resolved + s.registryCallFailed + s.outOfGas, "every budget is accounted for");

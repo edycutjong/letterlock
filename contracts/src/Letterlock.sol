@@ -179,8 +179,9 @@ contract Letterlock {
     /// @dev Returns zeros when no key was published, or when the agent's current owner is not the key's publisher
     ///      (the agent was transferred or burned): sealing to a previous owner's key would leak to them. Reverts
     ///      `RegistryCallFailed` when the registry's `ownerOf` fails other than with `ERC721NonexistentToken`,
-    ///      including when it runs out of gas, so a caller that forwards too little gas gets a revert, never zeros
-    ///      for a live key.
+    ///      running out of gas included, or with no data when the read itself runs out of gas (as when too little
+    ///      gas is left after a starved registry call to revert `RegistryCallFailed`). A caller that forwards too
+    ///      little gas gets a revert, never zeros for a live key: any revert means "unknown", never "no key".
     /// @param agentId The ERC-8004 agent id.
     /// @return pub The X25519 public key, or zero when none resolves.
     /// @return epoch The key's epoch, or 0 when none resolves.
@@ -249,8 +250,9 @@ contract Letterlock {
     }
 
     /// @dev `ownerOf`, where only the registry's `ERC721NonexistentToken` revert (a nonexistent or burned agent)
-    ///      reads as "no owner". Every other failure reverts `RegistryCallFailed`. A call that ran out of gas fails
-    ///      with no revert data, so too little gas can never turn a live agent into "no owner".
+    ///      reads as "no owner". Every other failure reverts `RegistryCallFailed`, or reverts with no data when the
+    ///      gas kept back from a starved call (1/64 of what was forwarded) cannot pay for that revert. A call that
+    ///      ran out of gas fails with no revert data, so too little gas can never turn a live agent into "no owner".
     function _ownerOf(uint256 agentId) private view returns (address owner) {
         try identityRegistry.ownerOf(agentId) returns (address o) {
             owner = o;
