@@ -1,0 +1,213 @@
+/* A page of the post office register: double rules top and bottom, pencilled column rules, one line per key. */
+.wrap {
+  width: 100%;
+  padding: 3px 0;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  /* a register page that cannot fit slides sideways inside itself; the page never scrolls sideways. Positioned,
+     so the screen-reader-only text in its cells scrolls with it instead of widening the page. */
+  position: relative;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 0.75px solid var(--ink);
+  border-bottom: 0.75px solid var(--ink);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.caption {
+  caption-side: top;
+  padding: 0 0 12px;
+  text-align: left;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.table th,
+.table td {
+  padding: 14px 16px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table thead th {
+  padding-top: 11px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ink);
+  white-space: nowrap;
+}
+
+.table tbody tr + tr > * {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+/* pencilled column rules */
+.table tr > * + * {
+  border-left: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.colAddressee {
+  width: 34%;
+}
+
+.colEpoch {
+  width: 6.5rem;
+  text-align: center !important;
+}
+
+.colKey {
+  width: auto;
+}
+
+.colPosted {
+  width: 28%;
+}
+
+.addressee {
+  font-weight: inherit;
+}
+
+.addresseeLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.name {
+  font-size: 1.375rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 0.625rem;
+}
+
+.note,
+.found {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.found {
+  color: var(--before);
+  font-size: 0.6875rem;
+}
+
+.epoch {
+  text-align: center;
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
+.keyInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.muted {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.empty {
+  padding: 28px 16px !important;
+  text-align: center !important;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.25rem;
+  color: var(--muted);
+}
+
+/* the line keyOf just resolved: inked airmail blue on a lit line, underlined in blue pencil: the open state */
+.table tr[data-state="found"] > * {
+  background-color: var(--bg-elevated);
+  box-shadow: inset 0 -2px 0 var(--before);
+}
+
+.table tr[data-state="found"] .name,
+.table tr[data-state="found"] .epoch {
+  color: var(--before);
+}
+
+/* an earlier epoch after a rotation: ruled through in pencil, kept as history */
+.table tr[data-state="superseded"] .name {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+  text-decoration-thickness: 1.25px;
+}
+
+.table tr[data-state="superseded"] .epoch,
+.table tr[data-state="superseded"] :global(.data) {
+  color: var(--muted);
+}
+
+/* ---- narrower than an iPad in landscape: addressee · epoch · key ---- */
+
+@media (max-width: 1023.98px) {
+  .wrap[data-layout="auto"] .colPosted,
+  .wrap[data-layout="auto"] .posted {
+    display: none;
+  }
+  .wrap[data-layout="auto"] .colAddressee {
+    width: 40%;
+  }
+}
+
+.wrap[data-layout="compact"] .colPosted,
+.wrap[data-layout="compact"] .posted {
+  display: none;
+}
+
+.wrap[data-layout="compact"] .colAddressee {
+  width: 40%;
+}
+
+.wrap[data-layout="compact"] .strip {
+  height: 10px;
+  width: auto;
+}
+
+.wrap[data-layout="compact"] .colEpoch {
+  width: 4.25rem;
+}
+
+.wrap[data-layout="compact"] .name {
+  font-size: 1.1875rem;
+}
+
+.wrap[data-layout="compact"] .table th,
+.wrap[data-layout="compact"] .table td {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+@media (max-width: 639.98px) {
+  .table th,
+  .table td {
+    padding: 12px 10px;
+  }
+  .table thead th {
+    padding-top: 10px;
+    padding-bottom: 9px;
+  }
+  .name {
+    font-size: 1.1875rem;
+  }
+  .colEpoch {
+    width: 3.75rem;
+  }
+  .keyInner :global(.data) {
+    font-size: 0.8125rem;
+  }
+}
