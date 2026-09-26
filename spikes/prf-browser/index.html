@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Letterlock · PRF spike</title>
+  <style>
+    body { font: 17px/1.5 "Helvetica Neue", Arial, sans-serif; background: #F3EEE3; color: #1E1B16; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+    button { font: inherit; padding: 12px 18px; margin: 4px 4px 4px 0; border: 1px solid #1E1B16; background: #F8F4EB; border-radius: 6px; min-height: 48px; }
+    pre { font: 13px/1.45 ui-monospace, Menlo, monospace; background: #F8F4EB; border: 1px solid #CFC4AF; padding: 12px; white-space: pre-wrap; word-break: break-all; }
+    h1 { font-family: "Bodoni 72", Didot, serif; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Letterlock — day-1 PRF spike</h1>
+  <p>Step 1 on the first device, step 2 on a second device where the same passkey synced (iPad). The two fingerprints must match.</p>
+  <button id="create">1 · Create passkey → key</button>
+  <button id="derive">2 · Use my passkey → key</button>
+  <button id="p256">3 · P256 binding check</button>
+  <pre id="log">ready</pre>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

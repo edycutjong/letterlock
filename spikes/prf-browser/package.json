@@ -1,0 +1,17 @@
+{
+  "name": "prf-browser-spike",
+  "private": true,
+  "type": "module",
+  "description": "Day-1 spike: real WebAuthn PRF in a browser → Letterlock key; optional P256 binding checked against Monad's 0x0100 precompile",
+  "scripts": {
+    "dev": "vite --host",
+    "test": "node run-spike.mjs"
+  },
+  "dependencies": {
+    "letterlock": "workspace:*"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0",
+    "vite": "^8.3.1"
+  }
+}
