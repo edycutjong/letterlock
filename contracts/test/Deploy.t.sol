@@ -53,4 +53,20 @@ contract DeployScriptTest is Test {
         vm.expectRevert("Deploy: Monad mainnet needs the ERC-8004 IdentityRegistry");
         script.deploy(address(0));
     }
+
+    /// `forge script` runs the script's own artifact (out/Deploy.s.sol/Deploy.json), which carries the Letterlock
+    /// creation code it was compiled with. This deploys through that artifact and requires exactly the runtime code
+    /// of the current src/Letterlock.sol artifact, metadata hash included. Regression: with dynamic test linking on,
+    /// an edit inside a function body left the script artifact stale, so a mainnet dry run carried a metadata hash
+    /// of source text that was never committed (and a logic edit would have deployed the old logic).
+    function test_scriptArtifactDeploysTheCurrentSource() public {
+        vm.chainId(10143); // registry address(0): the immutable is zero, as in the artifact's runtime code
+        Deploy fromArtifact = Deploy(vm.deployCode("Deploy.s.sol:Deploy"));
+        Letterlock d = fromArtifact.run();
+        assertEq(
+            keccak256(address(d).code),
+            keccak256(vm.getDeployedCode("Letterlock.sol:Letterlock")),
+            "the script artifact deploys other code than src/Letterlock.sol compiles to now: run forge build --force"
+        );
+    }
 }

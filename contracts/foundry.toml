@@ -17,6 +17,12 @@ optimizer = true
 optimizer_runs = 10000
 # Keep the default IPFS metadata hash in the bytecode so Sourcify (MonadVision) can do a full match.
 bytecode_hash = "ipfs"
+# Recompile every test and script that depends on a changed source. Foundry 1.8 turns dynamic test linking on by
+# default; with it, an edit inside a function body of src/Letterlock.sol (code or comment) recompiles only that
+# file, and script/Deploy.s.sol, which compiles `new Letterlock(...)` into its own bytecode, keeps the previous
+# creation code: `forge script` would deploy the old code. This is not a compiler setting, so it changes no bytecode.
+# test/Deploy.t.sol (test_scriptArtifactDeploysTheCurrentSource) fails on a stale script artifact.
+dynamic_test_linking = false
 
 [fuzz]
 runs = 1024
