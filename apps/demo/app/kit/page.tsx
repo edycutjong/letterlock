@@ -48,14 +48,29 @@ const COLOURS = [
   { name: "Sealing wax", token: "--after", hex: "#A3261E", use: "only as wax: the seal and the word “lock”", wax: true },
 ] as const;
 
-function Specimen({ name, detail, children, wide, plain }: { name: string; detail?: ReactNode; children: ReactNode; wide?: boolean; plain?: boolean }) {
+/** A specimen on its plate. The caption names the state in words; `code` sets a component's name as code instead. */
+function Specimen({
+  name,
+  code,
+  detail,
+  children,
+  wide,
+  plain,
+}: {
+  name: string;
+  code?: boolean;
+  detail?: ReactNode;
+  children: ReactNode;
+  wide?: boolean;
+  plain?: boolean;
+}) {
   return (
     <figure className={styles.specimen} data-wide={wide ? "" : undefined}>
       <div className={styles.plate} data-plain={plain ? "" : undefined}>
         {children}
       </div>
       <figcaption className={styles.caption}>
-        <span className={styles.captionName}>{name}</span>
+        <span className={styles.captionName}>{code ? <code>{name}</code> : name}</span>
         {detail && <span className={styles.captionDetail}>{detail}</span>}
       </figcaption>
     </figure>
@@ -413,30 +428,30 @@ export default function Kit() {
 
           <Section id="marks" title="Postmark, strip, stamp" lede="Ink marks struck on the paper. The strip is a postal 4-state bar code of the key fingerprint: 32 bars, two bits each, the same 16 digits as the hex beside it.">
             <div className={styles.row3}>
-              <Specimen name="Postmark" detail="ring only">
+              <Specimen name="Postmark" code detail="ring only">
                 <Postmark top="Letterlock register" bottom="Monad testnet" center="1" centerLabel="Epoch" size={128} tilt={-8} />
               </Specimen>
-              <Specimen name="Postmark" detail="with cancellation bars">
+              <Specimen name="Postmark" code detail="with cancellation bars">
                 <Postmark top="Monad testnet" bottom={postmarkDate(TESTNET_TEST_KEY.updatedAt)} center="1" centerLabel="Epoch" bars="left" size={112} tilt={-6} />
               </Specimen>
-              <Specimen name="Wordmark" detail="outlined; “lock” is wax">
+              <Specimen name="Wordmark" code detail="outlined; “lock” is wax">
                 <Wordmark height={48} />
               </Specimen>
             </div>
             <div className={styles.row3}>
-              <Specimen name="KeyStrip" detail="open: a key found in the register">
+              <Specimen name="KeyStrip" code detail="open: a key found in the register">
                 <div className={styles.stripDemo}>
                   <KeyStrip fingerprint={mayaKey.fingerprint} tone="open" height={22} announce />
                   <code className="data">{groupFingerprint(mayaKey.fingerprint)}</code>
                 </div>
               </Specimen>
-              <Specimen name="KeyStrip" detail="ink · pencil (superseded)">
+              <Specimen name="KeyStrip" code detail="ink · pencil (superseded)">
                 <div className={styles.stripDemo}>
                   <KeyStrip fingerprint={kai.keys[1]!.fingerprint} height={16} announce />
                   <KeyStrip fingerprint={kai.keys[0]!.fingerprint} tone="pencil" height={16} announce />
                 </div>
               </Specimen>
-              <Specimen name="ExampleBadge" detail="stamped on anything not on chain">
+              <Specimen name="ExampleBadge" code detail="stamped on anything not on chain">
                 <ExampleBadge />
               </Specimen>
             </div>
@@ -444,13 +459,13 @@ export default function Kit() {
 
           <Section id="fields" title="Fields" lede="A postal form’s lines: capitals for the label, a ruled box to write in. The note is written on a ruled sheet and counted in bytes, the unit the envelope limit is written in.">
             <div className={styles.row2}>
-              <Specimen name="TextField" detail="address, in the data face" plain>
+              <Specimen name="TextField" code detail="address, in the data face" plain>
                 <TextField label="To" defaultValue={maya.address} data hint="An address (0x…) or an agent (agent:<id>)." />
               </Specimen>
-              <Specimen name="TextField" detail="with a form error" plain>
+              <Specimen name="TextField" code detail="with a form error" plain>
                 <TextField label="To" defaultValue="0x4cca…fa30" data error="That is not a whole address: an address is 0x and 40 hex digits." />
               </Specimen>
-              <Specimen name="NoteField" detail="bytes counted live" plain wide>
+              <Specimen name="NoteField" code detail="bytes counted live" plain wide>
                 <NoteField label="Note" defaultValue={note.text} rows={3} />
               </Specimen>
             </div>

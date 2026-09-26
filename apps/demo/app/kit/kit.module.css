@@ -133,10 +133,14 @@
   line-height: 1.4;
 }
 
+/* the state in words, in the body face; a component's name is set as code, at a weight the mono face ships in */
 .captionName {
-  font-family: var(--font-data);
-  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--ink);
+}
+
+.captionName code {
+  font-weight: 500;
 }
 
 .captionDetail {
