@@ -1,7 +1,7 @@
-// P256-binding spike (an optional ownership proof). Question: can the SAME passkey mera uses also prove, onchain via
-// Monad's P256 precompile 0x0100 (EIP-7951), that it vouches for a given Letterlock X25519 key?
+// P256-binding spike (an optional ownership proof, docs/SPEC.md §7). Question: can the SAME passkey mera uses also
+// prove, onchain via Monad's P256 precompile 0x0100 (EIP-7951), that it vouches for a given Letterlock X25519 key?
 //  1. a capturing WebAuthnClient runs mera's creation ceremony and records the credential's P256 public key
-//     (mera never returns it — a limit of mera 0.2.0)
+//     (mera 0.2.0 never returns it)
 //  2. a second assertion signs
 //       challenge = SHA-256("letterlock/bind/v1" ‖ u64 chainId ‖ directory[20] ‖ owner[20] ‖ x25519pk[32] ‖ u32 epoch)
 //     (owner + chainId + directory stop a public signature being replayed for another address, chain or
