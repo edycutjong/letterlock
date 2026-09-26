@@ -51,19 +51,19 @@
 
     <ol class="steps">
       <li id="step-create" class="step">
-        <p class="where">On your Mac</p>
+        <p id="where-create" class="where">On your Mac</p>
         <button id="create" type="button" class="action">1 · Create</button>
-        <p class="step-help">Touch ID asks to save a new passkey to iCloud Keychain. The page then seals a note to
-          your new key and shows a QR code for the iPad.</p>
+        <p class="step-help">Touch ID (or Face ID) asks to save a new passkey to iCloud Keychain. The page then seals a
+          note to your new key and shows a QR code and a link for the other device.</p>
         <label class="note-field" for="note">Note to seal <span class="muted">(optional, up to 120 characters)</span></label>
         <input id="note" type="text" maxlength="120" autocomplete="off" spellcheck="false" value="the dentist moved to Thursday 10:40" />
       </li>
       <li id="step-derive" class="step">
-        <p class="where">On your iPad</p>
+        <p id="where-derive" class="where">On your iPad</p>
         <button id="derive" type="button" class="action">2 · Use my passkey</button>
-        <p class="step-help">First open this page from the Mac's QR code, so the sealed note comes with it. Then tap
-          and choose the passkey. Nothing from the Mac is stored on the iPad: the passkey is found by name. Pick the
-          passkey saved on the iPad itself — not “use a passkey from another device”.</p>
+        <p class="step-help">First open this page from the other device's QR code or link, so the sealed note comes with
+          it. Then tap and choose the passkey. Nothing from the other device is stored here: you pick the passkey by
+          name. Pick the passkey saved on this device itself — not “use a passkey from another device”.</p>
       </li>
     </ol>
 
@@ -88,12 +88,16 @@
     <section id="handoff" class="card handoff" hidden>
       <h2>Now take the note to your iPad</h2>
       <ol class="handoff-steps">
-        <li>Wait until the passkey reaches the iPad: open the <strong>Passwords</strong> app there and search
-          <strong id="handoff-host">…</strong> (iCloud Keychain usually syncs within a minute).</li>
-        <li>Point the iPad camera at this code and open the link in Safari.</li>
-        <li>Tap <strong>2 · Use my passkey</strong> and choose <strong id="handoff-who">…</strong> — the copy saved
-          on the iPad, not “use a passkey from another device”.</li>
-        <li>The iPad must show this same fingerprint: <strong id="handoff-fp" class="mono">…</strong></li>
+        <li>Check this <span class="handoff-here">Mac</span> first: tap <strong>2 · Use my passkey</strong> once. It must
+          show the same fingerprint and open the note. This panel stays on screen.</li>
+        <li>Wait until the passkey reaches the <span class="handoff-target">iPad</span>: open the <strong>Passwords</strong>
+          app there and search <strong id="handoff-host">…</strong> (iCloud Keychain usually syncs within a minute).</li>
+        <li id="handoff-scan">Point the iPad camera at this code and open the link in Safari.</li>
+        <li id="handoff-send" hidden>Send the link below to the <span class="handoff-target">Mac</span> with
+          <strong>Share…</strong> (AirDrop) or <strong>Copy link</strong>, and open it in Safari there.</li>
+        <li>Tap <strong>2 · Use my passkey</strong> there and choose <strong id="handoff-who">…</strong> — the copy saved
+          on the <span class="handoff-target">iPad</span>, not “use a passkey from another device”.</li>
+        <li>The <span class="handoff-target">iPad</span> must show this same fingerprint: <strong id="handoff-fp" class="mono">…</strong></li>
       </ol>
       <div class="qr-frame"><canvas id="qr" role="img" aria-label="QR code of the link that carries the sealed note"></canvas></div>
       <p class="muted small">The code holds only the sealed note, never the key. You can also send the link:</p>

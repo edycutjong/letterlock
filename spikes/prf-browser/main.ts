@@ -10,6 +10,7 @@ import { ceremonies, observeCeremonies, prfArrival, type Ceremony } from "./cere
 import { KID, handoffUrl, readHandoff, type Handoff } from "./link.ts";
 import { passkeyName } from "./names.ts";
 import { p256BindingCheck } from "./p256.ts";
+import { HYBRID_HINT, deriveVerdict, type Verdict } from "./verdict.ts";
 
 declare const __LL_BUILD__: string;
 const BUILD = typeof __LL_BUILD__ === "string" ? __LL_BUILD__ : "dev";
@@ -56,6 +57,9 @@ const deviceLabel = (): string => {
   return `${hit ? `${hit[0]} ${hit[1]}` : "unknown browser"} on ${os}`;
 };
 const isTablet = () => /iPad|iPhone|Android/.test(deviceLabel());
+// The main run goes Mac → iPad; the optional reverse run goes iPad → Mac. Each page names the other device.
+const here = () => (isTablet() ? "iPad" : "Mac");
+const other = () => (isTablet() ? "Mac" : "iPad");
 
 let prfSupport = "checking…";
 const checkPrfSupport = async (): Promise<string> => {
@@ -70,7 +74,6 @@ const checkPrfSupport = async (): Promise<string> => {
 };
 
 // ---------- reports: the same lines feed the on-screen list and the copied text ----------
-type Verdict = { level: "pass" | "fail" | "retry" | "info"; text: string };
 type Report = { title: string; verdict?: Verdict; fingerprint?: string; lines: [string, string][]; data: Record<string, unknown> };
 let lastReport: Report | null = null;
 
@@ -139,6 +142,12 @@ const renderReport = (r: Report, opened?: string | null) => {
   $<HTMLTextAreaElement>("copy-fallback").hidden = true;
 };
 
+/** This device sealed `env` itself: it is the note stored at 1 · Create, sealed to this device's own key. */
+const isOwnNote = (env: Envelope): boolean => {
+  const mine = json<Envelope>(store.get("ll.env"));
+  return mine !== null && mine.enc === env.enc && mine.ct === env.ct && store.get("ll.fp") === env.kid;
+};
+
 const renderSaved = () => {
   const cred = storedCredential();
   const fp = store.get("ll.fp");
@@ -147,16 +156,24 @@ const renderSaved = () => {
   if (cred) {
     el.textContent = `This device made the passkey “${name ?? "maya"}”${fp ? ` (key ${group(fp)})` : ""}. “2 · Use my passkey” re-checks it here with a credential hint.`;
   } else if (isTablet() && !handoff) {
-    el.textContent = "On the iPad? Don't create a passkey here. Open this page from the Mac's QR code, then tap “2 · Use my passkey”.";
+    el.textContent = "On the iPad: for the main test, open this page from the Mac's QR code, then tap “2 · Use my passkey”. Tap “1 · Create” here only for the optional reverse run (iPad → Mac).";
   } else {
     el.textContent = "";
   }
   el.hidden = el.textContent === "";
+  // a note from the other device means this device opens it; on an iPad, creating is the reverse run's job
+  const foreign = handoff !== null && !isOwnNote(handoff.env);
+  $("where-create").textContent = isTablet() ? "On the iPad: reverse run only" : "On your Mac";
+  $("where-derive").textContent = foreign ? `On your ${here()}` : "On your iPad";
 };
 
-const renderHandoff = async (link: string, fp: string, who: string, forIpad: boolean) => {
+const renderHandoff = async (link: string, fp: string, who: string, target: string) => {
   $("handoff").hidden = false;
-  $("handoff").querySelector("h2")!.textContent = forIpad ? "Now take the note to your iPad" : "Take this note to your other device";
+  $("handoff").querySelector("h2")!.textContent = `Now take the note to your ${target}`;
+  for (const el of $("handoff").querySelectorAll<HTMLElement>(".handoff-here")) el.textContent = here();
+  for (const el of $("handoff").querySelectorAll<HTMLElement>(".handoff-target")) el.textContent = target;
+  $("handoff-scan").hidden = target !== "iPad"; // the iPad camera reads the code off the Mac's screen
+  $("handoff-send").hidden = target === "iPad"; // a Mac has no camera app that reads QR codes: send the link
   $("handoff-host").textContent = rp.id;
   $("handoff-who").textContent = `“${who}”`;
   $("handoff-fp").textContent = group(fp);
@@ -182,7 +199,6 @@ const causeChain = (e: unknown): string => {
   }
   return parts.join(" ← ");
 };
-const HYBRID_HINT = "The passkey was used from ANOTHER device (hybrid / QR), and Safari 18.x can return no PRF output or a different one that way. Wait until the passkey shows in this device's Passwords app, then tap 2 again and pick it here.";
 const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; hybrid?: boolean; creating?: boolean }) => {
   if (ctx.hybrid && (code === "PRF_UNSUPPORTED" || code === "WRONG_KEY")) return HYBRID_HINT;
   switch (code) {
@@ -194,9 +210,9 @@ const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; 
         ? `The passkey “${ctx.savedName}” was saved, but the browser stopped before it returned the key. Tap “2 · Use my passkey” on this device to finish (one more prompt).`
         : ctx.creating
           ? "The passkey prompt was cancelled or timed out. Tap “1 · Create” to try again."
-          : `The passkey prompt was cancelled or timed out, or this device has no passkey for ${rp.id} yet. On the iPad, wait a minute for iCloud Keychain to sync, then tap again.`;
-    case "DAMAGED_LINK": return "The link is incomplete or was changed. Scan the Mac's QR code again.";
-    case "TAMPERED": return "The note in this link was changed or cut off. Open the link from the Mac again.";
+          : `The passkey prompt was cancelled or timed out, or this device has no passkey for ${rp.id} yet. Wait a minute for iCloud Keychain to sync it here, then tap again.`;
+    case "DAMAGED_LINK": return `The link is incomplete or was changed. Open it again from the ${other()}.`;
+    case "TAMPERED": return `The note in this link was changed or cut off. Open the link from the ${other()} again.`;
     case "INPUT_INVALID": return "The note in this link is not a valid Letterlock note.";
     case "NOTE_TOO_LONG": return `Keep the note under ${MAX_NOTE_BYTES} bytes so the QR code stays easy to scan.`;
     default: return "An unexpected error happened. Tap “Copy result” (or “Copy details”) and send it along.";
@@ -235,6 +251,10 @@ const loadHandoff = () => {
   setNext(handoff ? "derive" : "create");
   $("step-create").classList.toggle("is-quiet", !!handoff);
   renderSaved();
+  // reloaded on the device that sealed this note: bring its QR code back (1 · Create would add another passkey)
+  if (handoff && isOwnNote(handoff.env)) {
+    void renderHandoff(handoffUrl(handoff, pageBase()), handoff.env.kid, handoff.who ?? store.get("ll.name") ?? "your passkey", other());
+  }
 };
 
 // ---------- actions ----------
@@ -286,7 +306,7 @@ const create = async (text: string = noteText()) => {
     renderSaved();
     renderReport({
       title: "Passkey created — its key's fingerprint",
-      verdict: { level: "info", text: "Now open the link on the iPad. It must show this same fingerprint." },
+      verdict: { level: "info", text: `Tap “2 · Use my passkey” here once as a self-check, then open the link on the ${other()}. Both must show this same fingerprint.` },
       fingerprint: fp,
       lines: [
         ["Passkey prompts", promptLine(cs)],
@@ -297,7 +317,7 @@ const create = async (text: string = noteText()) => {
       ],
       data: { step: "create", fingerprint: fp, pk, credentialId: credential.credentialId, prompts: cs.length, prfAt: result.prfAt, ceremonies: cs },
     }, null);
-    await renderHandoff(link, fp, name, !isTablet());
+    await renderHandoff(link, fp, name, other());
     reveal($("result"));
     return log(result);
   } catch (e) {
@@ -339,6 +359,8 @@ const derive = async (envJson?: string) => {
   const hint = storedCredential();
   const useHint = hint !== null && (env === null || env.kid === store.get("ll.fp"));
   const path = useHint ? "credential-hint" : "discoverable";
+  // this device made the passkey the note is sealed to: opening it here is the self-check, not the cross-device test
+  const creator = useHint && env !== null;
   const link = handoff;
   // the link's cid describes the link's note only
   const linkCid = link?.cid && env && env.enc === link.env.enc && env.ct === link.env.ct ? link.cid : null;
@@ -361,18 +383,11 @@ const derive = async (envJson?: string) => {
     const sameCredential = linkCid === null ? null : linkCid === keys.credentialId;
     const attachment = cs.find((c) => c.kind === "get" && c.ok)?.attachment;
     const hybrid = attachment === "cross-platform";
-    const verdict: Verdict = !env
-      ? { level: "info", text: "No note in this link. Compare this fingerprint with your other device by eye." }
-      : opened !== null
-        ? { level: "pass", text: hybrid ? "Same key — the note opened, but through ANOTHER device (hybrid), not the passkey synced to this one." : "Same key — the note opened on this device." }
-      : hybrid ? { level: "retry", text: HYBRID_HINT }
-      : isLetterlockError(openError, "WRONG_KEY")
-        ? sameCredential === true
-          ? { level: "fail", text: "Same passkey as the other device, but a DIFFERENT key: its PRF output did not match across devices. Please send this result." }
-          : sameCredential === false
-            ? { level: "retry", text: `A different passkey was chosen. Tap 2 again and choose ${link?.who ? `“${link.who}”` : "the passkey the Mac made"}.` }
-            : { level: "fail", text: "Different key: either another passkey was chosen, or the PRF output differs across devices." }
-        : { level: "fail", text: `The note did not open (${codeOf(openError)}). ${friendly(codeOf(openError), {})}` };
+    const openCode = openError ? codeOf(openError) : null;
+    const verdict: Verdict = deriveVerdict({
+      hasNote: env !== null, opened: opened !== null, wrongKey: isLetterlockError(openError, "WRONG_KEY"), hybrid, creator,
+      sameCredential, who: link?.who, other: other(), openError: openCode ? { code: openCode, help: friendly(openCode, {}) } : undefined,
+    });
     const result = {
       step: "derive", path, attachment: attachment ?? null, fingerprint: fp, pk, credentialId: keys.credentialId, ceremonyMs, opened,
       openError: openError ? causeChain(openError) : null, noteSealedTo: env?.kid ?? null, sameCredential,
@@ -381,6 +396,11 @@ const derive = async (envJson?: string) => {
     if (sealed) {
       if (useHint) { store.set("ll.fp", fp); store.set("ll.env", JSON.stringify(sealed)); }
       handoff = { env: sealed, cid: keys.credentialId, ...(store.get("ll.name") && useHint ? { who: store.get("ll.name")! } : {}) };
+      history.replaceState(null, "", handoffUrl(handoff, pageBase()));
+    } else if (creator && env && hint && !(handoff && handoff.env.enc === env.enc && handoff.env.ct === env.ct)) {
+      // the stored note, opened on the device that made it with no link in the address bar: rebuild its link
+      const name = store.get("ll.name");
+      handoff = { env, cid: hint.credentialId, ...(name ? { who: name } : {}) };
       history.replaceState(null, "", handoffUrl(handoff, pageBase()));
     }
     renderReport({
@@ -399,9 +419,12 @@ const derive = async (envJson?: string) => {
       ],
       data: { step: "derive", verdict: verdict.level, path, attachment: attachment ?? null, fingerprint: fp, pk, noteSealedTo: env?.kid ?? null, opened, sameCredential, credentialId: keys.credentialId, prompts: cs.length, ceremonies: cs },
     }, opened);
-    if (sealed) await renderHandoff(location.href, fp, handoff?.who ?? "your passkey", false);
+    // the device that sealed the note keeps its QR code on screen: the self-check must not cost the hand-off
+    if (sealed) await renderHandoff(location.href, fp, handoff?.who ?? "your passkey", other());
+    else if (creator && handoff) await renderHandoff(handoffUrl(handoff, pageBase()), handoff.env.kid, handoff.who ?? "your passkey", other());
     else $("handoff").hidden = true;
     setNext(null);
+    renderSaved();
     reveal($("result"));
     return log(result);
   } catch (e) {
@@ -467,7 +490,8 @@ $("reset").addEventListener("click", () => {
   store.remove("ll.cred", "ll.fp", "ll.env", "ll.name");
   location.replace(pageBase());
 });
-window.addEventListener("hashchange", () => { loadHandoff(); $("result").hidden = true; $("handoff").hidden = true; });
+// hide the old run's panels first: loadHandoff brings the hand-off back when the new link is this device's own note
+window.addEventListener("hashchange", () => { $("result").hidden = true; $("handoff").hidden = true; loadHandoff(); });
 
 $("rpid").textContent = rp.id;
 $("device").textContent = deviceLabel();
