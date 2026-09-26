@@ -1,0 +1,49 @@
+// Read-only checks against the live Monad RPCs, run only with LIVE=1 (`pnpm test:live`): no transaction, no key.
+// Expected values come from deployments/143.json and deployments/10143.json, the records of the deploy smoke tests.
+import { readFileSync } from "node:fs";
+import { createPublicClient, http, keccak256 } from "viem";
+import { monad } from "viem/chains";
+import { describe, expect, it } from "vitest";
+import { letterlock } from "../src/index.ts";
+import { anvil, noChain, publicClient } from "./anvil/context.ts";
+
+const live = process.env.LIVE === "1";
+type Smoke = { publishedKey: string; epoch: number; kid: string; updatedAt: number; agentKey?: { agentId: number; publishedKey: string; epoch: number; kid: string; updatedAt: number }; dropBlock: number; envelopeBytes: number };
+type Rec = { address: string; deployer: string; dropTx: string; smokeTest: Smoke };
+const record = (chainId: number) => JSON.parse(readFileSync(new URL(`../../../deployments/${chainId}.json`, import.meta.url), "utf8")) as Rec;
+
+describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
+  const r = record(143);
+  const ll = letterlock({ chain: "monad" });
+
+  it("resolve(deployer) returns the smoke test's DEMO KEY from one keyOf read", async () => {
+    const key = await ll.resolve(r.deployer);
+    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([r.smokeTest.publishedKey, r.smokeTest.epoch, r.smokeTest.kid, r.smokeTest.updatedAt]);
+  });
+
+  it("resolve('agent:10260') returns the agent's DEMO KEY through the live ERC-8004 registry", async () => {
+    const a = r.smokeTest.agentKey!;
+    const key = await ll.resolve(`agent:${a.agentId}`);
+    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([a.publishedKey, a.epoch, a.kid, a.updatedAt]);
+  });
+
+  it("inbox(deployer) at the drop block finds the smoke test's envelope", async () => {
+    const box = await ll.inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock });
+    expect(box.envelopes.map((e) => [e.transactionHash, e.bytes, e.envelope.kid])).toEqual([[r.dropTx, r.smokeTest.envelopeBytes, r.smokeTest.kid]]);
+  });
+
+  it.skipIf(noChain)("the mainnet directory runs the bytecode the anvil tests run", async () => {
+    const mainnet = createPublicClient({ chain: monad, transport: http() });
+    const code = await mainnet.getCode({ address: r.address as `0x${string}` });
+    const local = await publicClient().getCode({ address: anvil().directory });
+    expect(keccak256(code!)).toBe(keccak256(local!));
+  });
+});
+
+describe.skipIf(!live)("live Monad testnet (LIVE=1, read-only)", () => {
+  it("resolve(deployer) returns the smoke test's TEST KEY", async () => {
+    const r = record(10143);
+    const key = await letterlock({ chain: "monad-testnet" }).resolve(r.deployer);
+    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([r.smokeTest.publishedKey, r.smokeTest.epoch, r.smokeTest.kid, r.smokeTest.updatedAt]);
+  });
+});
