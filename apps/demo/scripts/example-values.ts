@@ -3,7 +3,8 @@
 // Nothing here is a passkey, a published key or a transaction. Each example address is the first 20 bytes of
 // SHA-256 over a labelled string (no one holds a private key for it). Each example encryption key is the SDK's own
 // deriveKeyPair() over SHA-256 of another labelled string, standing in for a passkey PRF output. The example
-// envelopes are real SDK seal() output to those keys, bound to the testnet directory, and were never dropped.
+// envelopes are real SDK seal() output to those keys, bound to the testnet directory the app points at (the address
+// in deployments/10143.json, read below, so a redeploy only needs this script run again), and were never dropped.
 // The failures are what the SDK's open() really throws for the listed inputs.
 // test/examples.test.ts re-derives every key, opens every envelope and re-checks every failure, so the example
 // data on the pages stays honest.
@@ -11,13 +12,14 @@
 //   node scripts/example-values.ts > lib/examples.json     (from apps/demo; Node 22.18+ runs TypeScript directly)
 import { createHash } from "node:crypto";
 import { deriveKeyPair, fingerprint, isLetterlockError, open, seal, toHex, type Envelope } from "letterlock";
+import testnet from "../../../deployments/10143.json" with { type: "json" };
 
 export const sha256 = (s: string): Uint8Array => new Uint8Array(createHash("sha256").update(s).digest());
 export const exampleAddress = (label: string): `0x${string}` =>
   `0x${toHex(sha256(`letterlock example address: ${label}`).slice(0, 20))}`;
 export const exampleKeys = (label: string, epoch: number) => deriveKeyPair(sha256(`letterlock example prf: ${label}`), epoch);
 
-export const TESTNET = { chainId: 10143, directory: "0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4" } as const;
+export const TESTNET = { chainId: testnet.chainId, directory: testnet.address as `0x${string}` } as const;
 
 /** Every key an example persona has posted, oldest first; the last one is current. */
 const PERSONAS = [

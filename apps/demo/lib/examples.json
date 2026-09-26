@@ -1,7 +1,7 @@
 {
   "directory": {
     "chainId": 10143,
-    "directory": "0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4"
+    "directory": "0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a"
   },
   "personas": [
     {
@@ -66,12 +66,12 @@
       "envelope": {
         "v": 1,
         "chainId": 10143,
-        "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+        "directory": "0x3da5f339e20ab7325ffbb9df57fb5656ca1f8b3a",
         "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
         "epoch": 1,
         "kid": "6b5286d1ad2708a1",
-        "enc": "mZPH5lcLs6KT0xiJVoVpiL9dETe8h1oekaewvEQT6Ac",
-        "ct": "DdBtglJA4HaG7vwOrtn7VV_6Vbki6HgWRdxhcGBU5DP1AbpP6K2M23KWCM_xkT8ihhHsytsQEkha3uSc6ufB3sankFlZDMRoE4jL9W8uvTuxMnQdiFkbGbDA51k1Klit77gB4pU"
+        "enc": "ec9g-L4jhMchhIbIGFMA69U8iD7_9VbFOz0rdKbLhws",
+        "ct": "cInityYqdoG-7ZPcq75ADB-njHwXsG8JQpGhuDo5rDKZLjyK-IGi1X2bNMqUyA4VWpH6dsgZKcf0NN2oUPNf1Alw6L4NDZ7fDtXq2zVWFQAvtmXweeLhm1dFxtnqQxobXTevn68"
       }
     },
     {
@@ -84,12 +84,12 @@
       "envelope": {
         "v": 1,
         "chainId": 10143,
-        "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+        "directory": "0x3da5f339e20ab7325ffbb9df57fb5656ca1f8b3a",
         "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
         "epoch": 1,
         "kid": "6b5286d1ad2708a1",
-        "enc": "MPQPcJG87blZduyeNQ8rTKcFAj_LKL5AZB5nxlpFRFA",
-        "ct": "a_hAVPmX6e6jyXWldyk0kt96IUG_dB7hETfAoJZsmIr64HOVW2bKAl8hqn1Uz5zXNSr1JLTKmUYSle6i8W42rAn59Fwg7eXqpxtvoCTGLtKlpJgHWDQqhyASOT3XFI1mlg"
+        "enc": "z1PtFUBiXNKL4ouH1el80HXYlPMmnyDqrxGQxXKneVA",
+        "ct": "ZJRBxkQhloqLspTFLRWAi799f6X-TiXASXced-b6ARWsVnoL9UhSHGf13iQ8wZHn49iodRrS8JNwbPElcPM7hOMLuCMZ3knyBqMrPkiPTwKQ-aHX1bBljXopwT5zi7HntQ"
       }
     },
     {
@@ -102,12 +102,12 @@
       "envelope": {
         "v": 1,
         "chainId": 10143,
-        "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+        "directory": "0x3da5f339e20ab7325ffbb9df57fb5656ca1f8b3a",
         "recipient": "0x2cb6230026b0bd54a44fc92b501526e5351c7d02",
         "epoch": 1,
         "kid": "bf315c86ef04fff7",
-        "enc": "IhMjXkpqjnZ5g3kHW8wjTF8qYXTktY9QiiQUfOAItSo",
-        "ct": "vjuJ_2V-YvUxF9cGmZHhTPzOvzrXiycUz4UcQR3_sfU38jofG66DCRCM0Rj3OJHaXWwXP-v8tYHpWJ-viYFfY0zxRyxz5U4yJyVlT3GgiXS8rlNv8g"
+        "enc": "6ZKAR-p6UlAiNXJjzDqv39EE_fLlbzSteyz7iKaWFRs",
+        "ct": "qnEEWoJUwr5nmIFkoPn7z5mNJxy9N-1ce4X1PuZij4Hmzi5BqXN4yGUlPKRjBGUtdLxWEyEXDSGQlIW3XwRyV-p4HIuKjbaQb7209d34eLBvRedoxw"
       }
     }
   ],
@@ -117,12 +117,12 @@
     "envelope": {
       "v": 1,
       "chainId": 10143,
-      "directory": "0x4de866601ea5ea35eb142394df12bfa936a4b5d4",
+      "directory": "0x3da5f339e20ab7325ffbb9df57fb5656ca1f8b3a",
       "recipient": "0x4ccacf6625c9290a533d71998a33b24cfe85fa30",
       "epoch": 1,
       "kid": "6b5286d1ad2708a1",
-      "enc": "mZPH5lcLs6KT0xiJVoVpiL9dETe8h1oekaewvEQT6Ac",
-      "ct": "DdBtglJA4HaG7vwOr9n7VV_6Vbki6HgWRdxhcGBU5DP1AbpP6K2M23KWCM_xkT8ihhHsytsQEkha3uSc6ufB3sankFlZDMRoE4jL9W8uvTuxMnQdiFkbGbDA51k1Klit77gB4pU"
+      "enc": "ec9g-L4jhMchhIbIGFMA69U8iD7_9VbFOz0rdKbLhws",
+      "ct": "cInityYqdoG-7ZPcqr5ADB-njHwXsG8JQpGhuDo5rDKZLjyK-IGi1X2bNMqUyA4VWpH6dsgZKcf0NN2oUPNf1Alw6L4NDZ7fDtXq2zVWFQAvtmXweeLhm1dFxtnqQxobXTevn68"
     }
   },
   "failures": [

@@ -17,7 +17,17 @@ const data = JSON.parse(readFileSync(new URL("../lib/examples.json", import.meta
   failures: { code: string; letter: string; key: { name: string; epoch: number }; values: Record<string, string | number> }[];
 };
 
+const record = JSON.parse(readFileSync(new URL("../../../deployments/10143.json", import.meta.url), "utf8")) as { chainId: number; address: string };
+
 const decode = (b: Uint8Array) => new TextDecoder().decode(b);
+
+test("every example envelope is bound to the directory the app points at (deployments/10143.json), not a superseded one", () => {
+  assert.deepEqual(data.directory, { chainId: record.chainId, directory: record.address });
+  for (const env of [...data.letters.map((l) => l.envelope), data.tampered.envelope]) {
+    assert.equal(env.chainId, record.chainId);
+    assert.equal(env.directory, record.address.toLowerCase());
+  }
+});
 
 test("every example key is the SDK's derivation over its labelled string", () => {
   for (const p of data.personas) {
