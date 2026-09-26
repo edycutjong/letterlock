@@ -28,8 +28,9 @@
 .cardCol {
   display: grid;
   gap: 18px;
-  /* the card sits a little below the headline's cap height, like a card slipped into the register */
-  padding-top: clamp(48px, 8vw, 104px);
+  /* the card sits a little below the headline's cap height, like a card slipped into the register (its top edge
+     48-104 px down: this padding plus the 26 px the card keeps above itself for its postmark) */
+  padding-top: clamp(22px, calc(8vw - 26px), 78px);
 }
 
 .cardNote {

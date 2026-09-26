@@ -15,9 +15,17 @@
   box-shadow: var(--shadow-sm), var(--shadow-md);
 }
 
+/* The postmark is struck over the card's top corner and hangs above its edge. The card keeps that much room above
+   itself, so whatever is laid out over it (a line of fine print, a caption) never ends up under the ring, and no
+   page has to know the overhang (scripts/checks/postmark-clear.mjs). */
+.card[data-postmark] {
+  --postmark-rise: 26px;
+  margin-top: var(--postmark-rise);
+}
+
 .postmark {
   position: absolute;
-  top: -26px;
+  top: calc(-1 * var(--postmark-rise));
   right: clamp(-18px, -1.2vw, -8px);
   pointer-events: none;
 }
@@ -187,12 +195,14 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
+  .card[data-postmark] {
+    --postmark-rise: 30px;
+  }
   .card[data-postmark] .head {
     padding-right: 60px;
   }
   .postmark {
     width: 84px;
     height: 84px;
-    top: -30px;
   }
 }
