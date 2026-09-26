@@ -225,6 +225,9 @@ benchmark passes. The `git diff` catches both; CI runs it after the tests.
   the key. After `cast send publish` / `publishForAgent` / `drop` it reads the key back with `keyOf` or
   `keyOfAgent`, and with `--drop-tx` reads the `Dropped` envelope from the receipt, checks its chain, directory and
   recipient, and opens it (`verify`).
-- `script/outside-repo.mjs`: the check behind `smoke.mjs --out`. A path is compared with the repository after
-  symlinks and letter case are resolved on the part of it that exists, by whole segments, so `./..keys`, a link into
-  the tree and a dangling link are all refused (`outside-repo.test.mjs`).
+- `script/outside-repo.mjs`: the check behind `smoke.mjs --out`. It decides by file identity, not path text: after
+  symlinks are resolved on the part of the path that exists, the path is inside when that folder or any folder above
+  it has the repository root's device and inode. So `./..keys`, a link into the tree, another letter case and macOS's
+  `/System/Volumes/Data/...` name for the repository are all refused, and so is a dangling link. `prepare` also
+  refuses an `--out` that already holds `key.json` or `envelope.json` (or a symlink by that name), so an earlier
+  stand-in is never replaced, and writes both exclusively with mode 600 (`outside-repo.test.mjs`).

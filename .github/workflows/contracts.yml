@@ -67,8 +67,8 @@ jobs:
         run: node --test script/keystore-from-env.test.mjs
 
       # smoke.mjs writes a PRF stand-in, which opens what is sealed to its key, to --out: any --out inside the
-      # repository is refused, after symlinks and letter case are resolved. Its end-to-end run skips here (this job
-      # does not install the SDK's dependencies).
+      # repository is refused (by device and inode, after symlinks are resolved), and an existing key.json is never
+      # replaced. Its end-to-end runs skip here (this job does not install the SDK's dependencies).
       - name: Smoke key files stay out of the repository
         run: node --test script/outside-repo.test.mjs
 

@@ -5,7 +5,7 @@
 //   node --test contracts/script/outside-repo.test.mjs     (the smoke.mjs test also needs the SDK's dependencies)
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { after, test } from "node:test";
@@ -48,20 +48,39 @@ test("the repository's path in another letter case is inside, on a file system t
     assert.equal(isOutside(repo, join(upper, "..keys")), false);
   });
 
+// macOS: /System/Volumes/Data is a second name for /Users, /private, /opt and the other firmlink roots, and
+// realpath keeps that spelling, so only the folders' identity shows it is the same tree.
+const firmlinked = join("/System/Volumes/Data", repo);
+const sameFolder = (a, b) => {
+  const x = statSync(a, { bigint: true });
+  const y = statSync(b, { bigint: true });
+  return x.dev === y.dev && x.ino === y.ino;
+};
+const hasFirmlink = existsSync(firmlinked) && sameFolder(firmlinked, repo);
+test("the repository under /System/Volumes/Data is inside, where that second name exists",
+  { skip: hasFirmlink ? false : "no /System/Volumes/Data name for the repository here" }, () => {
+    for (const p of [firmlinked, join(firmlinked, "keys"), join(firmlinked, "..keys"), join(firmlinked, "a", "b")])
+      assert.equal(isOutside(repo, p), false, p);
+    assert.equal(isOutside(firmlinked, join(repo, "keys")), false);
+  });
+
 test("paths outside the repository are allowed, existing or not", () => {
   for (const p of [work, join(work, "new", "deeper"), dirname(repo), join(dirname(repo), "sibling-not-there"), tmpdir()])
     assert.equal(isOutside(repo, p), true, p);
 });
 
 const sdkInstalled = existsSync(join(repo, "packages", "letterlock", "node_modules", "@hpke", "core"));
+const skipSmoke = { skip: sdkInstalled ? false : "the SDK's dependencies are not installed (pnpm install)" };
+const prepare = (out) => {
+  const directory = JSON.parse(readFileSync(join(repo, "deployments", "10143.json"), "utf8")).address;
+  return spawnSync(process.execPath, [
+    "contracts/script/smoke.mjs", "prepare", "--chain-id", "10143", "--directory", directory,
+    "--recipient", "0x000000000000000000000000000000000000dead", "--out", out,
+  ], { cwd: repo, encoding: "utf8" });
+};
+
 test("smoke.mjs prepare refuses --out ./..keys and writes nothing there; an outside --out gets key.json, mode 600",
-  { skip: sdkInstalled ? false : "the SDK's dependencies are not installed (pnpm install)" }, () => {
-    const directory = JSON.parse(readFileSync(join(repo, "deployments", "10143.json"), "utf8")).address;
-    const prepare = (out) =>
-      spawnSync(process.execPath, [
-        "contracts/script/smoke.mjs", "prepare", "--chain-id", "10143", "--directory", directory,
-        "--recipient", "0x000000000000000000000000000000000000dead", "--out", out,
-      ], { cwd: repo, encoding: "utf8" });
+  skipSmoke, () => {
 
     const name = `..keys-test-${process.pid}`;
     try {
@@ -79,3 +98,29 @@ test("smoke.mjs prepare refuses --out ./..keys and writes nothing there; an outs
     assert.equal(JSON.parse(done.stdout).selfCheck, "opened");
     assert.equal(statSync(join(out, "key.json")).mode & 0o777, 0o600);
   });
+
+test("smoke.mjs prepare never replaces an earlier key.json: a second run into the same --out fails and changes nothing",
+  skipSmoke, () => {
+    const out = join(work, "smoke-twice");
+    assert.equal(prepare(out).status, 0);
+    const key = readFileSync(join(out, "key.json"));
+    const envelope = readFileSync(join(out, "envelope.json"));
+    const again = prepare(out);
+    assert.notEqual(again.status, 0);
+    assert.match(again.stderr, /already exists/);
+    assert.deepEqual(readFileSync(join(out, "key.json")), key);
+    assert.deepEqual(readFileSync(join(out, "envelope.json")), envelope);
+  });
+
+test("smoke.mjs prepare refuses a key.json symlink in --out and writes nothing through it", skipSmoke, () => {
+  const out = join(work, "smoke-link");
+  const target = join(work, "link-target.json"); // outside the tree, so a broken check leaks nothing into it
+  mkdirSync(out);
+  symlinkSync(target, join(out, "key.json"));
+  const done = prepare(out);
+  assert.notEqual(done.status, 0);
+  assert.match(done.stderr, /already exists/);
+  assert.equal(existsSync(target), false);
+  assert.equal(lstatSync(join(out, "key.json")).isSymbolicLink(), true);
+  assert.equal(existsSync(join(out, "envelope.json")), false);
+});

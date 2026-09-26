@@ -2,7 +2,8 @@
 // Smoke run for a deployed directory, using the SDK's own derive/seal/open (packages/letterlock).
 // The key has no passkey behind it: deriveKeyPair() over 32 random bytes that stand in for a passkey PRF output. It
 // is labelled TEST KEY (the default) or, with --label "DEMO KEY", a demo key on mainnet. The stand-in is written only
-// to --out, which must be outside this repository (outside-repo.mjs). Whoever keeps it can open anything sealed to
+// to --out, which must be outside this repository (outside-repo.mjs), and never over an existing key.json or
+// envelope.json there (a stand-in already published must stay openable). Whoever keeps it can open anything sealed to
 // the key, so never seal a real note to one.
 //
 //   node contracts/script/smoke.mjs prepare --chain-id 143 --directory 0x.. --recipient 0x..|agent:<id> --out DIR
@@ -15,7 +16,7 @@
 //       -> keyOf(address) or keyOfAgent(id) must return the saved key and epoch; with --drop-tx, the Dropped envelope
 //          is read back from that receipt, must name this chain, directory and recipient, and is opened
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -53,7 +54,7 @@ async function prepare() {
   const chainId = Number(need("chain-id"));
   const label = args.label ?? "TEST KEY";
   const out = resolve(need("out"));
-  // compared after symlinks and letter case are resolved, by whole segments: a folder named "..keys" is inside
+  // by file identity, after symlinks: "..keys", a link into the tree or any other spelling of it is inside
   if (!isOutside(repo, out)) throw new Error(`--out must be outside the repository (${repo})`);
   if (!isAddress(directory)) throw new Error("bad directory address");
   if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error("bad --chain-id");
@@ -72,11 +73,24 @@ async function prepare() {
 
   const envelopeBytes = new TextEncoder().encode(JSON.stringify(envelope));
   mkdirSync(out, { recursive: true });
+  // Never over an earlier run's files: a stand-in whose key was published must stay, so its drops can still be opened.
+  // Both names are checked before either is written, and each write is exclusive (O_CREAT|O_EXCL), so an existing file
+  // or a symlink planted there is refused and mode 600 always applies.
+  for (const name of ["key.json", "envelope.json"]) {
+    let taken = true;
+    try {
+      lstatSync(join(out, name));
+    } catch {
+      taken = false;
+    }
+    if (taken) throw new Error(`${join(out, name)} already exists: use a new --out for each key`);
+  }
+  const exclusive = { flag: "wx", mode: 0o600 };
   writeFileSync(join(out, "key.json"), JSON.stringify({
     label: `${label} - random 32-byte PRF stand-in, not a passkey`, recipient: recipient.canonical,
     prfStandIn: `0x${toHex(prfStandIn)}`, epoch: 1, publicKey: `0x${toHex(keys.publicKey)}`, kid: fingerprint(keys.publicKey),
-  }, null, 2), { mode: 0o600 });
-  writeFileSync(join(out, "envelope.json"), JSON.stringify(envelope, null, 2));
+  }, null, 2), exclusive);
+  writeFileSync(join(out, "envelope.json"), JSON.stringify(envelope, null, 2), exclusive);
   console.log(JSON.stringify({
     label, network, recipient: recipient.canonical, publicKey: `0x${toHex(keys.publicKey)}`, epoch: 1,
     kid: fingerprint(keys.publicKey), envelopeBytes: envelopeBytes.length, envelopeHex: `0x${toHex(envelopeBytes)}`,

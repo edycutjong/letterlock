@@ -1,12 +1,13 @@
 // Where a script may write a secret: only outside the repository, where `git add -A` cannot pick it up. smoke.mjs
 // writes its PRF stand-in, which opens anything sealed to its key, to --out through this check.
 //
-// A path is compared as the file system resolves it: symlinks followed and letter case as stored, on the nearest part
-// of the path that exists (the rest does not exist yet, so it holds no link), and then by whole path segments. So a
-// folder inside the repository named like "..keys", a link into the tree and the repository's path typed in another
-// letter case (on a file system that ignores case) all count as inside.
-import { existsSync, lstatSync, realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+// Inside or outside is decided by file identity, not by path text: the path is resolved (symlinks followed) as far as
+// it exists, and it is inside when that folder or any folder above it has the repository root's device and inode. So
+// every spelling of the tree is inside: a folder in it named like "..keys", a link into it, the repository's path in
+// another letter case (on a file system that ignores case), in another Unicode normalisation, through a bind mount,
+// or through a second name for the same folder such as macOS's /System/Volumes/Data/Users/... firmlink.
+import { existsSync, lstatSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 
 /** `path` as the file system resolves it. Throws on a symlink that does not resolve (dangling, or a loop). */
 export const physicalPath = (path) => {
@@ -23,8 +24,20 @@ export const physicalPath = (path) => {
   return parent === abs ? abs : join(physicalPath(parent), basename(abs));
 };
 
-/** True when `path` is neither `dir` nor anything inside it. */
+const identity = (path) => {
+  const s = statSync(path, { bigint: true });
+  return `${s.dev}:${s.ino}`;
+};
+
+/** True when `path` is neither `dir` nor anything inside it, compared by (device, inode) of `dir` and each ancestor. */
 export const isOutside = (dir, path) => {
-  const rel = relative(physicalPath(dir), physicalPath(path));
-  return isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`);
+  const root = identity(dir);
+  let p = physicalPath(path);
+  while (!existsSync(p)) p = dirname(p); // the part that does not exist yet holds no link and no second name
+  for (;;) {
+    if (identity(p) === root) return false;
+    const parent = dirname(p);
+    if (parent === p) return true;
+    p = parent;
+  }
 };
