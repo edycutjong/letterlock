@@ -84,9 +84,10 @@ Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
   unit, fuzz (256 runs), invariant (32 runs) and deploy tests in a scratch copy; the fork and gas tests are left out.
   40 killed. The survivor (#39) turns `>= 0xed` into `> 0xed` in the u ≥ p check, and it is equivalent: u = p is
   already rejected as a libsodium small-order entry.
-- The fork test deploys on the latest mainnet block and reads the live registry's `ownerOf` for agent 10259
-  (registered in tx `0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77`) and for agent 0. It is
-  skipped, with the RPC error, when the RPC is unreachable.
+- The fork tests deploy on the latest mainnet block and read the live registry's `ownerOf` for agent 10259
+  (registered in tx `0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77`) and for agent 0. One moves
+  agent 10259 with the registry's own `transferFrom` and checks that the buyer publishes the stored epoch + 1. They
+  are skipped, with the RPC error, when the RPC is unreachable.
 
 ## Gas
 
