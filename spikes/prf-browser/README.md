@@ -97,7 +97,7 @@ node check-page.mjs --url https://letterlock-spike.vercel.app/   # the same chec
 Results on 2026-09-26 with Chromium 153 virtual authenticators:
 
 - `run-spike.mjs`: **13/14 passed, 1 SKIP**. The SKIP is the cross-device check, which is this human run.
-- `check-page.mjs`: **24/24** on the local production build and **25/25** on the live page (build `7f63af7`); the
+- `check-page.mjs`: **25/25** on the local production build and **26/26** on the live page (build `fa47ecc`); the
   live run adds the CSP header check.
 - The SDK's own suite (`pnpm --filter letterlock test`): **59/59**.
 
@@ -109,11 +109,12 @@ Results on 2026-09-26 with Chromium 153 virtual authenticators:
 - Copy result, and no sideways scroll at iPad and phone widths;
 - no page errors or CSP errors.
 
-Chromium always returns PRF at creation. So three cases are checked by *simulating* the authenticator
-behaviour in a test-only init script:
+Chromium always returns PRF at creation, and its virtual authenticator never refuses a prompt. So four cases
+are checked by *simulating* the authenticator behaviour in a test-only init script:
 - the 2-prompt fallback;
 - a blocked second prompt: the page keeps the passkey, and one more tap finishes;
-- a hybrid assertion that returns a different PRF value: the page diagnoses it as hybrid, not as a failure.
+- a hybrid assertion that returns a different PRF value: the page diagnoses it as hybrid, not as a failure;
+- a Touch ID prompt cancelled during *1 · Create*: the page asks for another tap on the Mac.
 
 ## Build and deploy
 
