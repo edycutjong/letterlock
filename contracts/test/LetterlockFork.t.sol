@@ -190,8 +190,9 @@ contract LetterlockMainnetForkTest is KeyOfAgentGasSweep {
     /// Regression, against the live registry: a contract reads keyOfAgent for the real agent with every gas budget
     /// from 5,000 to 80,000 (step 20), each read cold in its own transaction. Every budget must return the live key
     /// or revert; none may return zeros. Run against the previous source (commit d15fe63, which read any ownerOf
-    /// failure as "no owner"; only the RegistryCallFailed declaration added so this file compiles), this test fails
-    /// at block 108213528: 527 budgets, 35,920 to 46,440 gas, returned zeros for the live key.
+    /// failure as "no owner"; only the two error declarations this file names, RegistryCallFailed and
+    /// IERC721.ERC721NonexistentToken, added so it compiles), this test fails at block 108228931: 527 budgets, 35,920
+    /// to 46,440 gas, returned zeros for the live key.
     function test_fork_gasStarvedReaderNeverReadsZeros() public onlyFork {
         vm.prank(owner);
         ll.publishForAgent(agentId, SDK_E1, 1);
