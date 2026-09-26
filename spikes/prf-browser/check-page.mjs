@@ -51,7 +51,21 @@ const simulateAuthenticator = () => {
   };
   proto.get = function (o) {
     if (window.__simBlockNextGet) { window.__simBlockNextGet = false; return Promise.reject(new DOMException("simulated: second prompt blocked", "NotAllowedError")); }
-    return get.call(this, o);
+    const pending = get.call(this, o);
+    if (!window.__simHybridNextGet) return pending;
+    window.__simHybridNextGet = false;
+    // hybrid (another device over QR/Bluetooth) whose PRF output differs from on-device, as Safari 18.x has done
+    return pending.then((cred) => {
+      Object.defineProperty(cred, "authenticatorAttachment", { value: "cross-platform" });
+      const results = cred.getClientExtensionResults.bind(cred);
+      cred.getClientExtensionResults = () => {
+        const r = results();
+        const first = r.prf?.results?.first;
+        if (first) { const b = new Uint8Array(first).slice(); b[0] ^= 1; r.prf.results.first = b.buffer; }
+        return r;
+      };
+      return cred;
+    });
   };
 };
 
@@ -154,7 +168,7 @@ try {
   await tap(mac.page, "#derive");
   const cA3 = await copied(mac.page);
   check("A', no storage: discoverable lookup → same fingerprint, same passkey as the link, the note opens (PASS)",
-    cA3.json.path === "discoverable" && cA3.json.ceremonies[0]?.lookup === "discoverable" && (await fpOf(mac.page)) === fpA
+    cA3.json.path === "discoverable" && cA3.json.ceremonies[0]?.lookup === "discoverable" && cA3.json.attachment === "platform" && (await fpOf(mac.page)) === fpA
       && cA3.json.sameCredential === true && (await text(mac.page, "#opened")) === note && (await mac.page.locator("#verdict.pass").count()) === 1,
     await text(mac.page, "#verdict"));
 
@@ -224,6 +238,18 @@ try {
   check("simulated late PRF: 2 prompts (create, then a credential-hint assertion), reported as 'fallback'; the key re-derives",
     cE.json.prompts === 2 && cE.json.prfAt === "fallback" && cE.json.ceremonies.map((c) => `${c.kind}:${c.lookup ?? "-"}:${c.prf}`).join() === "create:-:enabled-only,get:credential-hint:output"
       && (await fpOf(late.page)) === fpE && cE2.json.verdict === "pass", promptsE);
+
+  // ---------- simulated: the passkey is used over hybrid and returns another PRF value ----------
+  const linkE = await late.page.locator("#link").getAttribute("href");
+  await late.page.evaluate(() => localStorage.clear());
+  await late.page.goto("about:blank");
+  await load(late.page, linkE);
+  await late.page.evaluate(() => { window.__simHybridNextGet = true; });
+  await tap(late.page, "#derive");
+  const cH = await copied(late.page);
+  check("simulated hybrid use with a different PRF value → diagnosed as 'used from ANOTHER device', not as a same-passkey FAIL",
+    cH.json.verdict === "retry" && cH.json.attachment === "cross-platform" && (await text(late.page, "#verdict")).includes("ANOTHER device")
+      && (await fact(late.page, "Passkey used from"))?.startsWith("ANOTHER device"), await text(late.page, "#verdict"));
 
   // ---------- simulated: ...and the second prompt is blocked → the passkey is kept, one more tap finishes ----------
   const blocked = await device({ label: "F", simulate: true });
