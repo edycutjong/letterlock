@@ -1,14 +1,14 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const git = (cmd: string) => {
-  try { return execSync(cmd, { cwd: here, stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; }
+const git = (...args: string[]) => {
+  try { return execFileSync("git", args, { cwd: here, stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; }
 };
 // The page shows (and "Copy result" reports) which commit it was built from; "+dirty" = uncommitted spike edits
 // (Markdown excluded: docs never enter the bundle).
-const build = `${git("git rev-parse --short HEAD") || "nogit"}${git("git status --porcelain -- . :(exclude)*.md") ? "+dirty" : ""}`;
+const build = `${git("rev-parse", "--short", "HEAD") || "nogit"}${git("status", "--porcelain", "--", ".", ":(exclude)*.md") ? "+dirty" : ""}`;
 
 export default defineConfig({
   define: { __LL_BUILD__: JSON.stringify(build) },
