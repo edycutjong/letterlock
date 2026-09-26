@@ -1,0 +1,31 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+
+# Monad execution environment for forge/cast/anvil (Foundry >= 1.8): Monad gas model, precompiles,
+# contract-size limits. Monad's docs require the osaka EVM target.
+network = "monad"
+solc_version = "0.8.33"
+evm_version = "osaka"
+optimizer = true
+optimizer_runs = 10000
+# Keep the default IPFS metadata hash in the bytecode so Sourcify (MonadVision) can do a full match.
+bytecode_hash = "ipfs"
+
+[fuzz]
+runs = 1024
+
+[invariant]
+runs = 256
+depth = 128
+fail_on_revert = false
+
+[rpc_endpoints]
+monad = "https://rpc.monad.xyz"
+monad_testnet = "https://testnet-rpc.monad.xyz"
+
+[fmt]
+line_length = 120

@@ -1,0 +1,15 @@
+# Foundry build output and caches (cache/ also holds forge-script data with RPC URLs)
+out/
+cache/
+
+# Simulated (not broadcast) script runs
+broadcast/*/dry-run/
+broadcast/**/dry-run/
+
+# Coverage reports
+lcov.info
+coverage/
+report/
+
+.env
+.env.*
