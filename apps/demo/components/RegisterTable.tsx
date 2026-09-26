@@ -86,7 +86,7 @@ export function RegisterTable({ caption, captionHidden, rows, layout = "auto", e
                   {r.example && <ExampleBadge className={styles.badge} />}
                 </span>
                 {r.state === "found" && <span className={`${styles.found} label-caps`}>Found by keyOf</span>}
-                {r.state === "superseded" && <span className={`${styles.note} label-caps`}>Superseded</span>}
+                {r.state === "superseded" && <span className={`${styles.superseded} label-caps`}>Superseded</span>}
                 {r.note && <span className={styles.note}>{r.note}</span>}
               </th>
               <td className={styles.epoch}>{r.epoch}</td>

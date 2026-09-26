@@ -1,11 +1,12 @@
+// the token sheet and the base layer first, before any component brings its own stylesheet
+import "./tokens.css";
+import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Bodoni_Moda, IBM_Plex_Mono, Public_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DIRECTORY } from "@/lib/deployment.ts";
-import "./tokens.css";
-import "./globals.css";
 
 // Display: engraved-stationery Didone with a true italic for address lines; its optical-size axis keeps the
 // hairlines sturdy at 15 px and fine at 60 px. Body: a plain civil-service sans, like postal forms. Data: mono, for

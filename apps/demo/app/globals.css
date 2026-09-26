@@ -29,277 +29,284 @@
   -webkit-tap-highlight-color: color-mix(in srgb, var(--before) 14%, transparent);
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+/* Everything below is the base layer: element defaults and the shared classes (.page, .label-caps, .data, …).
+   Component stylesheets (CSS modules) are not layered, so any component rule beats any rule here whatever the
+   order the build emits the stylesheets in (it emits the components' sheet first, this one second), and a
+   component can restyle a shared class it is combined with (scripts/checks/module-overrides.mjs). The :root
+   block above stays outside the layer: it must override the font names in tokens.css. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-html {
-  background-color: var(--bg);
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  scroll-padding-top: 24px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
   html {
-    scroll-behavior: smooth;
+    background-color: var(--bg);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-padding-top: 24px;
   }
-}
 
-body {
-  position: relative;
-  margin: 0;
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: var(--fs-body);
-  line-height: 1.55;
-  font-kerning: normal;
-  font-optical-sizing: auto;
-  font-variant-numeric: lining-nums;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  overflow-x: clip;
-}
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
 
-/* The stock, the tooth and the margin rule are laid over the whole document (not fixed to the viewport), so the
-   sheet reads the same at any scroll position and in a full-page capture. */
+  body {
+    position: relative;
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: var(--fs-body);
+    line-height: 1.55;
+    font-kerning: normal;
+    font-optical-sizing: auto;
+    font-variant-numeric: lining-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: clip;
+  }
 
-/* manila stock, lit from the top-left of the first screen */
-body::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  background-image: radial-gradient(60% 80% at 18% 20%, #FBF7EF 0%, transparent 60%);
-  background-size: 100% min(100%, 1100px);
-  background-repeat: no-repeat;
-}
+  /* The stock, the tooth and the margin rule are laid over the whole document (not fixed to the viewport), so the
+     sheet reads the same at any scroll position and in a full-page capture. */
 
-/* paper tooth, multiplied into the stock under the ink so type stays crisp */
-body::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: var(--noise-svg);
-  background-size: 300px 300px;
-  filter: grayscale(1) contrast(1.6);
-  mix-blend-mode: multiply;
-  opacity: 0.13;
-}
+  /* manila stock, lit from the top-left of the first screen */
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background-image: radial-gradient(60% 80% at 18% 20%, #FBF7EF 0%, transparent 60%);
+    background-size: 100% min(100%, 1100px);
+    background-repeat: no-repeat;
+  }
 
-/* the register's double margin rule, pencil-ruled down the left of the sheet */
-.margin-rule {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: clamp(8px, 2.2vw, 30px);
-  width: 5px;
-  z-index: -1;
-  pointer-events: none;
-  border-left: 1px solid var(--rule);
-  border-right: 1px solid var(--rule);
-  opacity: 0.8;
-}
+  /* paper tooth, multiplied into the stock under the ink so type stays crisp */
+  body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--noise-svg);
+    background-size: 300px 300px;
+    filter: grayscale(1) contrast(1.6);
+    mix-blend-mode: multiply;
+    opacity: 0.13;
+  }
 
-@media (max-width: 639.98px) {
+  /* the register's double margin rule, pencil-ruled down the left of the sheet */
   .margin-rule {
-    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: clamp(8px, 2.2vw, 30px);
+    width: 5px;
+    z-index: -1;
+    pointer-events: none;
+    border-left: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+    opacity: 0.8;
   }
-}
 
-/* ---- browser surfaces ----------------------------------------------------------------------------------- */
+  @media (max-width: 639.98px) {
+    .margin-rule {
+      display: none;
+    }
+  }
 
-::selection {
-  background-color: color-mix(in srgb, var(--before) 24%, transparent);
-  color: var(--ink);
-}
+  /* ---- browser surfaces ----------------------------------------------------------------------------------- */
 
-:focus {
-  outline: none;
-}
+  ::selection {
+    background-color: color-mix(in srgb, var(--before) 24%, transparent);
+    color: var(--ink);
+  }
 
-:focus-visible {
-  outline: 2px solid var(--before);
-  outline-offset: 3px;
-  border-radius: 2px;
-}
+  :focus {
+    outline: none;
+  }
 
-input,
-textarea,
-select,
-button {
-  font: inherit;
-  color: inherit;
-  caret-color: var(--before);
-}
+  :focus-visible {
+    outline: 2px solid var(--before);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
 
-::placeholder {
-  color: var(--muted);
-  opacity: 1;
-}
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+    caret-color: var(--before);
+  }
 
-::-webkit-scrollbar {
-  width: 11px;
-  height: 11px;
-}
+  ::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background-color: color-mix(in srgb, var(--muted) 55%, var(--rule));
-  border: 3px solid var(--bg);
-  border-radius: 8px;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--muted);
-}
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--muted) 55%, var(--rule));
+    border: 3px solid var(--bg);
+    border-radius: 8px;
+  }
 
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted);
+  }
 
-/* ---- type ------------------------------------------------------------------------------------------------ */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 
-h1,
-h2,
-h3,
-h4 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 500;
-  color: var(--ink);
-  text-wrap: balance;
-}
+  /* ---- type ------------------------------------------------------------------------------------------------ */
 
-h1 em,
-h2 em,
-h3 em {
-  font-style: italic;
-}
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 500;
+    color: var(--ink);
+    text-wrap: balance;
+  }
 
-p {
-  margin: 0;
-  text-wrap: pretty;
-}
+  h1 em,
+  h2 em,
+  h3 em {
+    font-style: italic;
+  }
 
-a {
-  color: inherit;
-  text-decoration-line: underline;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, var(--ink) 38%, transparent);
-  text-underline-offset: 0.24em;
-  transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
-}
+  p {
+    margin: 0;
+    text-wrap: pretty;
+  }
 
-a:hover {
-  color: var(--before);
-  text-decoration-color: currentColor;
-}
+  a {
+    color: inherit;
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in srgb, var(--ink) 38%, transparent);
+    text-underline-offset: 0.24em;
+    transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
+  }
 
-code,
-kbd,
-samp {
-  font-family: var(--font-data);
-  font-size: 0.92em;
-  font-variant-ligatures: none;
-}
+  a:hover {
+    color: var(--before);
+    text-decoration-color: currentColor;
+  }
 
-strong {
-  font-weight: 600;
-}
+  code,
+  kbd,
+  samp {
+    font-family: var(--font-data);
+    font-size: 0.92em;
+    font-variant-ligatures: none;
+  }
 
-table {
-  font-variant-numeric: tabular-nums lining-nums;
-}
+  strong {
+    font-weight: 600;
+  }
 
-/* ---- shared building blocks ------------------------------------------------------------------------------- */
+  table {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
 
-.page {
-  width: 100%;
-  max-width: var(--page-max);
-  margin-inline: auto;
-  padding-inline: var(--gutter);
-}
+  /* ---- shared building blocks ------------------------------------------------------------------------------- */
 
-/* an addressee, set like engraved stationery */
-.address-line {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
+  .page {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
 
-/* register column heads, form labels and stamp lettering; never a kicker above a heading */
-.label-caps {
-  font-family: var(--font-body);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+  /* an addressee, set like engraved stationery */
+  .address-line {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
 
-/* the data face: fingerprints, hashes, envelope JSON, function names; never prose */
-.data {
-  font-family: var(--font-data);
-  font-size: var(--fs-data);
-  font-variant-ligatures: none;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-  color: var(--ink);
-}
+  /* register column heads, form labels and stamp lettering; never a kicker above a heading */
+  .label-caps {
+    font-family: var(--font-body);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
 
-.visually-hidden {
-  position: absolute !important;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
+  /* the data face: fingerprints, hashes, envelope JSON, function names; never prose */
+  .data {
+    font-family: var(--font-data);
+    font-size: var(--fs-data);
+    font-variant-ligatures: none;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+  }
 
-.skip-link {
-  position: absolute;
-  left: 12px;
-  top: -80px;
-  z-index: var(--z-overlay);
-  padding: 12px 16px;
-  background: var(--ink);
-  color: var(--bg-elevated);
-  font-weight: 600;
-  text-decoration: none;
-  border-radius: 3px;
-}
+  .visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
 
-.skip-link:focus-visible {
-  top: 12px;
-  color: var(--bg-elevated);
-}
+  .skip-link {
+    position: absolute;
+    left: 12px;
+    top: -80px;
+    z-index: var(--z-overlay);
+    padding: 12px 16px;
+    background: var(--ink);
+    color: var(--bg-elevated);
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 3px;
+  }
 
-/* a double rule, thick over thin, the way a register page closes a section */
-.double-rule {
-  height: 5px;
-  border: 0;
-  margin: 0;
-  border-top: 1.5px solid var(--ink);
-  border-bottom: 0.75px solid var(--ink);
+  .skip-link:focus-visible {
+    top: 12px;
+    color: var(--bg-elevated);
+  }
+
+  /* a double rule, thick over thin, the way a register page closes a section */
+  .double-rule {
+    height: 5px;
+    border: 0;
+    margin: 0;
+    border-top: 1.5px solid var(--ink);
+    border-bottom: 0.75px solid var(--ink);
+  }
 }
