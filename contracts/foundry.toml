@@ -8,6 +8,9 @@ script = "script"
 # Monad execution environment for forge/cast/anvil (Foundry >= 1.8): Monad gas model, precompiles,
 # contract-size limits. Monad's docs require the osaka EVM target.
 network = "monad"
+# network = "monad" already implies this; stated because test/LetterlockGas.t.sol depends on it. Each top-level
+# write in a test runs as its own transaction, so gas snapshots are whole transactions with cold storage.
+isolate = true
 solc_version = "0.8.33"
 evm_version = "osaka"
 optimizer = true

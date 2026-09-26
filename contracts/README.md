@@ -58,18 +58,19 @@ Events: `KeyPublished(address indexed who, uint256 indexed agentId, bytes32 pub,
 git submodule update --init --recursive   # forge-std v1.16.2
 cd contracts
 forge build
-forge test -vvv          # includes the Monad mainnet fork test (network); set MONAD_MAINNET_RPC to override
+forge test -vvv          # includes the Monad mainnet fork tests (network); set MONAD_MAINNET_RPC to override
+forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true   # exits 1 if a gas number moved
 forge coverage --no-match-path test/LetterlockGas.t.sol --no-match-coverage "test/" --report summary
-forge snapshot --check --match-path test/LetterlockGas.t.sol
+node script/export-abi.mjs --check
 ```
 
 Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
 
-- `forge test -vvv`: 88 tests passed, 0 failed, 0 skipped. That is 65 unit and fuzz tests (10 fuzz tests,
-  1,024 runs each), 7 mainnet-fork tests, 6 deploy-script tests, 8 gas benchmarks, and 2 in the invariant suite:
+- `forge test -vvv`: 96 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz tests (11 fuzz tests,
+  1,024 runs each), 8 mainnet-fork tests, 6 deploy-script tests, 8 gas benchmarks, and 2 in the invariant suite:
   5 invariants over 256 runs × 128 calls (32,768 calls), plus a fixed-seed 3,000-call walk that reaches every
   accept and reject path.
-- Coverage of `src/Letterlock.sol`: 100% of lines (60/60), statements (84/84), branches (20/20) and functions (10/10).
+- Coverage of `src/Letterlock.sol`: 100% of lines (62/62), statements (85/85), branches (19/19) and functions (11/11).
 - Mutation check (34 hand-written mutants of `Letterlock.sol`): 33 killed. The survivor turns `>= 0xed` into
   `> 0xed` in the u ≥ p check, and it is equivalent: u = p is already rejected as a libsodium small-order entry.
 - The fork test deploys on the latest mainnet block and reads the live registry's `ownerOf` for agent 10259
@@ -78,23 +79,39 @@ Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
 
 ## Gas
 
-Execution gas per call under Monad execution, from `snapshots/Letterlock.json` (`test/LetterlockGas.t.sol`,
-storage cooled first). This excludes the 21,000 intrinsic cost and calldata. The agent rows use the test-double
-registry.
+From `snapshots/Letterlock.json`, written by `test/LetterlockGas.t.sol` under Foundry's Monad execution environment
+(`network = "monad"`, `isolate = true`). The agent rows use the test-double registry; the live ERC-8004 registry is a
+proxy and costs more.
 
-| Call | Gas |
-|---|---|
-| `publish`, first key | 69,893 |
-| `publish`, rotation | 35,893 |
-| `publishForAgent`, first key | 89,089 |
-| `keyOf` | 8,756 |
-| `keyOfAgent` | 28,011 |
-| `drop`, 1 KiB, to an address | 65,020 |
-| `drop`, 1 KiB, to an agent | 76,569 |
-| `drop`, 16 KiB, to an address | 679,420 |
+| Call | Transaction gas | Execution gas |
+|---|---|---|
+| `publish`, first key | 70,002 | 48,286 |
+| `publish`, rotation | 36,002 | 14,286 |
+| `publishForAgent`, first key | 89,198 | 67,330 |
+| `drop`, 1 KiB envelope, to an address | 65,020 (calldata floor) | 19,387 |
+| `drop`, 1 KiB envelope, to an agent | 76,573 | 38,565 |
+| `drop`, 16 KiB envelope, to an address | 679,420 (calldata floor) | 143,947 |
+| `keyOf` (view) | none | 8,756 |
+| `keyOfAgent` (view) | none | 28,015 |
 
-Testnet receipts, which are charged at the gas limit: deploy 1,098,346 · `publish` 70,753 · `drop` (484-byte
-envelope) 45,708.
+- **Transaction gas** is the whole transaction, as its receipt reports it. Each write runs isolated, as its own
+  transaction with cold storage, so the number includes the 21,000 base cost and the calldata. Under EIP-7623,
+  calldata and execution are charged together as max(4 × tokens + execution, 10 × tokens); a zero byte is 1 token,
+  any other byte 4. Monad charges the gas limit rather than the gas used, so set the limit to at least this number.
+- **Execution gas** of a write is derived as transaction − 21,000 − 4 × tokens. A drop of a JSON envelope (every
+  byte non-zero) pays exactly the 10-per-token floor, which hides its execution, so drop execution is measured on a
+  zero-filled envelope of the same length: `drop` reads only the length. Each drop benchmark asserts that both
+  measurements fit the formula above.
+- A view is a static call, which Foundry does not isolate: its number is execution only, with Letterlock's storage
+  cold, as when another contract reads a key in its own transaction. An `eth_call` from an app costs nothing.
+- At both measured sizes, a drop to an address pays exactly the floor, 24,060 + 40 gas per envelope byte: the
+  envelope's size, not the contract's execution, sets the price.
+
+Check that no number moved (exits 1 on any change):
+
+```sh
+forge test --match-path test/LetterlockGas.t.sol --gas-snapshot-check true
+```
 
 ## Scripts
 

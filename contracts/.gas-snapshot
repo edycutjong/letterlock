@@ -1,8 +1,0 @@
-LetterlockGasTest:test_gas_drop_toAddress_16KiB() (gas: 2816052)
-LetterlockGasTest:test_gas_drop_toAddress_1KiB() (gas: 293629)
-LetterlockGasTest:test_gas_drop_toAgent_1KiB() (gas: 324304)
-LetterlockGasTest:test_gas_keyOf() (gas: 119881)
-LetterlockGasTest:test_gas_keyOfAgent() (gas: 158219)
-LetterlockGasTest:test_gas_publishForAgent_firstKey() (gas: 118693)
-LetterlockGasTest:test_gas_publish_firstKey() (gas: 99490)
-LetterlockGasTest:test_gas_publish_rotate() (gas: 137248)
