@@ -78,6 +78,19 @@
   cursor: pointer;
   list-style: none;
   font-weight: 600;
+  transition: color var(--transition-fast);
+}
+
+/* under the pointer the disclosure reads like the site's links: airmail blue, underlined */
+@media (hover: hover) {
+  .json summary:hover {
+    color: var(--before);
+  }
+  .json summary:hover > span:first-child {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+  }
 }
 
 .json summary::-webkit-details-marker {
@@ -90,8 +103,8 @@
   width: 9px;
   height: 9px;
   margin-right: 6px;
-  border-right: 1.6px solid var(--ink);
-  border-bottom: 1.6px solid var(--ink);
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
   transform: rotate(45deg) translateY(-3px);
   transition: transform var(--transition-fast);
 }

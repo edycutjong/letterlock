@@ -53,7 +53,8 @@
   --btn-bg: transparent;
   --btn-fg: var(--ink);
   --btn-edge: var(--ink);
-  --btn-hover: color-mix(in srgb, var(--bg-elevated) 85%, transparent);
+  /* an ink wash, which shows on the manila page and on the letter sheet alike, and the label underlined in ink */
+  --btn-hover: color-mix(in srgb, var(--ink) 8%, transparent);
   border-width: 1.5px;
   box-shadow: none;
 }
@@ -74,6 +75,8 @@
 .label {
   padding-block: 10px;
   text-wrap: balance;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
 }
 
 /* pointer states; data-force draws the same states in the gallery */
@@ -82,10 +85,17 @@
     background-color: var(--btn-hover);
     color: var(--btn-fg);
   }
+  .button[data-tone="outline"]:hover:not(:disabled):not([aria-busy="true"]) .label {
+    text-decoration-line: underline;
+  }
 }
 
 .button[data-force="hover"] {
   background-color: var(--btn-hover);
+}
+
+.button[data-tone="outline"][data-force="hover"] .label {
+  text-decoration-line: underline;
 }
 
 .button:focus-visible,
