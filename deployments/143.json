@@ -1,0 +1,90 @@
+{
+  "chainId": 143,
+  "network": "Monad mainnet",
+  "contract": "Letterlock",
+  "address": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+  "deployTx": "0x9766a31cb8910e2d1f953176454230e51388acd91fc78dc589b406d15b8f0a03",
+  "block": 108289180,
+  "deployer": "0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3",
+  "identityRegistry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+  "agentPath": "enabled: identityRegistry is the ERC-8004 IdentityRegistry on Monad mainnet (an upgradeable proxy); publishForAgent requires msg.sender == ownerOf(agentId), and keyOfAgent resolves only while the agent's owner is the key's publisher",
+  "sameSourceAs": "deployments/10143.json: both deploy transactions carry the same creation code (keccak256 0x3c0142f9b37e10b9bcfe327e77ddd97f9a6374e84a86e04bd4c6c3ced4710b50, commit 56e3d95, same compiler settings); only the constructor argument, the registry, differs",
+  "verified": true,
+  "verification": {
+    "verifier": "sourcify",
+    "verifierUrl": "https://sourcify-api-monad.blockvision.org/",
+    "match": "exact_match (creation and runtime bytecode)",
+    "check": "https://sourcify-api-monad.blockvision.org/v2/contract/143/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+    "monadscan": "not verified (the Etherscan-family verifier needs an API key)"
+  },
+  "sentCodeCheck": "the deploy transaction's input equals forge inspect Letterlock bytecode followed by abi.encode(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432): checked on a fresh dry run in the same command before sending, and on the sent transaction after (contracts/script/DeployMainnet.md, step 3)",
+  "preflight": "forge build --force, then LETTERLOCK_REQUIRE_FORK=true forge test: 111 passed, 0 failed, 0 skipped, including the 9 mainnet fork tests against the live registry and test_scriptArtifactDeploysTheCurrentSource",
+  "agentId": 10260,
+  "agentRegisterTx": "0xb6b41dd5800042005b96b46d8245f0311b6461bc5cdbc90347952c3393896cf1",
+  "agentCardUrl": "https://letterlock-agent.vercel.app/.well-known/agent-card.json",
+  "agent": {
+    "agentId": 10260,
+    "agentRegistry": "eip155:143:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "owner": "0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3",
+    "registerCall": "register(string agentURI) on the IdentityRegistry; agentId read from its Registered(agentId, agentURI, owner) event",
+    "registerBlock": 108289775,
+    "tokenURI": "https://letterlock-agent.vercel.app/.well-known/agent-card.json",
+    "card": "ERC-8004 registration-v1 file, served with HTTP 200 by the Vercel project letterlock-agent (source: apps/agent). It lists the registration (agentId 10260) and sets active: false, because its POST /remember endpoint goes live in the next build phase and answers 404 today",
+    "cardSource": "apps/agent/public/.well-known/agent-card.json",
+    "indexedBy": "https://trust8004.xyz/agents/143:10260"
+  },
+  "publishTx": "0x35b8330e768a6c7529c0c9c4151d945ed83e3ef596c0c6ddca3486efe11ae233",
+  "publishForAgentTx": "0x3a5be1d8643029ded9158bf36d73cd1cac4f4a9f24296ac55518539237e80c26",
+  "dropTx": "0x616fe1a946d1b90461ffd8284be4881f8650799166526c2d22523053bff93659",
+  "abiPath": "contracts/abi/Letterlock.json",
+  "sdkAbiPath": "packages/letterlock/src/abi.ts",
+  "source": {
+    "path": "contracts/src/Letterlock.sol",
+    "commit": "56e3d95",
+    "deployedAtHead": "f20e681",
+    "compiler": "solc 0.8.33",
+    "evmVersion": "osaka",
+    "optimizerRuns": 10000
+  },
+  "smokeTest": {
+    "label": "DEMO KEY: SDK deriveKeyPair() over 32 random bytes standing in for a passkey PRF output; no passkey was used, so it is nobody's key",
+    "publishedKey": "0xd731a42a5c635049527ab327fe41b5a6a1528fa6e9c8c117f3c6396e3c106076",
+    "epoch": 1,
+    "kid": "db9784b7c246deb1",
+    "updatedAt": 1790459137,
+    "publishBlock": 108289847,
+    "agentKey": {
+      "agentId": 10260,
+      "publishedKey": "0x2a4c968fa564fcf020443a890c0a7f5f59f86383c1ead4a7c9c3071f22de296e",
+      "epoch": 1,
+      "kid": "2fc259671e68693d",
+      "updatedAt": 1790459147,
+      "publishBlock": 108289878,
+      "label": "DEMO KEY, derived the same way as the address key: do not seal real notes to agent:10260 at epoch 1"
+    },
+    "dropBlock": 108289909,
+    "envelopeBytes": 490,
+    "result": "keyOf(deployer) returned the demo key at epoch 1 (updatedAt 1790459137); keyOfAgent(10260) and agentKeyRecord(10260) returned the agent demo key at epoch 1 (updatedAt 1790459147, publisher = the deployer, the agent's owner); the Dropped envelope read back from the drop receipt named chain 143, this directory and the deployer, and opened with the re-derived demo key (contracts/script/smoke.mjs verify)"
+  },
+  "gasUsed": {
+    "deploy": 1201505,
+    "agentRegister": 224739,
+    "publish": 70863,
+    "publishForAgent": 108799,
+    "drop": 45780,
+    "total": 1651686,
+    "note": "receipt gasUsed, equal to each tx's gas limit (Monad charges the gas limit); every tx paid an effective gas price of 102 gwei"
+  },
+  "gasSpentMON": 0.168471972,
+  "gasSpentCheck": "deployer balance 36.144032523623926407 MON before nonce 0 and 35.975560551623926407 MON after nonce 4: a difference of exactly 1,651,686 gas x 102 gwei",
+  "explorer": {
+    "contract": "https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+    "deployTx": "https://monadvision.com/tx/0x9766a31cb8910e2d1f953176454230e51388acd91fc78dc589b406d15b8f0a03",
+    "agentRegisterTx": "https://monadvision.com/tx/0xb6b41dd5800042005b96b46d8245f0311b6461bc5cdbc90347952c3393896cf1",
+    "publishTx": "https://monadvision.com/tx/0x35b8330e768a6c7529c0c9c4151d945ed83e3ef596c0c6ddca3486efe11ae233",
+    "publishForAgentTx": "https://monadvision.com/tx/0x3a5be1d8643029ded9158bf36d73cd1cac4f4a9f24296ac55518539237e80c26",
+    "dropTx": "https://monadvision.com/tx/0x616fe1a946d1b90461ffd8284be4881f8650799166526c2d22523053bff93659",
+    "identityRegistry": "https://monadvision.com/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "monadscan": "https://monadscan.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"
+  }
+}

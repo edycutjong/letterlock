@@ -1,6 +1,9 @@
 # Deploy Letterlock to Monad mainnet (chain 143)
 
-**Status: not deployed yet.** The live deployment is on testnet: `deployments/10143.json`.
+**Status: deployed on 2026-09-27** with these steps (step 0 by way of (b)) at
+`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`, block 108289180: step 3 printed `sent the compiled source`, and
+Sourcify returned `exact_match` for the creation and the runtime code. The record is `deployments/143.json`. Testnet
+(`deployments/10143.json`) was redeployed from the same commit first, with the same step-3 checks.
 
 On mainnet the directory is deployed with the real ERC-8004 IdentityRegistry
 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, so the agent path is enabled. `script/Deploy.s.sol` picks that
@@ -8,9 +11,10 @@ registry on chain 143 by default and refuses any other one there.
 
 ## Source changes since the testnet deployment (applied)
 
-The testnet deployment was built from commit `d15fe63`. The changes to `src/Letterlock.sol` below came after it; none
-could go to that deployment without breaking its Sourcify exact match. All are in the source now, so this deploy
-ships them, and nothing else is held back:
+The earlier testnet deployment, `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`, was built from commit `d15fe63`. The
+changes to `src/Letterlock.sol` below came after it; none could go to that deployment without breaking its Sourcify
+exact match. All are in commit `56e3d95`, which this deploy shipped (as did the testnet redeploy of 2026-09-27), and
+nothing else is held back:
 
 1. Registry-call rule (commit `f6f80fa`). `_ownerOf` reads only the registry's `ERC721NonexistentToken(uint256)`
    revert (selector `0x7e273289`, the one the live registry uses) as "no owner", and reverts
@@ -252,4 +256,6 @@ cast call "$ADDR" "keyOfAgent(uint256)(bytes32,uint32,uint64)" 0 --rpc-url "$MON
 - `node script/export-abi.mjs --check` must print `ABI up to date` (the ABI does not change per chain).
 - Commit `deployments/143.json` and `broadcast/Deploy.s.sol/143/run-latest.json`. Never commit `cache/` or `.env`.
 
-The first real `publish` comes from a passkey-derived account through the SDK, not from this deployer.
+The first mainnet `publish`, `publishForAgent` and `drop` were smoke tests from this deployer with DEMO KEYs (random
+bytes in place of a passkey; `script/smoke.mjs`), after it registered ERC-8004 agent 10260: see
+`deployments/143.json`. A person's key comes from a passkey-derived account through the SDK, never from this deployer.

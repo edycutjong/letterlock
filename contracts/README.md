@@ -9,8 +9,17 @@ upgrade path, and no function accepts value.
 
 | Network | Address | Registry | Source |
 |---|---|---|---|
+| Monad mainnet (143) | [`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`](https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | commit `56e3d95`, Sourcify `exact_match` (creation and runtime) |
 | Monad testnet (10143) | [`0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a`](https://testnet.monadvision.com/address/0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a) | none: agent path disabled | commit `56e3d95`, Sourcify `exact_match` |
-| Monad mainnet (143) | not deployed yet ([script/DeployMainnet.md](script/DeployMainnet.md)) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | the current `src/Letterlock.sol` |
+
+Both deploy transactions carry the same creation code; only the constructor argument, the registry, differs. The
+mainnet record, [`deployments/143.json`](../deployments/143.json), was made with [script/DeployMainnet.md](script/DeployMainnet.md)
+and holds the deploy and the first real mainnet transactions, all from the deployer: it registered ERC-8004 agent
+**#10260** in the IdentityRegistry (its agent card: <https://letterlock-agent.vercel.app/.well-known/agent-card.json>,
+source in `apps/agent`), then sent a `publish`, a `publishForAgent` for agent 10260 and a `drop` of a 490-byte
+envelope sealed with the SDK's `seal()`. Both published keys are DEMO KEYs, nobody's: the SDK's `deriveKeyPair()`
+over 32 random bytes standing in for a passkey PRF output, so no real note should be sealed to them. `keyOf(deployer)`
+and `keyOfAgent(10260)` returned them, and the dropped envelope opened with the re-derived key.
 
 The testnet record, including a real `publish` and a real `drop`, is in [`deployments/10143.json`](../deployments/10143.json).
 The published key there is a TEST KEY: the SDK's `deriveKeyPair()` over 32 random bytes standing in for a
@@ -168,9 +177,12 @@ proxy and costs more.
 - The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails. Turning dynamic
   test linking off left every entry unchanged too.
 
-Testnet receipts of the deployed contract (commit `56e3d95`), each equal to its transaction's gas limit: deploy
-1,187,921 · `publish` 70,863 · `drop` (492-byte envelope) 45,804. A read-only simulation of the mainnet deploy,
-after `forge build --force` on 2026-09-27, set a gas limit of 1,201,505 (`script/DeployMainnet.md`).
+Mainnet receipts (commit `56e3d95`), each equal to its transaction's gas limit: deploy 1,201,505 (the limit the
+read-only simulation set) · `publish` 70,863 · `publishForAgent` 108,799 against the live registry (89,198 against the
+test double above) · `drop` (490-byte envelope) 45,780; registering the agent (the registry's `register(string)`)
+took 224,739. At the 102 gwei every one of them paid, the five cost 0.168471972 MON, exactly the deployer's balance
+change. Testnet receipts (same commit): deploy 1,187,921 (the zero-address constructor argument is cheaper calldata)
+· `publish` 70,863 · `drop` (492-byte envelope) 45,804.
 
 Check that no number moved:
 
@@ -187,7 +199,7 @@ benchmark passes. The `git diff` catches both; CI runs it after the tests.
 ## Scripts
 
 - `script/Deploy.s.sol`: deploy (testnet: registry `address(0)`; mainnet: the ERC-8004 registry is enforced).
-- `script/DeployMainnet.md`: exact mainnet steps. Not run yet.
+- `script/DeployMainnet.md`: exact mainnet steps, run on 2026-09-27 (`deployments/143.json`).
 - `script/keystore-from-env.mjs`: imports a deployer key from an environment variable into a Foundry keystore
   without a terminal (the variable's name, not its value, is on the command line); `keystore-from-env.test.mjs`
   checks it with random keys.

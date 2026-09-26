@@ -5,8 +5,10 @@ WebAuthn PRF output and publishes only the public half on Monad. Anyone resolves
 with HPKE; only the same passkey — on any device it syncs to — can open.
 
 Status: SDK core implemented in `packages/letterlock` (tested). Contract implemented in `contracts/` and deployed on
-Monad testnet (§8). This document is normative for the code; tests pin the derivation and envelope formats (§2–§3)
-and the contract rules (§8). The §7 binding layout is spike-only and gets its pinned test when it is ported.
+Monad mainnet and testnet from the same source (§8), Sourcify-verified. The mainnet directory's first keys are demo
+keys from the deploy smoke test (random bytes in place of a passkey), one for the deployer and one for ERC-8004 agent
+#10260. This document is normative for the code; tests pin the derivation and envelope formats (§2–§3) and the
+contract rules (§8). The §7 binding layout is spike-only and gets its pinned test when it is ported.
 
 ## 1. Primitives
 | Role | Choice |
@@ -111,12 +113,13 @@ Until that ships, the binding is `msg.sender` = the passkey-derived mera account
 
 | Network | Directory | Agent path |
 |---|---|---|
+| Monad mainnet (143) | `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e` | enabled: ERC-8004 IdentityRegistry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Monad testnet (10143) | `0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a` | disabled: ERC-8004 has no registry on testnet |
-| Monad mainnet (143) | not deployed yet | ERC-8004 IdentityRegistry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 
-The testnet directory is built from commit `56e3d95`, which includes the registry-call rule below. The rule is on the
-agent path only, which the testnet directory disables, so it never calls a registry. The earlier testnet directory
-`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before the rule) is superseded.
+Both directories are built from commit `56e3d95` and were deployed with the same creation code; only the constructor
+argument, the registry, differs (`deployments/143.json`, `deployments/10143.json`). The registry-call rule below is on
+the agent path only, which the testnet directory disables, so there it never calls a registry. The earlier testnet
+directory `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before the rule) is superseded.
 
 **Reading keys**
 - `keyOf(address)` and `keyOfAgent(agentId)` return `(pub, epoch, updatedAt)`. All zeros means no key
@@ -158,7 +161,7 @@ agent path only, which the testnet directory disables, so it never calls a regis
   `(address(0), agentId)` for `"agent:<id>"`. Anything else reverts `InvalidRecipient`.
 - The envelope is the §3 JSON as UTF-8, 1 to 16,384 bytes (`EmptyEnvelope`, `EnvelopeTooLarge`). The recipient must
   have a key that resolves at that moment (`NoKeyPublished`).
-- The SDK has no drop helper yet (planned); the testnet drop was sent with `cast send`.
+- The SDK has no drop helper yet (planned); the mainnet and testnet drops were sent with `cast send`.
 - The contract does not validate the envelope: a successful drop says nothing about whether it opens. An envelope
   dropped to an agent is sealed to the key that resolves at that moment, so after a transfer only the previous owner
   can open it.

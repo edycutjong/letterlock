@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Letterlock memory agent</title>
+  <meta name="description" content="An ERC-8004 agent on Monad that seals notes to a person's Letterlock address. Not live yet.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #F3EEE3; --sheet: #F8F4EB; --ink: #1E1B16; --muted: #6E6556; --before: #2F5D9E; --rule: #CFC4AF;
+            --display: "Bodoni Moda", "Didot", "Bodoni 72", serif; --body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+            --data: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 var(--body); }
+    main { max-width: 42rem; margin: 0 auto; padding: 3.5rem 1rem 4rem; }
+    header { display: flex; gap: 1rem; align-items: center; }
+    header img { width: 64px; height: 64px; }
+    h1 { font: italic 600 2.1rem/1.1 var(--display); margin: 0; }
+    .lede { font-size: 1.1rem; margin: 1.5rem 0; }
+    .status { background: var(--sheet); border: 1px solid var(--rule); border-left: 4px solid var(--muted);
+              padding: 0.9rem 1.1rem; margin: 1.5rem 0; }
+    .status strong { letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.8rem; color: var(--muted); display: block; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1.25rem; margin: 2rem 0 0;
+         border-top: 1px solid var(--rule); padding-top: 1.25rem; }
+    dt { color: var(--muted); }
+    dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    code { font: 0.9rem var(--data); }
+    a { color: var(--before); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible { outline: 2px solid var(--before); outline-offset: 3px; }
+    @media (max-width: 30rem) { dl { grid-template-columns: 1fr; } dt { margin-top: 0.5rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="/icon.svg" alt="" width="64" height="64">
+      <h1>Letterlock memory agent</h1>
+    </header>
+    <p class="lede">An ERC-8004 agent that seals notes to a person's Letterlock address: it reads their passkey-derived
+      key from the Letterlock directory on Monad and encrypts to it with HPKE, so only their passkey can open the note.</p>
+    <div class="status" role="status">
+      <strong>Not live yet</strong>
+      Its endpoint, <code>POST /remember</code>, goes live in the next build phase. Today it does not answer.
+    </div>
+    <dl>
+      <dt>ERC-8004 agent</dt>
+      <dd><a href="https://monadvision.com/tx/0xb6b41dd5800042005b96b46d8245f0311b6461bc5cdbc90347952c3393896cf1">#10260</a> on Monad mainnet</dd>
+      <dt>Agent key</dt>
+      <dd><code>keyOfAgent(10260)</code>, epoch 1: a demo key from the deploy smoke test (random bytes, no passkey). Do not seal real notes to it.</dd>
+      <dt>Agent card</dt>
+      <dd><a href="/.well-known/agent-card.json"><code>/.well-known/agent-card.json</code></a></dd>
+      <dt>Directory</dt>
+      <dd><a href="https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"><code>0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e</code></a> (Monad mainnet)</dd>
+      <dt>Identity registry</dt>
+      <dd><a href="https://monadvision.com/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"><code>0x8004A169FB4a3325136EB29fA0ceB6D2e539a432</code></a> (ERC-8004)</dd>
+    </dl>
+  </main>
+</body>
+</html>
