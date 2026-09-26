@@ -8,6 +8,7 @@ import {
 } from "letterlock";
 import { ceremonies, observeCeremonies, prfArrival, type Ceremony } from "./ceremonies.ts";
 import { KID, handoffUrl, readHandoff, type Handoff } from "./link.ts";
+import { passkeyName } from "./names.ts";
 import { p256BindingCheck } from "./p256.ts";
 
 declare const __LL_BUILD__: string;
@@ -27,7 +28,6 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const utf8 = (s: string) => new TextEncoder().encode(s);
 const group = (fp: string) => (fp.match(/.{1,4}/g) ?? [fp]).join(" ");
 const pageBase = () => location.origin + location.pathname;
-const hhmm = () => new Date().toTimeString().slice(0, 5);
 
 // ---------- per-device storage (a convenience only: the link carries the note, the passkey carries the key) ----------
 type StoreKey = "ll.cred" | "ll.fp" | "ll.env" | "ll.name";
@@ -262,7 +262,7 @@ const create = async (text: string = noteText()) => {
     showError(e, { step: "1 · Create" });
     throw e;
   }
-  const name = `maya ${hhmm()}`;
+  const name = passkeyName();
   const mark = ceremonies.length;
   busy(true, "create");
   try {
