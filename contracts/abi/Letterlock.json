@@ -1,0 +1,397 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "registry",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MAX_ENVELOPE_BYTES",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "NO_AGENT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "agentKeyRecord",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "publisher",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "drop",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "toAgent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "envelope",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "identityRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC721"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "keyOf",
+    "inputs": [
+      {
+        "name": "who",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "keyOfAgent",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "publish",
+    "inputs": [
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "publishForAgent",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "Dropped",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "toAgent",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "envelope",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "KeyPublished",
+    "inputs": [
+      {
+        "name": "who",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AgentIdReserved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AgentPathDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EmptyEnvelope",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EnvelopeTooLarge",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "max",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EpochNotIncreasing",
+    "inputs": [
+      {
+        "name": "current",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "given",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidRecipient",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "toAgent",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "LowOrderKey",
+    "inputs": [
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoKeyPublished",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "toAgent",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NonCanonicalKey",
+    "inputs": [
+      {
+        "name": "pub",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotAgentOwner",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RegistryHasNoCode",
+    "inputs": [
+      {
+        "name": "registry",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroKey",
+    "inputs": []
+  }
+]
