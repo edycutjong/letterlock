@@ -1,0 +1,21 @@
+.strip {
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+  overflow: visible;
+  fill: currentColor;
+  color: var(--ink);
+  shape-rendering: crispEdges;
+}
+
+.strip[data-tone="open"] {
+  color: var(--before);
+}
+
+.strip[data-tone="pencil"] {
+  color: var(--muted);
+}
+
+.hex > span {
+  white-space: nowrap;
+}
