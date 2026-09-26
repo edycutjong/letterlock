@@ -40,9 +40,10 @@ jobs:
         run: forge build --sizes
 
       # Unit, fuzz, invariant, deploy and gas tests, plus the Monad mainnet fork tests (they skip, with the RPC error,
-      # if rpc.monad.xyz is unreachable). --gas-snapshot-check fails only when an entry that is both in
-      # snapshots/Letterlock.json and produced by this run has a different value. An entry the run does not produce
-      # is dropped from the file, and a new one is added, with exit 0: the next step catches those.
+      # if rpc.monad.xyz is unreachable: LETTERLOCK_REQUIRE_FORK is left unset here, so an RPC outage does not fail CI;
+      # the mainnet deploy pre-flight sets it, which fails them instead). --gas-snapshot-check fails only when an
+      # entry that is both in snapshots/Letterlock.json and produced by this run has a different value. An entry the
+      # run does not produce is dropped from the file, and a new one is added, with exit 0: the next step catches those.
       - name: Test
         run: forge test -vvv --gas-snapshot-check true
 
@@ -57,6 +58,11 @@ jobs:
 
       - name: ABI exports match the contract
         run: node script/export-abi.mjs --check
+
+      # The keystore import for a deploy run with no terminal (script/DeployMainnet.md step 0), with random test keys:
+      # Foundry must decrypt what it writes back to the same key and address.
+      - name: Keystore import from the environment
+        run: node --test script/keystore-from-env.test.mjs
 
       # A raw key on a command line is visible in the process list: documented commands use a keystore (--account).
       - name: No private key on a documented command line
