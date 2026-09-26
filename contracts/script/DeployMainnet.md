@@ -6,21 +6,23 @@ On mainnet the directory is deployed with the real ERC-8004 IdentityRegistry
 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, so the agent path is enabled. `script/Deploy.s.sol` picks that
 registry on chain 143 by default and refuses any other one there.
 
-## Before deploying: source changes held back from testnet
+## Source changes since the testnet deployment (applied)
 
-These change `src/Letterlock.sol`, so they wait for this deploy: making them earlier would break the testnet
-deployment's Sourcify exact match.
+The testnet deployment was built from commit `d15fe63`. Two changes to `src/Letterlock.sol` were held back from it,
+because they would have broken its Sourcify exact match. Both are in the source now, so this deploy ships them, and
+nothing else is held back:
 
-1. `_ownerOf`: read only the registry's `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`, the one the
-   live registry uses) as "no owner", and revert on any other failure, so a caller that forwards too little gas
-   gets a revert instead of all zeros from `keyOfAgent`. For example
-   `catch (bytes memory r) { if (r.length < 4 || bytes4(r) != bytes4(0x7e273289)) revert RegistryCallFailed(agentId); owner = address(0); }`.
-   Tried in a scratch copy on 2026-09-26: the existing 96 tests pass, and a mainnet-fork probe (static call of
-   `keyOfAgent` for agent 10259 at every gas budget from 5,000 to 80,000, step 20) found 0 budgets that return
-   zeros for the live key, against 527 with the current source. Add that probe as a fork regression test, then
-   regenerate the ABI (`node script/export-abi.mjs`) and the gas snapshot.
-2. `drop` NatSpec: say only that the docs/SPEC.md §3 envelope is UTF-8 JSON, not that the SDK drops it (the SDK
-   has no drop helper yet).
+1. Registry-call rule (commit `f6f80fa`). `_ownerOf` reads only the registry's `ERC721NonexistentToken(uint256)`
+   revert (selector `0x7e273289`, the one the live registry uses) as "no owner", and reverts
+   `RegistryCallFailed(agentId)` on any other failure, so a caller that forwards too little gas gets a revert
+   instead of all zeros from `keyOfAgent`. This adds `RegistryCallFailed` to the ABI (25 entries;
+   `abi/Letterlock.json` and the SDK's `letterlockAbi` are regenerated) and changes no gas snapshot entry. The fork
+   regression test `test_fork_gasStarvedReaderNeverReadsZeros` (commit `306fa5d`) reads `keyOfAgent` for agent
+   10259 at every gas budget from 5,000 to 80,000 (step 20), each read cold: 0 of 3,751 budgets returned zeros
+   (block 108228758). Under the previous rule the same test fails: 527 budgets, 35,920 to 46,440 gas, returned
+   zeros for the live key (block 108228931).
+2. `drop` NatSpec: it says only that the envelope format is the docs/SPEC.md §3 UTF-8 JSON, no longer that the SDK
+   drops it (the SDK has no drop helper yet).
 
 ## 0. Deployer (once)
 
@@ -40,9 +42,10 @@ MONAD_MAINNET_ADDRESS=0x...
 MONAD_MAINNET_RPC=https://rpc.monad.xyz
 ```
 
-Fund `MONAD_MAINNET_ADDRESS` with MON. On 2026-09-26 a read-only simulation of this script (step 2) estimated
-1,117,608 gas and 0.2258 MON at a 202 gwei max fee. Monad charges the full gas limit, not the gas used, so keep a
-margin (about 0.3 MON), plus gas for the first `publish` / `drop` transactions.
+Fund `MONAD_MAINNET_ADDRESS` with MON. On 2026-09-26 a read-only simulation of this script (step 2) with the
+current source estimated 1,201,505 gas (the deploy transaction's gas limit) and 0.2427 MON at a 202 gwei max fee.
+Monad charges the full gas limit, not the gas used, so keep a margin (about 0.3 MON), plus gas for the first
+`publish` / `drop` transactions.
 
 Run every step below from `contracts/`, in one shell:
 

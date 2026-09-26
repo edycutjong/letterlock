@@ -9,14 +9,18 @@ upgrade path, and no function accepts value.
 
 | Network | Address | Registry | Source |
 |---|---|---|---|
-| Monad testnet (10143) | [`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`](https://testnet.monadvision.com/address/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4) | none: agent path disabled | Sourcify `exact_match` |
-| Monad mainnet (143) | not deployed yet ([script/DeployMainnet.md](script/DeployMainnet.md)) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | |
+| Monad testnet (10143) | [`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`](https://testnet.monadvision.com/address/0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4) | none: agent path disabled | commit `d15fe63`, Sourcify `exact_match` |
+| Monad mainnet (143) | not deployed yet ([script/DeployMainnet.md](script/DeployMainnet.md)) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | the current `src/Letterlock.sol` |
 
 The testnet record, including a real `publish` and a real `drop`, is in [`deployments/10143.json`](../deployments/10143.json).
 The published key there is a TEST KEY: the SDK's `deriveKeyPair()` over 32 random bytes standing in for a
 passkey PRF output. The ERC-8004 IdentityRegistry exists only on mainnet, so testnet runs with the agent path
 disabled. The first testnet deployment, `0x311921118F2D40f37e554516069A918bA290e75C`, predates the epoch rule
 below (it accepted any higher epoch) and is superseded.
+
+The source changed once after the testnet deployment (commit `d15fe63`): the registry-call rule below, and the
+`drop` NatSpec, which in `d15fe63` says the SDK drops the envelope (it has no drop helper yet). The rule is on
+the agent path only, which the testnet deployment disables, so there it behaves as the current source would.
 
 ## Interface
 
@@ -25,7 +29,7 @@ below (it accepted any higher epoch) and is superseded.
 | `publish(bytes32 pub, uint32 epoch)` | anyone, for themselves | writes `msg.sender`'s key; `epoch` must be the current one + 1 (the first is 1) |
 | `publishForAgent(uint256 agentId, bytes32 pub, uint32 epoch)` | `identityRegistry.ownerOf(agentId)` | same rules, for an ERC-8004 agent; the epoch sequence continues across owners |
 | `keyOf(address)` → `(pub, epoch, updatedAt)` | view | zeros when none |
-| `keyOfAgent(uint256)` → `(pub, epoch, updatedAt)` | view | zeros when none, or when the agent's current owner is not the key's publisher |
+| `keyOfAgent(uint256)` → `(pub, epoch, updatedAt)` | view | zeros when none, or when the agent's current owner is not the key's publisher; reverts `RegistryCallFailed` when the registry cannot answer |
 | `agentKeyRecord(uint256)` → `(pub, epoch, updatedAt, publisher)` | view | the raw record, for indexers and new owners |
 | `drop(address to, uint256 toAgent, bytes envelope)` | anyone | demo transport: emits `Dropped`, stores nothing |
 
@@ -50,27 +54,30 @@ both with `node script/export-abi.mjs`).
 - **Drop recipients.** Exactly one kind: `(to, NO_AGENT)` for an address, or `(address(0), agentId)` for an
   agent (`InvalidRecipient` otherwise). The envelope is 1 to 16,384 bytes (`EmptyEnvelope`, `EnvelopeTooLarge`).
   The recipient must have a key that resolves now (`NoKeyPublished`), so no drop can target a recipient without a
-  live key. The contract does not validate the envelope: any 1 to 16,384 bytes are accepted. The SDK has no drop
-  helper yet (planned): the testnet drop was sent with `cast send`. The `drop` NatSpec in the deployed source says
-  the SDK drops the envelope; it will be reworded at the next source change (the mainnet deploy), because editing it
-  now would break the testnet Sourcify exact match.
+  live key. The contract does not validate the envelope: any 1 to 16,384 bytes are accepted. The format is the
+  `docs/SPEC.md` §3 UTF-8 JSON. The SDK has no drop helper yet (planned): the testnet drop was sent with `cast send`.
 - **Agent keys follow the NFT.** After a transfer or burn, `keyOfAgent` returns zeros, because the previous owner
   holds the passkey. The new owner publishes the stored epoch + 1 (read it with `agentKeyRecord`). A drop to an
   agent is sealed to the key that resolves at that moment, so after a transfer only the previous owner can open it.
 - **Indexers.** A `KeyPublished` log is history, not liveness: no Letterlock event marks the registry transfer or
   burn that stops an agent key from resolving. Confirm an agent key with `keyOfAgent` when sealing (or join the
   registry's `Transfer` events). Never seal from indexed events alone, or the note can go to the previous owner.
-- **On-chain readers of `keyOfAgent` need gas.** `keyOfAgent` (and `drop` / `publishForAgent` on the agent path)
-  calls the registry's `ownerOf` in a `try`, and the deployed source reads *any* failure of that call as "no owner",
-  including running out of gas. A contract that forwards too little gas can therefore get all zeros back for an
-  agent whose key is live. On a Monad mainnet fork (block 108209739, agent 10259, cold state) a static call with
-  35,920 to 46,440 gas returned zeros, and 46,620 or more returned the key. Forward at least 100,000 gas, or check
-  `agentKeyRecord` before treating zeros as "no key". An `eth_call` from an app is unaffected. The fix (read only
-  the registry's `ERC721NonexistentToken` revert as "no owner", revert on anything else) ships with the mainnet
-  deploy (`script/DeployMainnet.md`); the testnet deployment has the agent path disabled.
+- **Registry calls fail closed.** `keyOfAgent`, `publishForAgent` and a drop to an agent call the registry's
+  `ownerOf` in a `try`. Only its `ERC721NonexistentToken(uint256)` revert (selector `0x7e273289`: the agent was never
+  minted, or was burned) reads as "no owner". Any other failure (no revert data, which is what running out of gas
+  returns; another error; a panic) reverts `RegistryCallFailed(agentId)`. So zeros from `keyOfAgent` always mean
+  that no key resolves, never that the call was starved of gas, and a contract reading it needs no workaround
+  beyond forwarding enough gas to get an answer. On a Monad mainnet fork (block 108228758, agent 10259), a contract
+  read `keyOfAgent` at every gas budget from 5,000 to 80,000 (step 20), each read cold: every budget from 46,620 up
+  returned the key, every smaller one reverted (767 with `RegistryCallFailed`, 1,314 out of gas inside Letterlock),
+  and none returned zeros. Under the rule the testnet deployment was built with, which read any failure as "no
+  owner", the same sweep returned zeros at 527 budgets (35,920 to 46,440 gas; block 108228931). An `eth_call` from
+  an app is never starved.
 - **Trust.** The agent path is only as trustworthy as the ERC-8004 registry, which is an upgradeable proxy on
-  mainnet. Anyone may `drop` (HPKE base mode is anonymous), so recipients can be spammed and envelopes replayed:
-  see the threat model in `docs/SPEC.md` §6.
+  mainnet. If an upgrade changed its revert for a missing agent, reads and drops for such an agent would revert
+  `RegistryCallFailed` instead of returning zeros or `NoKeyPublished`: they fail closed. Anyone may `drop` (HPKE
+  base mode is anonymous), so recipients can be spammed and envelopes replayed: see the threat model in
+  `docs/SPEC.md` §6.
 
 ## Build and test
 
@@ -88,19 +95,29 @@ node script/export-abi.mjs --check
 
 Measured on 2026-09-26 (Foundry 1.8.3, `network = "monad"`):
 
-- `forge test -vvv`: 96 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz tests (11 fuzz tests,
-  1,024 runs each), 8 mainnet-fork tests, 6 deploy-script tests, 8 gas benchmarks, and 2 in the invariant suite:
-  5 invariants over 256 runs × 128 calls (32,768 calls), plus a fixed-seed 3,000-call walk that reaches every
-  accept and reject path.
-- Coverage of `src/Letterlock.sol`: 100% of lines (62/62), statements (85/85), branches (19/19) and functions (11/11).
-- Mutation check (`node script/mutate.mjs`): 41 hand-written mutants of `src/Letterlock.sol`, each run against the
-  unit, fuzz (256 runs), invariant (32 runs) and deploy tests in a scratch copy; the fork and gas tests are left out.
-  40 killed. The survivor (#39) turns `>= 0xed` into `> 0xed` in the u ≥ p check, and it is equivalent: u = p is
-  already rejected as a libsodium small-order entry.
+- `forge test -vvv`: 106 tests passed, 0 failed, 0 skipped. That is 72 unit and fuzz tests (11 fuzz tests,
+  1,024 runs each), 9 registry-call tests, 9 mainnet-fork tests, 6 deploy-script tests, 8 gas benchmarks, and 2 in
+  the invariant suite: 5 invariants over 256 runs × 128 calls (32,768 calls), plus a fixed-seed 3,000-call walk that
+  reaches every accept and reject path.
+- The registry-call tests (`test/LetterlockRegistryCall.t.sol`) run all three agent paths against a test-double
+  registry whose `ownerOf` fails in one chosen way (no revert data, a real out-of-gas, an error string, another
+  custom error, a panic, 3 bytes of the right selector), and `keyOfAgent` against an answer that does not decode.
+  They check that `ERC721NonexistentToken` alone reads as "no owner", and repeat the gas-budget sweep offline
+  through a proxy test double (the live registry is a proxy): 0 of 3,751 budgets return zeros, against 512 under
+  the previous rule.
+- Coverage of `src/Letterlock.sol`: 100% of lines (64/64), statements (89/89), branches (20/20) and functions (11/11).
+- Mutation check (`node script/mutate.mjs`): 46 hand-written mutants of `src/Letterlock.sol`, each run against the
+  unit, fuzz (256 runs), invariant (32 runs), registry-call and deploy tests in a scratch copy; the fork and gas
+  tests are left out. 44 killed. Both survivors are equivalent: #20 drops the length check before the selector
+  comparison, but `bytes4()` zero-pads revert data shorter than 4 bytes and the selector ends in `0x89`, so it
+  never matches; #44 turns `>= 0xed` into `> 0xed` in the u ≥ p check, but u = p is already rejected as a libsodium
+  small-order entry.
 - The fork tests deploy on the latest mainnet block and read the live registry's `ownerOf` for agent 10259
   (registered in tx `0x0b11de186c6bf57d53300239086398712d17e01967844e701be72a287f7d8f77`) and for agent 0. One moves
-  agent 10259 with the registry's own `transferFrom` and checks that the buyer publishes the stored epoch + 1. They
-  are skipped, with the RPC error, when the RPC is unreachable.
+  agent 10259 with the registry's own `transferFrom` and checks that the buyer publishes the stored epoch + 1. One
+  checks that the live registry reverts `ERC721NonexistentToken` for an unregistered id. One is the gas-budget sweep
+  of the registry-call rule above, which fails if any budget returns zeros. They are skipped, with the RPC error,
+  when the RPC is unreachable.
 
 ## Gas
 
@@ -131,9 +148,11 @@ proxy and costs more.
   cold, as when another contract reads a key in its own transaction. An `eth_call` from an app costs nothing.
 - At both measured sizes, a drop to an address pays exactly the floor, 24,060 + 40 gas per envelope byte: the
   envelope's size, not the contract's execution, sets the price.
+- The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails.
 
-Testnet receipts of the deployed contract, each equal to its transaction's gas limit: deploy 1,104,026 ·
-`publish` 70,863 · `drop` (484-byte envelope) 45,708.
+Testnet receipts of the deployed contract (commit `d15fe63`), each equal to its transaction's gas limit: deploy
+1,104,026 · `publish` 70,863 · `drop` (484-byte envelope) 45,708. A read-only simulation of the mainnet deploy with
+the current source set a gas limit of 1,201,505 (`script/DeployMainnet.md`).
 
 Check that no number moved:
 
