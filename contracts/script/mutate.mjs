@@ -51,6 +51,15 @@ const MUTANTS = [
   ["resolve: publisher ignored (a previous owner's key resolves)",
     "return k.epoch != 0 && _ownerOf(agentId) == k.publisher;", "return k.epoch != 0;"],
   ["resolve: failed ownerOf reads as tx.origin", "owner = address(0);\n        }", "owner = tx.origin;\n        }"],
+  // registry-call rule: only ERC721NonexistentToken means "no owner"
+  ["registry call: any failure reads as no owner (the previous rule)",
+    "if (reason.length < 4 || bytes4(reason) != IERC721.ERC721NonexistentToken.selector) {\n                revert RegistryCallFailed(agentId);\n            }", ""],
+  ["registry call: only a revert without data is a failure",
+    "reason.length < 4 || bytes4(reason) != IERC721.ERC721NonexistentToken.selector", "reason.length == 0"],
+  ["registry call: selector test inverted", "bytes4(reason) != IERC721", "bytes4(reason) == IERC721"],
+  ["registry call: length guard removed", "reason.length < 4 || bytes4(reason)", "bytes4(reason)",
+    "bytes4() zero-pads revert data shorter than 4 bytes, and the selector's last byte is 0x89, so it never matches"],
+  ["registry call: the failure names agent 0", "revert RegistryCallFailed(agentId);", "revert RegistryCallFailed(0);"],
   ["keyOfAgent: resolution skipped", "if (!_agentKeyResolves(agentId, k)) return (0, 0, 0);", ""],
   ["agentKeyRecord: publisher hidden", "return (k.pub, k.epoch, k.updatedAt, k.publisher);", "return (k.pub, k.epoch, k.updatedAt, address(0));"],
   // address keys

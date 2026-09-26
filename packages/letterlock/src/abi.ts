@@ -382,6 +382,17 @@ export const letterlockAbi = [
   },
   {
     "type": "error",
+    "name": "RegistryCallFailed",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "RegistryHasNoCode",
     "inputs": [
       {

@@ -7,4 +7,9 @@ describe("package entry", () => {
     const names = sdk.letterlockAbi.filter((e) => e.type === "function").map((e) => e.name);
     expect(names).toEqual(expect.arrayContaining(["keyOf", "keyOfAgent", "publish", "publishForAgent", "drop"]));
   });
+
+  it("carries RegistryCallFailed, so viem can decode a keyOfAgent read whose registry call failed", () => {
+    const failed = sdk.letterlockAbi.find((e) => e.type === "error" && e.name === "RegistryCallFailed");
+    expect(failed?.inputs).toEqual([{ name: "agentId", type: "uint256", internalType: "uint256" }]);
+  });
 });

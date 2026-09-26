@@ -3,7 +3,12 @@ pragma solidity ^0.8.26;
 
 /// @notice The one ERC-721 read Letterlock makes on the ERC-8004 IdentityRegistry (each agent is an ERC-721 token).
 interface IERC721 {
-    /// @notice The owner of `tokenId` (an ERC-8004 agent id); reverts when the token does not exist.
+    /// @notice OpenZeppelin ERC-721's revert for a token that does not exist (never minted, or burned). The live
+    ///         ERC-8004 registry's `ownerOf` reverts with it, selector 0x7e273289.
+    error ERC721NonexistentToken(uint256 tokenId);
+
+    /// @notice The owner of `tokenId` (an ERC-8004 agent id); reverts `ERC721NonexistentToken` when the token does
+    ///         not exist.
     function ownerOf(uint256 tokenId) external view returns (address owner);
 }
 
@@ -97,6 +102,10 @@ contract Letterlock {
     error AgentIdReserved();
     /// @notice The caller is not `identityRegistry.ownerOf(agentId)` (or the agent does not exist).
     error NotAgentOwner(uint256 agentId, address caller);
+    /// @notice The registry's `ownerOf(agentId)` failed with something other than `ERC721NonexistentToken`, for
+    ///         example because the caller forwarded too little gas. Only that error means "no owner", so a failed
+    ///         registry call never reads as "no key".
+    error RegistryCallFailed(uint256 agentId);
     /// @notice A drop must name exactly one recipient kind: an address with `toAgent == NO_AGENT`, or
     ///         `to == address(0)` with an agent id.
     error InvalidRecipient(address to, uint256 toAgent);
@@ -132,10 +141,11 @@ contract Letterlock {
 
     /// @notice Publish or rotate the encryption key of an ERC-8004 agent that the caller owns.
     /// @dev Reverts `AgentPathDisabled` when `identityRegistry == address(0)`. The caller must be
-    ///      `identityRegistry.ownerOf(agentId)` at the time of the call. An agent has one epoch sequence across
-    ///      owners: a new owner publishes the stored epoch + 1 (read it with `agentKeyRecord`). A previous owner
-    ///      moves that sequence forward by one per publish, so it cannot use up the epochs before a transfer and
-    ///      leave the next owner unable to publish.
+    ///      `identityRegistry.ownerOf(agentId)` at the time of the call (`NotAgentOwner` otherwise, and
+    ///      `RegistryCallFailed` when that call fails other than with `ERC721NonexistentToken`). An agent has one
+    ///      epoch sequence across owners: a new owner publishes the stored epoch + 1 (read it with `agentKeyRecord`).
+    ///      A previous owner moves that sequence forward by one per publish, so it cannot use up the epochs before a
+    ///      transfer and leave the next owner unable to publish.
     /// @param agentId The ERC-8004 agent id (any value except `NO_AGENT`).
     /// @param pub The X25519 public key: non-zero, canonical, and not a small-order point.
     /// @param epoch Exactly the agent's stored epoch + 1 (`agentKeyRecord`; 0 when none, so the first is 1).
@@ -167,7 +177,10 @@ contract Letterlock {
 
     /// @notice The key to seal to for an ERC-8004 agent.
     /// @dev Returns zeros when no key was published, or when the agent's current owner is not the key's publisher
-    ///      (the agent was transferred or burned): sealing to a previous owner's key would leak to them.
+    ///      (the agent was transferred or burned): sealing to a previous owner's key would leak to them. Reverts
+    ///      `RegistryCallFailed` when the registry's `ownerOf` fails other than with `ERC721NonexistentToken`,
+    ///      including when it runs out of gas, so a caller that forwards too little gas gets a revert, never zeros
+    ///      for a live key.
     /// @param agentId The ERC-8004 agent id.
     /// @return pub The X25519 public key, or zero when none resolves.
     /// @return epoch The key's epoch, or 0 when none resolves.
@@ -201,9 +214,9 @@ contract Letterlock {
     ///      have a key that resolves now (`keyOf` / `keyOfAgent` non-zero), so no drop can target a recipient
     ///      without a live key. The contract does not validate the envelope: any 1 to `MAX_ENVELOPE_BYTES` bytes
     ///      are accepted, sealed correctly or not. A drop to an agent is sealed to the key that resolves at that
-    ///      time, so after the agent is transferred only its previous owner can open it. The Letterlock SDK drops
-    ///      the UTF-8 JSON envelope of docs/SPEC.md §3. Anyone may drop (HPKE base mode is anonymous; see the SPEC
-    ///      threat model on replay).
+    ///      time, so after the agent is transferred only its previous owner can open it. The envelope format is the
+    ///      UTF-8 JSON of docs/SPEC.md §3. Anyone may drop (HPKE base mode is anonymous; see the SPEC threat model
+    ///      on replay).
     /// @param to The recipient address, or `address(0)` for an agent recipient.
     /// @param toAgent The recipient agent id, or `NO_AGENT` for an address recipient.
     /// @param envelope The sealed envelope, 1 to `MAX_ENVELOPE_BYTES` bytes.
@@ -235,11 +248,18 @@ contract Letterlock {
         return k.epoch != 0 && _ownerOf(agentId) == k.publisher;
     }
 
-    /// @dev `ownerOf`, with a revert (nonexistent or burned agent) read as "no owner".
+    /// @dev `ownerOf`, where only the registry's `ERC721NonexistentToken` revert (a nonexistent or burned agent)
+    ///      reads as "no owner". Every other failure reverts `RegistryCallFailed`. A call that ran out of gas fails
+    ///      with no revert data, so too little gas can never turn a live agent into "no owner".
     function _ownerOf(uint256 agentId) private view returns (address owner) {
         try identityRegistry.ownerOf(agentId) returns (address o) {
             owner = o;
-        } catch {
+        } catch (bytes memory reason) {
+            // casting to 'bytes4' is safe because it keeps the error selector, the first 4 of at least 4 bytes
+            // forge-lint: disable-next-line(unsafe-typecast)
+            if (reason.length < 4 || bytes4(reason) != IERC721.ERC721NonexistentToken.selector) {
+                revert RegistryCallFailed(agentId);
+            }
             owner = address(0);
         }
     }
