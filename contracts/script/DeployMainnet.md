@@ -8,19 +8,25 @@ registry on chain 143 by default and refuses any other one there.
 
 ## 0. Deployer (once)
 
-A dedicated mainnet key, never the testnet deployer (that key was shown in a chat session and must never hold
-mainnet funds). The file lives outside the repository:
+Use a dedicated mainnet key, separate from the testnet deployer. Import it into Foundry's encrypted keystore
+(`~/.foundry/keystores/`). The command prompts for the private key and a password, so the key never appears on a
+command line, in shell history, or in a plain-text file:
+
+```sh
+cast wallet import letterlock-mainnet --interactive
+```
+
+The environment file holds no key, only the address and the RPC. It lives outside the repository:
 
 ```sh
 # ~/.config/monad/mainnet-deployer.env   (chmod 600)
 MONAD_MAINNET_ADDRESS=0x...
-MONAD_MAINNET_PRIVATE_KEY=0x...
 MONAD_MAINNET_RPC=https://rpc.monad.xyz
 ```
 
-Fund `MONAD_MAINNET_ADDRESS` with MON. On 2026-09-26 a simulation of this script estimated 1,111,929 gas and
-0.2246 MON at a 202 gwei max fee. Monad charges the full gas limit, not the gas used, so keep a margin (about
-0.3 MON), plus gas for the first `publish` / `drop` transactions.
+Fund `MONAD_MAINNET_ADDRESS` with MON. On 2026-09-26 a read-only simulation of this script (step 2) estimated
+1,117,608 gas and 0.2258 MON at a 202 gwei max fee. Monad charges the full gas limit, not the gas used, so keep a
+margin (about 0.3 MON), plus gas for the first `publish` / `drop` transactions.
 
 Run every step below from `contracts/`, in one shell:
 
@@ -33,8 +39,8 @@ set -a; source ~/.config/monad/mainnet-deployer.env; set +a
 
 ```sh
 test "$(cast chain-id --rpc-url "$MONAD_MAINNET_RPC")" = 143 && echo "chain ok"
-test "$(cast wallet address --private-key "$MONAD_MAINNET_PRIVATE_KEY" | tr A-F a-f)" = \
-     "$(echo "$MONAD_MAINNET_ADDRESS" | tr A-F a-f)" && echo "key matches address"
+test "$(cast wallet address --account letterlock-mainnet | tr A-F a-f)" = \
+     "$(echo "$MONAD_MAINNET_ADDRESS" | tr A-F a-f)" && echo "key matches address"   # asks for the keystore password
 cast balance "$MONAD_MAINNET_ADDRESS" --rpc-url "$MONAD_MAINNET_RPC" --ether
 cast code 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 --rpc-url "$MONAD_MAINNET_RPC" | head -c 12; echo   # not 0x
 forge test   # includes test/LetterlockFork.t.sol against the live IdentityRegistry
@@ -52,7 +58,7 @@ Expect `Agent path enabled: identityRegistry = 0x8004A169FB4a3325136EB29fA0ceB6D
 
 ```sh
 forge script script/Deploy.s.sol:Deploy --rpc-url "$MONAD_MAINNET_RPC" \
-  --private-key "$MONAD_MAINNET_PRIVATE_KEY" --broadcast
+  --account letterlock-mainnet --sender "$MONAD_MAINNET_ADDRESS" --broadcast   # asks for the keystore password
 ```
 
 The address, tx hash and block are in `broadcast/Deploy.s.sol/143/run-latest.json` (safe to commit; the RPC

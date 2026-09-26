@@ -12,8 +12,8 @@ import {Letterlock} from "../src/Letterlock.sol";
 ///                            and publishForAgent / drop-to-agent revert AgentPathDisabled there.
 ///   Or pass it explicitly: --sig "deploy(address)" <registry>
 ///
-///   forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC" --private-key "$KEY" --broadcast
-///   (full mainnet procedure: script/DeployMainnet.md)
+///   forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC" --account <keystore> --sender <address> --broadcast
+///   (keystore: `cast wallet import <keystore> --interactive`; full mainnet procedure: script/DeployMainnet.md)
 contract Deploy is Script {
     address public constant MAINNET_IDENTITY_REGISTRY = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
     uint256 public constant MONAD_MAINNET = 143;

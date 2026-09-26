@@ -2,8 +2,8 @@
 
 `src/Letterlock.sol` is the onchain half of Letterlock: a public directory of passkey-derived X25519 encryption
 keys. A device derives the key from its passkey's PRF output (`docs/SPEC.md` §2) and publishes only the public
-half. Anyone reads `keyOf` / `keyOfAgent` and seals to it with HPKE. The contract has no owner, no admin, no
-upgrade path, and holds no funds.
+half. Anyone reads `keyOf` / `keyOfAgent` and seals to it with HPKE. The contract has no owner, no admin and no
+upgrade path, and no function accepts value.
 
 ## Deployments
 
@@ -21,8 +21,8 @@ disabled.
 
 | Function | Who | What |
 |---|---|---|
-| `publish(bytes32 pub, uint32 epoch)` | anyone, for themselves | writes `msg.sender`'s key; `epoch` must exceed the current one (the first may be any value >= 1) |
-| `publishForAgent(uint256 agentId, bytes32 pub, uint32 epoch)` | `identityRegistry.ownerOf(agentId)` | same rules, for an ERC-8004 agent |
+| `publish(bytes32 pub, uint32 epoch)` | anyone, for themselves | writes `msg.sender`'s key; `epoch` must be the current one + 1 (the first is 1) |
+| `publishForAgent(uint256 agentId, bytes32 pub, uint32 epoch)` | `identityRegistry.ownerOf(agentId)` | same rules, for an ERC-8004 agent; the epoch sequence continues across owners |
 | `keyOf(address)` → `(pub, epoch, updatedAt)` | view | zeros when none |
 | `keyOfAgent(uint256)` → `(pub, epoch, updatedAt)` | view | zeros when none, or when the agent's current owner is not the key's publisher |
 | `agentKeyRecord(uint256)` → `(pub, epoch, updatedAt, publisher)` | view | the raw record, for indexers and new owners |
@@ -38,16 +38,23 @@ Events: `KeyPublished(address indexed who, uint256 indexed agentId, bytes32 pub,
   (`LowOrderKey`; all 14, since libsodium ignores bit 255), and must be canonical: bit 255 clear and u < 2^255 − 19
   (`NonCanonicalKey`). A non-canonical spelling of a valid key still seals, but the envelope can never be opened,
   because HPKE binds the sender's copy of the key bytes and the recipient re-derives the canonical ones.
-- **Epochs** strictly increase per slot, so an (address or agent, epoch) pair names at most one key, ever.
-  Rotation is a higher epoch; old epochs stay derivable off-chain, so old envelopes still open.
+- **Epochs** go 1, 2, 3, ...: the first key is epoch 1 and every publish is exactly the current epoch + 1
+  (`EpochNotNext`), so an (address or agent, epoch) pair names at most one key, ever. Old epochs stay derivable
+  off-chain, so old envelopes still open. Reaching epoch n takes n publishes, so no single call (a mistaken or
+  phished one, or a seller's just before an agent transfer) can use up the epochs and freeze a slot.
 - **`NO_AGENT = type(uint256).max`** marks the address path in `KeyPublished.agentId` and in `drop` / `Dropped`
   `toAgent`. It cannot be 0, because agent 0 exists on mainnet. `publishForAgent` rejects `NO_AGENT`
   (`AgentIdReserved`), so the marker is unambiguous.
 - **Drop recipients.** Exactly one kind: `(to, NO_AGENT)` for an address, or `(address(0), agentId)` for an
   agent (`InvalidRecipient` otherwise). The envelope is 1 to 16,384 bytes (`EmptyEnvelope`, `EnvelopeTooLarge`).
-  The recipient must have a key that resolves now (`NoKeyPublished`), so no drop is unopenable by design.
+  The recipient must have a key that resolves now (`NoKeyPublished`), so no drop can target a recipient without a
+  live key. The contract does not validate the envelope: any 1 to 16,384 bytes are accepted.
 - **Agent keys follow the NFT.** After a transfer or burn, `keyOfAgent` returns zeros, because the previous owner
-  holds the passkey. The new owner publishes an epoch above the stored one.
+  holds the passkey. The new owner publishes the stored epoch + 1 (read it with `agentKeyRecord`). A drop to an
+  agent is sealed to the key that resolves at that moment, so after a transfer only the previous owner can open it.
+- **Indexers.** A `KeyPublished` log is history, not liveness: no Letterlock event marks the registry transfer or
+  burn that stops an agent key from resolving. Confirm an agent key with `keyOfAgent` when sealing (or join the
+  registry's `Transfer` events). Never seal from indexed events alone, or the note can go to the previous owner.
 - **Trust.** The agent path is only as trustworthy as the ERC-8004 registry, which is an upgradeable proxy on
   mainnet. Anyone may `drop` (HPKE base mode is anonymous), so recipients can be spammed and envelopes replayed:
   see the threat model in `docs/SPEC.md` §6.
