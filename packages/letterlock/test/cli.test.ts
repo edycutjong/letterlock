@@ -1,11 +1,11 @@
 // The `letterlock` CLI, run in-process (run(argv, io)) against the anvil directory. test/pack.test.ts runs the
 // built bin as a child process.
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generatePrivateKey } from "viem/accounts";
 import { privateKeyToAccount } from "viem/accounts";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../src/cli/program.ts";
 import { VERSION, decodeEnvelope, deriveKeyPair, fingerprint, open, toHex } from "../src/index.ts";
 import { client, ctx, fund, fundedAccount, noChain } from "./anvil/context.ts";
@@ -75,6 +75,7 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     await client().publish({ account, keys });
     dir = await mkdtemp(join(tmpdir(), "letterlock-cli-"));
   });
+  afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
 
   it("resolve prints the key, and --json the same values as the SDK", async () => {
     const r = await cli(["resolve", recipient, ...chain()]);
