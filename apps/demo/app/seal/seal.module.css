@@ -1,0 +1,138 @@
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  column-gap: clamp(32px, 5.5vw, 80px);
+  row-gap: 48px;
+}
+
+.form {
+  display: grid;
+  gap: 26px;
+  min-width: 0;
+}
+
+.found {
+  margin-top: -8px;
+}
+
+.submit {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.result {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.resultTitle {
+  font-size: var(--fs-address);
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+  gap: 8px 36px;
+  margin: 6px 0 0;
+}
+
+.facts div {
+  display: grid;
+  gap: 4px;
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.sendNote {
+  flex: 1 1 14rem;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.json {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.json summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: var(--tap);
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+}
+
+.json summary::-webkit-details-marker {
+  display: none;
+}
+
+.json summary::after {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-right: 1.6px solid var(--ink);
+  border-bottom: 1.6px solid var(--ink);
+  transform: rotate(45deg) translateY(-3px);
+  transition: transform var(--transition-fast);
+}
+
+.json[open] summary::after {
+  transform: rotate(225deg) translateY(-2px);
+}
+
+.json summary > span:first-child {
+  flex: 1;
+}
+
+.jsonMeta {
+  font-weight: 400;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.json pre {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background-color: color-mix(in srgb, var(--bg-sunk) 70%, transparent);
+  border-radius: 2px;
+}
+
+@media (max-width: 959.98px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .result {
+    max-width: 620px;
+  }
+}
+
+@media (max-width: 479.98px) {
+  .facts {
+    grid-template-columns: repeat(2, auto);
+  }
+}

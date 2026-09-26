@@ -1,0 +1,180 @@
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: start;
+  column-gap: clamp(32px, 5.5vw, 80px);
+  row-gap: 48px;
+}
+
+/* the route as a ruled form: one numbered line per step, a tick box on the right */
+.route {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) 5.5rem;
+  gap: 8px 20px;
+  padding: 26px 0 28px;
+}
+
+.step + .step {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.no {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 2.5rem;
+  line-height: 0.9;
+  color: var(--muted);
+}
+
+.step[data-status="next"] .no {
+  color: var(--before);
+}
+
+.body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.h2 {
+  font-size: clamp(1.375rem, 1.2rem + 0.6vw, 1.625rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.body p {
+  max-width: 56ch;
+  line-height: 1.55;
+}
+
+.actions {
+  margin-top: 6px;
+}
+
+.mark {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.box {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  color: var(--bg-elevated);
+}
+
+.mark[data-status="done"] .box {
+  background: var(--ink);
+}
+
+.mark[data-status="next"] .box {
+  border: 2px solid var(--before);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--before) 14%, transparent);
+}
+
+.mark[data-status="todo"] .box {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.markLabel {
+  font-size: 0.6875rem;
+}
+
+.mark[data-status="next"] .markLabel {
+  color: var(--before);
+}
+
+.check {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px 24px;
+  background-color: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+  border-radius: 3px;
+  box-shadow: var(--shadow-sm);
+}
+
+.check ul {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check li {
+  position: relative;
+  padding-left: 20px;
+  font-size: var(--fs-small);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+
+.check li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 8px;
+  height: 1.5px;
+  background: var(--ink);
+}
+
+.check strong {
+  color: var(--ink);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 959.98px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 559.98px) {
+  .step {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    grid-template-areas:
+      "no body"
+      "no mark";
+  }
+  .no {
+    grid-area: no;
+    font-size: 2rem;
+  }
+  .body {
+    grid-area: body;
+  }
+  .mark {
+    grid-area: mark;
+    grid-auto-flow: column;
+    justify-content: start;
+    justify-items: start;
+    align-items: center;
+    padding-top: 6px;
+  }
+  .box {
+    width: 24px;
+    height: 24px;
+  }
+}

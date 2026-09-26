@@ -1,0 +1,125 @@
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: start;
+  column-gap: clamp(32px, 5.5vw, 80px);
+  row-gap: 56px;
+}
+
+.reader {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.caption {
+  max-width: 58ch;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.inbox {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.inboxTitle {
+  font-size: var(--fs-address);
+  font-style: italic;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+}
+
+.item + .item {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.thumb {
+  position: relative;
+  padding: 6px 4px 8px 0;
+}
+
+/* struck across the envelope in ink, the way the post office returns a letter */
+.returned {
+  position: absolute;
+  left: 4px;
+  bottom: 14px;
+  padding: 3px 7px 2px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background-color: var(--bg-elevated);
+  border: 1.5px solid var(--ink);
+  outline: 0.75px solid var(--ink);
+  outline-offset: 1.5px;
+  transform: rotate(-8deg);
+  white-space: nowrap;
+}
+
+.meta {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+.state {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.3125rem;
+  line-height: 1.2;
+}
+
+.item[data-state="opened"] .state {
+  color: var(--before);
+}
+
+.detail {
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta > div {
+  margin-top: 8px;
+}
+
+@media (max-width: 959.98px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .reader {
+    max-width: 640px;
+    width: 100%;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 479.98px) {
+  .item {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 14px;
+  }
+}

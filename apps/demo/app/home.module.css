@@ -1,0 +1,129 @@
+.main {
+  flex: 1 0 auto;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  align-items: start;
+  column-gap: clamp(32px, 6vw, 88px);
+}
+
+.intro {
+  min-width: 0;
+}
+
+.cta {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.fine {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.cardCol {
+  display: grid;
+  gap: 18px;
+  /* the card sits a little below the headline's cap height, like a card slipped into the register */
+  padding-top: clamp(48px, 8vw, 104px);
+}
+
+.cardNote {
+  padding-inline: 4px;
+}
+
+.how {
+  margin-top: clamp(56px, 8vw, 104px);
+  padding-top: 20px;
+  border-top: 1px solid var(--ink);
+}
+
+.howTitle {
+  font-size: var(--fs-address);
+  font-style: italic;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.steps li {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 8px;
+  padding: 20px clamp(16px, 2.4vw, 28px) 22px;
+}
+
+.steps li + li {
+  border-left: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.steps li:first-child {
+  padding-left: 0;
+}
+
+.no {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.steps h3 {
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.steps p {
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  max-width: 34ch;
+}
+
+.steps code {
+  justify-self: start;
+  margin-top: 6px;
+  padding: 3px 8px;
+  font-size: 0.875rem;
+  background-color: color-mix(in srgb, var(--bg-sunk) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+  border-radius: 2px;
+}
+
+@media (max-width: 959.98px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cardCol {
+    padding-top: 12px;
+    max-width: 560px;
+  }
+}
+
+@media (max-width: 759.98px) {
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .steps li,
+  .steps li:first-child {
+    padding: 18px 0;
+  }
+  .steps li + li {
+    border-left: 0;
+    border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+  }
+}
