@@ -5,7 +5,7 @@ import { toHex, utf8 } from "./bytes.ts";
 import { LetterlockError } from "./errors.ts";
 
 /**
- * Derivation (docs/SPEC.md §2):
+ * Derivation (docs/SPEC.md §2, normative):
  *   prfSalt(epoch) = SHA-256("letterlock/hpke/v1/" ‖ epoch)          — Letterlock's own PRF namespace,
  *                                                                     disjoint from mera's account salt
  *   sk = HKDF-SHA256(ikm = PRF output, salt = "letterlock/v1",

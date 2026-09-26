@@ -38,14 +38,15 @@ try {
   const a = await mac.page.evaluate(() => window.spike.create());
   check("A: passkey created, PRF → 32-byte X25519 pk", a.pk?.length === 64, a.fingerprint);
   const again = await mac.page.evaluate(() => window.spike.derive());
-  check("A: same device re-derives the same key and opens its note", again.pk === a.pk && again.opened === "the dentist moved to Thursday 10:40", again.ceremonyMs + "ms");
+  check("A: same device, stored credential as allowCredentials hint → same key, note opens",
+    again.path === "credential-hint" && again.pk === a.pk && again.opened === "the dentist moved to Thursday 10:40", again.ceremonyMs + "ms");
 
   // ---- fresh browser state, same passkey (the demo's "clear Safari storage" path) ----
   await mac.page.evaluate(() => localStorage.clear());
   await mac.page.reload(); await mac.page.waitForFunction(() => "spike" in window);
   const fresh = await mac.page.evaluate((env) => window.spike.derive(env), JSON.stringify(a.envelope));
-  check("A': storage cleared, no credential hint → discoverable passkey re-derives the key and opens the note",
-    fresh.pk === a.pk && fresh.opened === "the dentist moved to Thursday 10:40", fresh.fingerprint);
+  check("A': storage cleared → discoverable lookup (no hint) re-derives the key and opens the note",
+    fresh.path === "discoverable" && fresh.pk === a.pk && fresh.opened === "the dentist moved to Thursday 10:40", fresh.fingerprint);
 
   // ---- device B ("iPad"): CDP cannot move a credential's hmac-secret between virtual authenticators ----
   const { credentials } = await mac.cdp.send("WebAuthn.getCredentials", { authenticatorId: mac.authenticatorId });
@@ -54,7 +55,7 @@ try {
   for (const c of credentials) await ipad.cdp.send("WebAuthn.addCredential", { authenticatorId: ipad.authenticatorId, credential: c });
   const b = await ipad.page.evaluate((env) => window.spike.derive(env).catch((e) => ({ error: String(e) })), JSON.stringify(a.envelope));
   if (b.pk === a.pk) check("B: synced passkey on a second device re-derives the identical key", true, b.fingerprint);
-  else skip("B: cross-device re-derivation", "CDP credential export omits hmac-secret (copied credential has no PRF: " + (b.error ?? "different key").slice(0, 60) + ") — covered by test/passkey.test.ts synced-store case + the human iPad run");
+  else skip("B: cross-device re-derivation", "CDP credential export omits hmac-secret (copied credential has no PRF: " + (b.error ?? "different key").slice(0, 60) + ") — NOT verified on real hardware: only the Node synced-store model covers it; the human Safari→iPad run is PENDING");
 
   // ---- authenticator without PRF → named error, no silent downgrade ----
   const dash = await device({ hasPrf: false });
@@ -67,12 +68,12 @@ try {
   check("P256: ES256 key captured through a mera WebAuthnClient + assertion over the bound challenge", bind.verdict === "PENDING_ONCHAIN", bind.verdict + (bind.error ?? bind.reason ?? ""));
   let onchain = {};
   if (bind.verdict === "PENDING_ONCHAIN") {
-    check("P256: clientDataJSON carries the bound challenge; UV flag set", bind.clientDataOk && bind.uvFlag);
+    check("P256: clientDataJSON type/challenge/origin, rpIdHash, UP+UV flags all match", bind.clientDataOk && bind.rpIdHashOk && bind.upFlag && bind.uvFlag);
     check("P256: WebCrypto verifies the signature", bind.webcryptoOk);
     for (const [net, rpc] of Object.entries(RPC)) {
       const good = await ethCall(rpc, bind.precompileInput), bad = await ethCall(rpc, bind.tamperedInput);
       onchain[net] = { good, bad };
-      check(`P256: Monad ${net} 0x0100 returns 1 for the real signature`, good === "0x" + "0".repeat(63) + "1", good);
+      check(`P256: Monad ${net} 0x0100 verifies the passkey's signature over h (signature only — not yet an ownership proof)`, good === "0x" + "0".repeat(63) + "1", good);
       check(`P256: Monad ${net} 0x0100 rejects a 1-bit-tampered hash`, bad === "0x" || bad === "0x" + "0".repeat(64), bad);
     }
   }

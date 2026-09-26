@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { toHex, utf8 } from "../src/bytes.ts";
 import { open, seal } from "../src/envelope.ts";
 import { isLetterlockError } from "../src/errors.ts";
-import { createEncryptionAddress, deriveFromPasskey } from "../src/passkey.ts";
+import { createEncryptionAddress, deriveFromPasskey, openWithPasskey } from "../src/passkey.ts";
 import { softAuthenticator } from "./soft-authenticator.ts";
 
 const rp = { id: "letterlock.test", name: "Letterlock" };
@@ -34,7 +34,7 @@ describe("passkey → encryption address (via mera)", () => {
     const { keys, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: mac });
     const env = await seal({
       chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
-      recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: keys.publicKey, epoch: 1,
+      to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: keys.publicKey, epoch: 1 },
       plaintext: utf8("the dentist moved to Thursday 10:40"),
     });
     const ipad = mac.syncedTo();
@@ -65,9 +65,47 @@ describe("passkey → encryption address (via mera)", () => {
     expect(isLetterlockError(e, "PRF_UNSUPPORTED")).toBe(true);
   });
 
-  it("a passkey from another relying party is not found (rpId isolation)", async () => {
+  it("a passkey from another relying party is not found (rpId isolation) → PASSKEY_FAILED", async () => {
     const dev = softAuthenticator();
     await createEncryptionAddress({ rp, user, webAuthnClient: dev });
-    await expect(deriveFromPasskey({ rpId: "evil.test", epoch: 1, webAuthnClient: dev })).rejects.toThrow();
+    const e = await deriveFromPasskey({ rpId: "evil.test", epoch: 1, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "PASSKEY_FAILED")).toBe(true);
+  });
+
+  it("a malformed credential id → INPUT_INVALID (mera's own validation, wrapped)", async () => {
+    const e = await deriveFromPasskey({ rpId: rp.id, epoch: 1, credential: { credentialId: "not/base64url=" }, webAuthnClient: softAuthenticator() })
+      .then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID")).toBe(true);
+  });
+
+  it("create-time fallback stays pinned to the NEW passkey even when an older one exists for the site", async () => {
+    const dev = softAuthenticator({ prfAtCreate: false });
+    await createEncryptionAddress({ rp, user, webAuthnClient: dev });              // older passkey, listed first
+    const { keys, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+    const pinned = await deriveFromPasskey({ rpId: rp.id, epoch: 1, credential, webAuthnClient: dev });
+    expect(toHex(keys.publicKey)).toBe(toHex(pinned.publicKey));
+  });
+
+  it("choosing the wrong passkey at the prompt → WRONG_KEY, not TAMPERED", async () => {
+    const dev = softAuthenticator();
+    const first = await createEncryptionAddress({ rp, user, webAuthnClient: dev });   // e.g. an old passkey
+    const second = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+    const env = await seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
+      to: { recipient: "agent:7", publicKey: second.keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
+    const e = await openWithPasskey(env, { rpId: rp.id, credential: first.credential, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "WRONG_KEY")).toBe(true);
+    expect(await openWithPasskey(env, { rpId: rp.id, credential: second.credential, webAuthnClient: dev })).toEqual(utf8("hi"));
+  });
+
+  it("openWithPasskey derives the envelope's own epoch, so notes sealed before a rotation still open", async () => {
+    const dev = softAuthenticator();
+    const { credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+    const k2 = await deriveFromPasskey({ rpId: rp.id, epoch: 2, credential, webAuthnClient: dev });
+    const k1 = await deriveFromPasskey({ rpId: rp.id, epoch: 1, credential, webAuthnClient: dev });
+    const mk = (k: typeof k1, t: string) => seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
+      to: { recipient: "agent:7", publicKey: k.publicKey, epoch: k.epoch }, plaintext: utf8(t) });
+    const [old, cur] = await Promise.all([mk(k1, "before rotation"), mk(k2, "after rotation")]);
+    expect(new TextDecoder().decode(await openWithPasskey(old, { rpId: rp.id, credential, webAuthnClient: dev }))).toBe("before rotation");
+    expect(new TextDecoder().decode(await openWithPasskey(cur, { rpId: rp.id, credential, webAuthnClient: dev }))).toBe("after rotation");
   });
 });

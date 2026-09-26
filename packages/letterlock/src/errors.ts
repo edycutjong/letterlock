@@ -3,6 +3,8 @@ export type LetterlockErrorCode =
   | "NO_KEY_PUBLISHED"
   | "TAMPERED"
   | "EPOCH_MISMATCH"
+  | "WRONG_KEY"
+  | "PASSKEY_FAILED"
   | "INPUT_INVALID";
 
 export class LetterlockError extends Error {

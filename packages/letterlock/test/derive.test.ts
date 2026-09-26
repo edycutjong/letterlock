@@ -38,9 +38,10 @@ describe("derivation", () => {
     expect(fingerprint(deriveKeyPair(prf, 1).publicKey)).toMatchInlineSnapshot(`"48fd7d26d39587bf"`);
   });
 
-  it.each([0, -1, 1.5, 2 ** 32, Number.NaN])("rejects epoch %s", (e) => {
-    expect(() => prfSaltFor(e)).toThrow();
-    try { deriveKeyPair(prf, e); } catch (err) { expect(isLetterlockError(err, "INPUT_INVALID")).toBe(true); }
+  it.each([0, -1, 1.5, 2 ** 32, Number.NaN])("rejects epoch %s as INPUT_INVALID", (e) => {
+    const code = (f: () => unknown) => { try { f(); return "no error"; } catch (err) { return isLetterlockError(err) ? err.code : String(err); } };
+    expect(code(() => prfSaltFor(e))).toBe("INPUT_INVALID");
+    expect(code(() => deriveKeyPair(prf, e))).toBe("INPUT_INVALID");
   });
 
   it("rejects a PRF output that is not 32 bytes as PRF_UNSUPPORTED", () => {

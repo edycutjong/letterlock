@@ -29,8 +29,12 @@ export const toB64url = (b: Uint8Array): string => {
 
 export const fromB64url = (s: string): Uint8Array => {
   if (!/^[A-Za-z0-9_-]*$/.test(s)) throw new TypeError("not base64url");
+  if (s.length % 4 === 1) throw new TypeError("not base64url");
   const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const out = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  // reject non-canonical encodings (unused trailing bits set): one byte string ↔ exactly one string
+  if (toB64url(out) !== s) throw new TypeError("non-canonical base64url");
+  return out;
 };
 
 export const toHex = (b: Uint8Array): string => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");

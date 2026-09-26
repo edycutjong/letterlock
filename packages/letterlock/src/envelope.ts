@@ -2,7 +2,7 @@ import { Chacha20Poly1305 } from "@hpke/chacha20poly1305";
 import { CipherSuite, HkdfSha256 } from "@hpke/core";
 import { DhkemX25519HkdfSha256 } from "@hpke/dhkem-x25519";
 import { concat, fromB64url, fromHex, lp, toB64url, uintBE, utf8 } from "./bytes.ts";
-import type { EncryptionKeyPair } from "./derive.ts";
+import { fingerprint, type EncryptionKeyPair } from "./derive.ts";
 import { LetterlockError } from "./errors.ts";
 
 /** RFC 9180 base mode: DHKEM(X25519, HKDF-SHA256) · HKDF-SHA256 · ChaCha20-Poly1305 (suite 0x0020/0x0001/0x0003). */
@@ -25,6 +25,11 @@ export type EnvelopeHeader = {
 };
 
 export type Envelope = EnvelopeHeader & {
+  /**
+   * Fingerprint of the recipient key sealed to (docs/SPEC.md §3). NOT authenticated — a routing hint that lets
+   * open() say WRONG_KEY instead of TAMPERED. Tampering with it can only cause an error, never a decryption.
+   */
+  readonly kid: string;
   /** HPKE encapsulated key, base64url. */
   readonly enc: string;
   /** HPKE ciphertext, base64url. */
@@ -63,51 +68,69 @@ export const infoFor = (h: EnvelopeHeader): Uint8Array =>
     uintBE(h.epoch, 4),
   );
 
+/** A recipient's published key exactly as ONE keyOf() read returned it — key and epoch travel together. */
+export type RecipientKey = {
+  readonly recipient: string;
+  readonly publicKey: Uint8Array;
+  readonly epoch: number;
+};
+
 export type SealParams = {
   readonly chainId: number;
   readonly directory: `0x${string}`;
-  readonly recipient: string;
-  /** The recipient's published key and its epoch, as returned by keyOf(). */
-  readonly publicKey: Uint8Array;
-  readonly epoch: number;
+  /** Pass the keyOf() result as one value; never assemble publicKey and epoch from separate reads. */
+  readonly to: RecipientKey;
   readonly plaintext: Uint8Array;
 };
 
 /** Seal bytes to a published key. Needs no passkey and no secret: anyone may seal. */
 export const seal = async (p: SealParams): Promise<Envelope> => {
-  if (p.publicKey.length !== 32) throw new LetterlockError("INPUT_INVALID", "X25519 public key must be 32 bytes");
+  const { to } = p;
+  if (!(to.publicKey instanceof Uint8Array) || to.publicKey.length !== 32)
+    throw new LetterlockError("INPUT_INVALID", "X25519 public key must be 32 bytes");
   const header: EnvelopeHeader = {
     v: 1,
     chainId: p.chainId,
     directory: p.directory.toLowerCase() as `0x${string}`,
-    recipient: canonicalRecipient(p.recipient),
-    epoch: p.epoch,
+    recipient: canonicalRecipient(to.recipient),
+    epoch: to.epoch,
   };
   checkHeader(header);
-  const recipientPublicKey = await suite.kem.importKey("raw", p.publicKey.slice().buffer, true);
-  const { enc, ct } = await suite.seal({ recipientPublicKey, info: infoFor(header) }, p.plaintext);
-  return { ...header, enc: toB64url(new Uint8Array(enc)), ct: toB64url(new Uint8Array(ct)) };
+  let sealed: { enc: ArrayBuffer; ct: ArrayBuffer };
+  try {
+    const recipientPublicKey = await suite.kem.importKey("raw", to.publicKey.slice().buffer, true);
+    sealed = await suite.seal({ recipientPublicKey, info: infoFor(header) }, p.plaintext);
+  } catch (cause) {
+    // all-zero and other low-order X25519 points are refused by the KEM (RFC 9180 §7.1.4)
+    throw new LetterlockError("INPUT_INVALID", "recipient public key is not a usable X25519 key", { cause });
+  }
+  return { ...header, kid: fingerprint(to.publicKey), enc: toB64url(new Uint8Array(sealed.enc)), ct: toB64url(new Uint8Array(sealed.ct)) };
 };
 
 /**
- * Open an envelope with the recipient's re-derived key pair. Any change to a header field, `enc` or `ct`
- * fails authentication and surfaces as TAMPERED; a key from another epoch surfaces as EPOCH_MISMATCH.
+ * Open an envelope with the recipient's re-derived key pair.
+ * Pre-authentication hints (cheap, before any crypto; an attacker editing them only gets an error):
+ *   EPOCH_MISMATCH — the envelope names a different epoch than the key you derived → derive envelope.epoch
+ *   WRONG_KEY      — same epoch, different key: the wrong passkey was chosen at the prompt
+ * Authentication: any change to a bound header field, `enc` or `ct` → TAMPERED.
  */
 export const open = async (env: Envelope, keys: EncryptionKeyPair): Promise<Uint8Array> => {
   checkHeader(env);
   if (env.epoch !== keys.epoch)
     throw new LetterlockError("EPOCH_MISMATCH", `envelope is sealed to epoch ${env.epoch}, key is epoch ${keys.epoch}`);
+  if (typeof env.kid === "string" && env.kid !== fingerprint(keys.publicKey))
+    throw new LetterlockError("WRONG_KEY", `envelope is sealed to key ${env.kid}, this passkey derives ${fingerprint(keys.publicKey)}`);
   let enc: Uint8Array, ct: Uint8Array;
   try { enc = fromB64url(env.enc); ct = fromB64url(env.ct); }
-  catch (cause) { throw new LetterlockError("TAMPERED", "envelope fields are not base64url", { cause }); }
-  const recipientKey = {
-    privateKey: await suite.kem.importKey("raw", keys.secretKey.slice().buffer, false),
-    publicKey: await suite.kem.importKey("raw", keys.publicKey.slice().buffer, true),
-  };
+  catch (cause) { throw new LetterlockError("TAMPERED", "envelope fields are not canonical base64url", { cause }); }
   try {
+    const recipientKey = {
+      privateKey: await suite.kem.importKey("raw", keys.secretKey.slice().buffer, false),
+      publicKey: await suite.kem.importKey("raw", keys.publicKey.slice().buffer, true),
+    };
     const pt = await suite.open({ recipientKey, enc: enc.slice().buffer, info: infoFor(env) }, ct);
     return new Uint8Array(pt);
   } catch (cause) {
-    throw new LetterlockError("TAMPERED", "envelope failed authentication (altered, or sealed to a different key)", { cause });
+    throw new LetterlockError("TAMPERED", "envelope failed authentication (altered in transit)", { cause });
   }
 };

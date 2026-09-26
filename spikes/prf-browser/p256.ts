@@ -2,11 +2,14 @@
 // Monad's P256 precompile 0x0100 (EIP-7951), that it vouches for a given Letterlock X25519 key?
 //  1. a capturing WebAuthnClient runs mera's creation ceremony and records the credential's P256 public key
 //     (mera never returns it — a limit of mera 0.2.0)
-//  2. a second assertion signs challenge = SHA-256("letterlock/bind/v1" ‖ x25519pk ‖ u32 epoch)
+//  2. a second assertion signs
+//       challenge = SHA-256("letterlock/bind/v1" ‖ u64 chainId ‖ directory[20] ‖ owner[20] ‖ x25519pk[32] ‖ u32 epoch)
+//     (owner + chainId + directory stop a public signature being replayed for another address, chain or
+//      directory; u32 epoch stops epoch+256 aliasing — audit round 1, findings 1–2)
 //  3. the WebAuthn message hash h = SHA-256(authData ‖ SHA-256(clientDataJSON)) + (r, s, qx, qy) = the 160-byte
 //     precompile input; the runner eth_calls it on Monad testnet and mainnet.
 import type { WebAuthnClient } from "@category-labs/mera";
-import { createEncryptionAddress, toB64url, toHex } from "letterlock";
+import { createEncryptionAddress, fromHex, toB64url, toHex } from "letterlock";
 
 const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
 const u8 = (b: ArrayBuffer | ArrayBufferView) => new Uint8Array(b instanceof ArrayBuffer ? b : b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
@@ -15,10 +18,19 @@ const cat = (...p: Uint8Array[]) => { const o = new Uint8Array(p.reduce((n, x) =
 const be32 = (n: bigint) => Uint8Array.from({ length: 32 }, (_, i) => Number((n >> BigInt(8 * (31 - i))) & 0xffn));
 const big = (b: Uint8Array) => b.reduce((n, x) => (n << 8n) | BigInt(x), 0n);
 
-/** DER ECDSA-Sig-Value → (r, s), low-s normalized. */
+/** Strict DER ECDSA-Sig-Value → (r, s) in [1, n-1], low-s normalized (EIP-7951 accepts both; normalizing is harmless). */
 const derToRS = (der: Uint8Array): [bigint, bigint] => {
-  let i = 2; const read = () => { if (der[i++] !== 2) throw new Error("bad DER"); const len = der[i++]!; const v = der.slice(i, i + len); i += len; return big(v); };
-  const r = read(); let s = read(); if (s > N / 2n) s = N - s; return [r, s];
+  if (der[0] !== 0x30 || der[1] !== der.length - 2) throw new Error("bad DER: SEQUENCE header");
+  let i = 2;
+  const read = () => {
+    if (der[i++] !== 0x02) throw new Error("bad DER: INTEGER tag");
+    const len = der[i++]!; if (len < 1 || len > 33 || i + len > der.length) throw new Error("bad DER: INTEGER length");
+    const v = big(der.slice(i, i + len)); i += len; return v;
+  };
+  const r = read(); let s = read();
+  if (i !== der.length) throw new Error("bad DER: trailing bytes");
+  if (r < 1n || r >= N || s < 1n || s >= N) throw new Error("bad DER: r/s out of range");
+  if (s > N / 2n) s = N - s; return [r, s];
 };
 
 type Captured = { credentialId?: Uint8Array; alg?: number; spki?: Uint8Array };
@@ -53,7 +65,15 @@ const capturingClient = (cap: Captured): WebAuthnClient => ({
   },
 });
 
-export const p256BindingCheck = async (rp: { id: string; name: string }) => {
+const u32 = (n: number) => Uint8Array.of((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+const u64 = (n: number) => cat(u32(Math.floor(n / 2 ** 32)), u32(n >>> 0));
+
+export type BindContext = { chainId: number; directory: `0x${string}`; owner: `0x${string}` };
+
+export const bindChallenge = (c: BindContext, x25519pk: Uint8Array, epoch: number) =>
+  sha256(cat(new TextEncoder().encode("letterlock/bind/v1"), u64(c.chainId), fromHex(c.directory), fromHex(c.owner), x25519pk, u32(epoch)));
+
+export const p256BindingCheck = async (rp: { id: string; name: string }, ctx: BindContext) => {
   const cap: Captured = {};
   const { keys } = await createEncryptionAddress({ rp, user: { name: "maya-bind", displayName: "Maya" }, webAuthnClient: capturingClient(cap) });
   if (cap.alg !== -7 || !cap.spki) return { verdict: "CUT", reason: `authenticator chose alg ${cap.alg} (need ES256 -7) or hid the key` };
@@ -61,7 +81,7 @@ export const p256BindingCheck = async (rp: { id: string; name: string }) => {
   const raw = u8(await crypto.subtle.exportKey("raw", pub));          // 0x04 ‖ x ‖ y
   const qx = raw.slice(1, 33), qy = raw.slice(33, 65);
 
-  const challenge = await sha256(cat(new TextEncoder().encode("letterlock/bind/v1"), keys.publicKey, new Uint8Array([0, 0, 0, keys.epoch])));
+  const challenge = await bindChallenge(ctx, keys.publicKey, keys.epoch);
   const a = (await navigator.credentials.get({ publicKey: {
     rpId: rp.id, challenge: challenge.slice(), userVerification: "required",
     allowCredentials: [{ type: "public-key", id: cap.credentialId!.slice() }],
@@ -76,8 +96,13 @@ export const p256BindingCheck = async (rp: { id: string; name: string }) => {
   return {
     verdict: "PENDING_ONCHAIN",
     x25519pk: toHex(keys.publicKey), epoch: keys.epoch,
-    clientDataOk: client.type === "webauthn.get" && client.challenge === toB64url(challenge),
+    clientDataOk: client.type === "webauthn.get" && client.challenge === toB64url(challenge) && client.origin === location.origin,
+    rpIdHashOk: toHex(authData.slice(0, 32)) === toHex(await sha256(new TextEncoder().encode(rp.id))),
+    upFlag: ((authData[32] ?? 0) & 0x01) !== 0,
     uvFlag: ((authData[32] ?? 0) & 0x04) !== 0,
+    // What 0x0100 alone proves: this P256 key signed this h. It does NOT prove the P256 key belongs to `owner`
+    // — the contract must anchor Q to msg.sender (the mera account) and recompute h from authData +
+    // clientDataJSON itself (see docs/SPEC.md §7).
     webcryptoOk,
     precompileInput: "0x" + toHex(cat(h, be32(rr), be32(ss), qx, qy)),
     tamperedInput: "0x" + toHex(cat(h.map((b, i) => (i === 0 ? b ^ 1 : b)), be32(rr), be32(ss), qx, qy)),

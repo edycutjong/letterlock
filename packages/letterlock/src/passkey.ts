@@ -6,12 +6,18 @@ import {
   type WebAuthnClient,
 } from "@category-labs/mera";
 import { deriveKeyPair, prfSaltFor, type EncryptionKeyPair } from "./derive.ts";
+import { open, type Envelope } from "./envelope.ts";
 import { LetterlockError } from "./errors.ts";
 
+/** Every failure leaves the SDK as a LetterlockError with a documented code (docs/SPEC.md §5). */
 const wrap = (cause: unknown): never => {
-  if (isMeraError(cause) && cause.code === "PRF_UNAVAILABLE")
-    throw new LetterlockError("PRF_UNSUPPORTED", "this authenticator does not return a PRF output (e.g. Dashlane, some Chrome profiles)", { cause });
-  throw cause;
+  if (cause instanceof LetterlockError) throw cause;
+  if (isMeraError(cause)) {
+    if (cause.code === "PRF_UNAVAILABLE")
+      throw new LetterlockError("PRF_UNSUPPORTED", "this authenticator does not return a PRF output (e.g. Dashlane, some Chrome profiles)", { cause });
+    if (cause.code === "INPUT_INVALID") throw new LetterlockError("INPUT_INVALID", cause.message, { cause });
+  }
+  throw new LetterlockError("PASSKEY_FAILED", "the passkey ceremony was cancelled, timed out, or found no passkey for this site", { cause });
 };
 
 export type CreateAddressOptions = {
@@ -48,4 +54,16 @@ export const deriveFromPasskey = async (o: DeriveOptions): Promise<EncryptionKey
     });
     return { ...deriveKeyPair(r.prfOutput, o.epoch), credentialId: r.credentialId };
   } catch (e) { return wrap(e); }
+};
+
+export type OpenWithPasskeyOptions = Omit<DeriveOptions, "epoch">;
+
+/**
+ * One passkey prompt → plaintext. Derives the key for the envelope's own epoch (old notes keep opening after
+ * a rotation), opens, then wipes the derived secret key (best effort: JS cannot guarantee erasure).
+ */
+export const openWithPasskey = async (env: Envelope, o: OpenWithPasskeyOptions): Promise<Uint8Array> => {
+  const keys = await deriveFromPasskey({ ...o, epoch: env.epoch });
+  try { return await open(env, keys); }
+  finally { keys.secretKey.fill(0); }
 };
