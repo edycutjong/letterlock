@@ -1,15 +1,44 @@
 {
   "name": "letterlock",
-  "version": "0.0.0",
-  "description": "A passkey becomes an encryption address on Monad: keyOf(address) lets any app seal data only you can open.",
-  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A passkey becomes an encryption address on Monad: resolve keyOf(address) and seal data only that passkey can open, on any device it syncs to.",
+  "keywords": [
+    "passkey",
+    "webauthn",
+    "prf",
+    "hpke",
+    "x25519",
+    "encryption",
+    "monad",
+    "erc-8004",
+    "mera",
+    "viem"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edycutjong/letterlock.git",
+    "directory": "packages/letterlock"
+  },
+  "homepage": "https://github.com/edycutjong/letterlock/tree/main/packages/letterlock#readme",
+  "bugs": {
+    "url": "https://github.com/edycutjong/letterlock/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "tsup && node scripts/stage.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test:live": "LIVE=1 vitest run test/live.test.ts",
+    "typecheck": "tsc --noEmit",
+    "pack:check": "npm run build && npm pack ./dist --dry-run"
   },
   "dependencies": {
     "@category-labs/mera": "0.2.0",
@@ -17,10 +46,16 @@
     "@hpke/core": "^1.9.0",
     "@hpke/dhkem-x25519": "^1.8.0",
     "@noble/curves": "^2.4.0",
-    "@noble/hashes": "^2.4.0"
+    "@noble/hashes": "^2.4.0",
+    "@scure/bip32": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
+    "commander": "^14.0.3",
+    "viem": "^2.56.9"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "esbuild": "^0.27.7",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.0",
     "vitest": "^5.0.2"
   }

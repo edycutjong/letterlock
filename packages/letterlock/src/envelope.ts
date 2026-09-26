@@ -43,7 +43,9 @@ const AGENT = /^agent:(0|[1-9][0-9]{0,77})$/;
 export const canonicalRecipient = (r: string): Recipient => {
   if (ADDRESS.test(r)) return r.toLowerCase() as Recipient;
   if (AGENT.test(r)) return r as Recipient;
-  throw new LetterlockError("INPUT_INVALID", `recipient must be 0x<40 hex> or agent:<id>, got ${JSON.stringify(r)}`);
+  // a 64-hex-digit value pasted as a recipient may be a private key: never echo one into an error message
+  const shown = typeof r === "string" ? JSON.stringify(r.replace(/[0-9a-fA-F]{64}/g, "[64 hex digits]")) : typeof r;
+  throw new LetterlockError("INPUT_INVALID", `recipient must be 0x<40 hex> or agent:<id>, got ${shown}`);
 };
 
 const checkHeader = (h: EnvelopeHeader): void => {
@@ -115,6 +117,55 @@ export const parseEnvelope = (env: Envelope): { enc: Uint8Array; ct: Uint8Array 
   checkHeader(env);
   try { return { enc: fromB64url(env.enc), ct: fromB64url(env.ct) }; }
   catch (cause) { throw new LetterlockError("TAMPERED", "envelope fields are not canonical base64url", { cause }); }
+};
+
+const KID = /^[0-9a-f]{16}$/;
+
+/**
+ * The envelope as UTF-8 JSON, fields in the docs/SPEC.md §3 order: the bytes drop() sends and inbox() reads back.
+ * Validates first, so malformed envelopes never leave the SDK.
+ */
+export const encodeEnvelope = (env: Envelope): Uint8Array => {
+  parseEnvelope(env);
+  const { v, chainId, directory, recipient, epoch, kid, enc, ct } = env;
+  return utf8(JSON.stringify({ v, chainId, directory, recipient, epoch, kid, enc, ct }));
+};
+
+/**
+ * Parses envelope JSON (a string, or UTF-8 bytes such as a Dropped log's) and validates it as parseEnvelope does.
+ * Only the §3 fields are kept. Nothing is decrypted: a valid envelope can still fail to open.
+ *   INPUT_INVALID — not UTF-8, not JSON, a missing or mistyped field, or a bad header
+ *   TAMPERED      — enc or ct is not canonical base64url
+ */
+export const decodeEnvelope = (input: string | Uint8Array): Envelope => {
+  let text: string;
+  if (typeof input === "string") text = input;
+  else {
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(input); }
+    catch (cause) { throw new LetterlockError("INPUT_INVALID", "envelope is not UTF-8", { cause }); }
+  }
+  let o: unknown;
+  try { o = JSON.parse(text); }
+  catch (cause) { throw new LetterlockError("INPUT_INVALID", "envelope is not JSON", { cause }); }
+  if (typeof o !== "object" || o === null || Array.isArray(o)) throw new LetterlockError("INPUT_INVALID", "envelope is not a JSON object");
+  const f = o as Record<string, unknown>;
+  const field = <T>(name: string, type: "number" | "string"): T => {
+    if (typeof f[name] !== type) throw new LetterlockError("INPUT_INVALID", `envelope field "${name}" must be a ${type}`);
+    return f[name] as T;
+  };
+  const env: Envelope = {
+    v: field<1>("v", "number"),
+    chainId: field<number>("chainId", "number"),
+    directory: field<`0x${string}`>("directory", "string"),
+    recipient: field<Recipient>("recipient", "string"),
+    epoch: field<number>("epoch", "number"),
+    kid: field<string>("kid", "string"),
+    enc: field<string>("enc", "string"),
+    ct: field<string>("ct", "string"),
+  };
+  if (!KID.test(env.kid)) throw new LetterlockError("INPUT_INVALID", "envelope kid must be 16 lower-case hex digits");
+  parseEnvelope(env);
+  return env;
 };
 
 /**

@@ -10,7 +10,7 @@ import { open, parseEnvelope, type Envelope } from "./envelope.ts";
 import { LetterlockError } from "./errors.ts";
 
 /** Every failure leaves the SDK as a LetterlockError with a documented code (docs/SPEC.md §5). */
-const wrap = (cause: unknown): never => {
+export const toPasskeyError = (cause: unknown): never => {
   if (cause instanceof LetterlockError) throw cause;
   if (isMeraError(cause)) {
     if (cause.code === "PRF_UNAVAILABLE")
@@ -19,6 +19,9 @@ const wrap = (cause: unknown): never => {
   }
   throw new LetterlockError("PASSKEY_FAILED", "the passkey ceremony was cancelled, timed out, or found no passkey for this site", { cause });
 };
+
+/** A key pair derived from a passkey, with the rpId it was derived under: publish() refuses a key from another rpId. */
+export type PasskeyKeyPair = EncryptionKeyPair & { readonly rpId: string };
 
 export type CreateAddressOptions = {
   readonly rp: { id: string; name: string };
@@ -29,11 +32,11 @@ export type CreateAddressOptions = {
 /** One passkey creation ceremony → the epoch-1 encryption key pair (mera falls back to a 2nd prompt if needed). */
 export const createEncryptionAddress = async (
   o: CreateAddressOptions,
-): Promise<{ credential: PasskeyCredentialMetadata; keys: EncryptionKeyPair }> => {
+): Promise<{ credential: PasskeyCredentialMetadata; keys: PasskeyKeyPair }> => {
   try {
     const r = await createPasskeyWithPrfOutput({ ...o, prfSalt: prfSaltFor(1) });
-    return { credential: { credentialId: r.credentialId, transports: r.transports }, keys: deriveKeyPair(r.prfOutput, 1) };
-  } catch (e) { return wrap(e); }
+    return { credential: { credentialId: r.credentialId, transports: r.transports }, keys: { ...deriveKeyPair(r.prfOutput, 1), rpId: o.rp.id } };
+  } catch (e) { return toPasskeyError(e); }
 };
 
 export type DeriveOptions = {
@@ -44,7 +47,7 @@ export type DeriveOptions = {
 };
 
 /** One assertion ceremony → the key pair for `epoch`. Same passkey on any synced device → same keys. */
-export const deriveFromPasskey = async (o: DeriveOptions): Promise<EncryptionKeyPair & { credentialId: string }> => {
+export const deriveFromPasskey = async (o: DeriveOptions): Promise<PasskeyKeyPair & { credentialId: string }> => {
   try {
     const r = await getPasskeyPrfOutput({
       rpId: o.rpId,
@@ -52,8 +55,8 @@ export const deriveFromPasskey = async (o: DeriveOptions): Promise<EncryptionKey
       ...(o.credential ? { credential: o.credential } : {}),
       ...(o.webAuthnClient ? { webAuthnClient: o.webAuthnClient } : {}),
     });
-    return { ...deriveKeyPair(r.prfOutput, o.epoch), credentialId: r.credentialId };
-  } catch (e) { return wrap(e); }
+    return { ...deriveKeyPair(r.prfOutput, o.epoch), credentialId: r.credentialId, rpId: o.rpId };
+  } catch (e) { return toPasskeyError(e); }
 };
 
 export type OpenWithPasskeyOptions = Omit<DeriveOptions, "epoch">;
