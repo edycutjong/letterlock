@@ -100,6 +100,7 @@ export default function Kit() {
   const nadia = persona("Nadia");
   const agent = EXAMPLE_AGENTS[0]!;
   const note = letter("maya-dentist");
+  const short = letter("maya-courier");
   const pressFrames = [0, 70, 140, 210, PRESS_MS];
   const crackFrames = [0, 140, 280, 420, CRACK_MS];
 
@@ -247,6 +248,13 @@ export default function Kit() {
                   <Envelope recipient={maya.address} flap="closed" variant="compact" seal={<WaxSeal state="pressed" decorative />} decorative />
                   <Envelope recipient={maya.address} flap="open" variant="compact" seal={<WaxSeal state="cracked" decorative />} decorative />
                 </div>
+              </Specimen>
+              <Specimen name="opened, one short line" detail="the sheet still covers the flap folded back behind it">
+                <Envelope recipient={maya.address} epoch={1} fingerprint={mayaKey.fingerprint} flap="open" seal={<WaxSeal state="cracked" decorative />}>
+                  <Letter>
+                    <p>{short.text}</p>
+                  </Letter>
+                </Envelope>
               </Specimen>
               <Specimen name="replay" detail="seal it, then open it" wide>
                 <EnvelopeReplay recipient={maya.address} epoch={1} fingerprint={mayaKey.fingerprint} text={note.text} />

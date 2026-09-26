@@ -35,6 +35,8 @@ const LETTERS = [
   { id: "maya-dentist", to: "Maya", epoch: 1, text: "Maya, the dentist moved to Thursday at 10:40. I will remind you on Wednesday evening." },
   { id: "maya-flight", to: "Maya", epoch: 1, text: "Your flight changed to the evening departure, so I moved the car pickup to match." },
   { id: "kai-lease", to: "Kai", epoch: 1, text: "Kai, the landlord accepted the new lease terms. Sign before the 30th." },
+  // one short line: the kit shows that a letter sheet still covers the folded-back flap behind it
+  { id: "maya-courier", to: "Maya", epoch: 1, text: "The courier comes at noon." },
 ] as const;
 
 type Failure = { code: string; letter: string; key: { name: string; epoch: number }; values: Record<string, string | number> };
