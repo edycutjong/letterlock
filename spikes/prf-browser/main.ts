@@ -183,7 +183,7 @@ const causeChain = (e: unknown): string => {
   return parts.join(" ← ");
 };
 const HYBRID_HINT = "The passkey was used from ANOTHER device (hybrid / QR), and Safari 18.x can return no PRF output or a different one that way. Wait until the passkey shows in this device's Passwords app, then tap 2 again and pick it here.";
-const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; hybrid?: boolean }) => {
+const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; hybrid?: boolean; creating?: boolean }) => {
   if (ctx.hybrid && (code === "PRF_UNSUPPORTED" || code === "WRONG_KEY")) return HYBRID_HINT;
   switch (code) {
     case "PRF_UNSUPPORTED":
@@ -192,16 +192,18 @@ const friendly = (code: string, ctx: { savedName?: string; recovered?: boolean; 
     case "PASSKEY_FAILED":
       return ctx.recovered
         ? `The passkey “${ctx.savedName}” was saved, but the browser stopped before it returned the key. Tap “2 · Use my passkey” on this device to finish (one more prompt).`
-        : `The passkey prompt was cancelled or timed out, or this device has no passkey for ${rp.id} yet. On the iPad, wait a minute for iCloud Keychain to sync, then tap again.`;
+        : ctx.creating
+          ? "The passkey prompt was cancelled or timed out. Tap “1 · Create” to try again."
+          : `The passkey prompt was cancelled or timed out, or this device has no passkey for ${rp.id} yet. On the iPad, wait a minute for iCloud Keychain to sync, then tap again.`;
     case "DAMAGED_LINK": return "The link is incomplete or was changed. Scan the Mac's QR code again.";
     case "TAMPERED": return "The note in this link was changed or cut off. Open the link from the Mac again.";
     case "INPUT_INVALID": return "The note in this link is not a valid Letterlock note.";
     case "NOTE_TOO_LONG": return `Keep the note under ${MAX_NOTE_BYTES} bytes so the QR code stays easy to scan.`;
-    default: return "An unexpected error happened. Copy the details below and send them along.";
+    default: return "An unexpected error happened. Tap “Copy result” (or “Copy details”) and send it along.";
   }
 };
 
-const showError = (e: unknown, ctx: { step: string; ceremonies?: readonly Ceremony[]; savedName?: string; recovered?: boolean; hybrid?: boolean }) => {
+const showError = (e: unknown, ctx: { step: string; ceremonies?: readonly Ceremony[]; savedName?: string; recovered?: boolean; hybrid?: boolean; creating?: boolean }) => {
   const code = codeOf(e);
   $("error").hidden = false;
   $("error-title").textContent = ctx.recovered ? "Almost there: one more tap" : `That didn't work (${code})`;
@@ -314,7 +316,7 @@ const create = async (text: string = noteText()) => {
       setNext("derive");
       renderSaved();
     }
-    showError(e, { step: "1 · Create", ceremonies: cs, ...(made ? { savedName: name } : {}), recovered });
+    showError(e, { step: "1 · Create", ceremonies: cs, ...(made ? { savedName: name } : {}), recovered, creating: true });
     log({ step: "create", error: causeChain(e), ceremonies: cs });
     throw e;
   } finally {
