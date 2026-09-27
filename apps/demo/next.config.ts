@@ -26,6 +26,10 @@ const config: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   // lib/tokens.ts reads the token sheet when a page renders (every page is rendered per request, for its nonce)
   outputFileTracingIncludes: { "/**": ["./app/tokens.css"] },
+  // the register is also the integrations' verify view: keyOf lookups and the KeyPublished lines, live
+  async redirects() {
+    return [{ source: "/integrations/verify", destination: "/register", permanent: false }];
+  },
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },

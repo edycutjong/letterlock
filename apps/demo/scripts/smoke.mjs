@@ -59,6 +59,27 @@ try {
       if (!found) fail("/register: the keyOf lookup of the deployer found nothing");
       else pass(`/register: keyOf(${record.deployer.slice(0, 10)}…) found its key live`);
     }
+    if (route === "/seal") {
+      // sealing is local: a keyOf read and HPKE in the page; nothing is sent
+      await page.locator('main form input[name="to"]').fill(record.deployer);
+      await page.locator('tr[data-state="found"]').first().waitFor({ timeout: 30_000 });
+      await page.getByRole("textbox", { name: "Note" }).fill("smoke: sealed in the page, never sent");
+      await page.getByRole("button", { name: "Seal", exact: true }).click();
+      const sealed = await page.getByText("Sealed to key").waitFor({ timeout: 20_000 }).then(() => true, () => false);
+      const env = sealed ? JSON.parse((await page.locator("details pre").textContent()) ?? "{}") : {};
+      if (!sealed || env.chainId !== record.chainId || env.directory !== record.address.toLowerCase() || env.recipient !== record.deployer.toLowerCase())
+        fail(`/seal: sealing to ${record.deployer} did not give an envelope for chain ${record.chainId}, this directory and that address`);
+      else pass(`/seal: sealed to ${record.deployer.slice(0, 10)}… in the page (epoch ${env.epoch}, key ${env.kid}); nothing sent`);
+    }
+    if (route === "/open") {
+      await page.goto(`${base}/open?to=${record.deployer}`, { waitUntil: "networkidle", timeout: 45_000 });
+      const ok = await page
+        .waitForSelector('section[aria-labelledby="reader-title"] [data-wax][data-state="pressed"]', { timeout: 45_000 })
+        .then(() => true, () => false);
+      const letters = await page.locator('section[aria-labelledby="inbox-title"] li[data-state="sealed"]').count();
+      if (!ok || letters < 1) fail(`/open: the inbox of ${record.deployer} shows no sealed letter`);
+      else pass(`/open: the inbox of ${record.deployer.slice(0, 10)}… lists ${letters} sealed letters, read from Dropped events`);
+    }
     await page.waitForTimeout(500);
     if (errors.length) fail(`${route}: ${errors.join(" | ").slice(0, 400)}`);
     else pass(`${route}: HTTP ${status}, headers and nonce CSP, no console errors`);
@@ -70,6 +91,9 @@ try {
     if (r.status !== 200 || !t.startsWith(type)) fail(`${path}: HTTP ${r.status} ${t}`);
     else pass(`${path}: ${t}, ${(await r.arrayBuffer()).byteLength} bytes`);
   }
+  const verify = await fetch(base + "/integrations/verify", { redirect: "manual" });
+  if (![307, 308].includes(verify.status) || !(verify.headers.get("location") ?? "").endsWith("/register")) fail(`/integrations/verify: HTTP ${verify.status} to ${verify.headers.get("location")}`);
+  else pass("/integrations/verify: redirects to /register");
   const home = await (await fetch(base + "/")).text();
   for (const m of ['property="og:image"', 'name="twitter:card"', 'property="og:title"', "<title>"]) if (!home.includes(m)) fail(`/: no ${m}`);
   const drip = await fetch(base + "/api/drip", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
