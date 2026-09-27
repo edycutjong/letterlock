@@ -1,10 +1,11 @@
 // meraAccount(): the passkey's EVM account through mera's signing session and viem adapter, driven by the software
 // authenticator (test/soft-authenticator.ts) through the REAL mera ceremonies.
 import { getPasskeyPrfOutput } from "@category-labs/mera";
+import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { verifyMessage } from "viem";
-import { mnemonicToAccount } from "viem/accounts";
+import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { LETTERLOCK_RP_ID, MERA_ACCOUNT_PATH, createEncryptionAddress, isLetterlockError, meraAccount, toHex } from "../src/index.ts";
 import { client, fund, noChain } from "./anvil/context.ts";
@@ -41,6 +42,18 @@ describe("meraAccount", () => {
     const zeroed = await zeroedDuring(() => meraAccount({ rpId: rp.id, webAuthnClient: fixedPrfAuthenticator(prfOutput) }));
     expect(zeroed).toContain(toHex(prfOutput));
     expect(zeroed).toContain(toHex(seed));
+  });
+
+  it("zeroes every HD key on the path, the master key included, and the account key it hands the signing session", async () => {
+    const prfOutput = new Uint8Array(32).fill(7);
+    const master = HDKey.fromMasterSeed(mnemonicToSeedSync(entropyToMnemonic(prfOutput, wordlist)));
+    const path = ["m", "m/44'", "m/44'/60'", "m/44'/60'/0'", "m/44'/60'/0'/0", MERA_ACCOUNT_PATH];
+    const keys = path.map((p) => toHex(master.derive(p).privateKey!));
+    expect(privateKeyToAccount(`0x${keys.at(-1)!}`).address).toBe("0x29458C602E3DB4fC3b54EC2bbEE26Dbe64C7779f"); // the pinned account
+    const zeroed = await zeroedDuring(() => meraAccount({ rpId: rp.id, webAuthnClient: fixedPrfAuthenticator(prfOutput) }));
+    for (const [i, key] of keys.entries()) expect(zeroed, path[i]).toContain(key);
+    // the account key twice: the HD key's own copy, and the copy handed to the session (which keeps a copy of its own)
+    expect(zeroed.filter((z) => z === keys.at(-1)).length).toBeGreaterThanOrEqual(2);
   });
 
   it("the same passkey on a synced device gives the same account; another passkey another account", async () => {

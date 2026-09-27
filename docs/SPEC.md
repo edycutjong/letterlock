@@ -169,8 +169,9 @@ things:
 Until that ships, the binding is `msg.sender` = the passkey-derived mera account: `meraAccount` evaluates the PRF with
 mera's own salt `SHA-256("mera.prf.salt.v1")`, uses the output as BIP-39 entropy, and takes the BIP-32 key at
 `m/44'/60'/0'/0/0` of its seed, as mera's passkey-account recipe does. The key lives in a mera
-`Secp256k1SigningSession` and signs through `toViemAccount`; the PRF output, the seed and the HD keys are zeroed once
-the session holds its copy (best effort, as in §2).
+`Secp256k1SigningSession` and signs through `toViemAccount`; the PRF output, the seed, every HD key on the path (the
+master key included) and the copy of the key handed to the session are zeroed before `meraAccount` returns, and the
+session keeps its own copy until `end()` (best effort, as in §2).
 
 The SDK keeps the published key on the same passkey as the account. A device can hold several passkeys for the rpId
 (mera adds one on every creation, and a creation that fails after the ceremony leaves its passkey behind), and a

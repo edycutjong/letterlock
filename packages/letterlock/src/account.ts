@@ -35,6 +35,29 @@ export type MeraAccount = LocalAccount<"mera"> & {
   end(): void;
 };
 
+const HARDENED = 0x8000_0000;
+/** MERA_ACCOUNT_PATH as BIP-32 child indices: 44', 60', 0', 0, 0. */
+const PATH_INDICES = MERA_ACCOUNT_PATH.split("/").slice(1).map((s) => (s.endsWith("'") ? Number(s.slice(0, -1)) + HARDENED : Number(s)));
+
+/**
+ * The secp256k1 key at MERA_ACCOUNT_PATH of `seed`, derived one level at a time so that each HD key on the path, the
+ * master key first, is zeroed as soon as its child exists (HDKey.derive() leaves the keys between the master and the
+ * leaf as they are). Returns a copy, which the caller zeroes.
+ */
+const accountKeyOf = (seed: Uint8Array): Uint8Array => {
+  let node = HDKey.fromMasterSeed(seed);
+  try {
+    for (const index of PATH_INDICES) {
+      const child = node.deriveChild(index);
+      node.wipePrivateData();
+      node = child;
+    }
+    const key = node.privateKey;
+    if (!key) throw new LetterlockError("PASSKEY_FAILED", "the passkey's account key could not be derived");
+    return key;
+  } finally { node.wipePrivateData(); }
+};
+
 /**
  * One passkey prompt → the passkey's EVM account, as a viem account, so the SAME passkey that derives the encryption
  * key also signs the publish transaction (msg.sender is the passkey account: docs/SPEC.md §7).
@@ -44,8 +67,9 @@ export type MeraAccount = LocalAccount<"mera"> & {
  * The encryption key uses Letterlock's salts (§2), so the two keys are unrelated. Any wallet that follows the same
  * recipe derives the same address from the same passkey.
  *
- * Best effort on secrets: the PRF output, the seed and the HD keys are zeroed once the session holds its own copy.
- * The mnemonic is a JS string and cannot be zeroed.
+ * Best effort on secrets: the PRF output, the seed, every HD key on the path and the copy of the key handed to the
+ * session are zeroed before this returns; the session keeps its own copy until end(). The mnemonic is a JS string and
+ * cannot be zeroed, and copies inside the libraries (HMAC inputs and outputs) are out of reach.
  */
 export const meraAccount = async (o: MeraAccountOptions): Promise<MeraAccount> => {
   let prf: { prfOutput: Uint8Array; credentialId: string };
@@ -57,14 +81,14 @@ export const meraAccount = async (o: MeraAccountOptions): Promise<MeraAccount> =
       ...(o.timeout !== undefined ? { timeout: o.timeout } : {}),
     });
   } catch (e) { return toPasskeyError(e); }
-  const seed = mnemonicToSeedSync(entropyToMnemonic(prf.prfOutput, wordlist));
-  prf.prfOutput.fill(0);
-  const master = HDKey.fromMasterSeed(seed);
-  seed.fill(0);
-  const node = master.derive(MERA_ACCOUNT_PATH);
-  master.wipePrivateData();
-  if (!node.privateKey) throw new LetterlockError("PASSKEY_FAILED", "the passkey's account key could not be derived");
-  const session = createSecp256k1SigningSession({ privateKey: node.privateKey });
-  node.wipePrivateData();
+  let seed: Uint8Array;
+  try { seed = mnemonicToSeedSync(entropyToMnemonic(prf.prfOutput, wordlist)); }
+  finally { prf.prfOutput.fill(0); }
+  let key: Uint8Array;
+  try { key = accountKeyOf(seed); }
+  finally { seed.fill(0); }
+  let session: ReturnType<typeof createSecp256k1SigningSession>;
+  try { session = createSecp256k1SigningSession({ privateKey: key }); } // the session keeps a copy of its own
+  finally { key.fill(0); }
   return Object.assign(toViemAccount(session), { credentialId: prf.credentialId, end: () => session.end() });
 };
