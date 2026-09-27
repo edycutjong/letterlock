@@ -6,12 +6,11 @@ import { letterlock } from "../src/index.ts";
 const read = (path: string) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
 
 describe("public docs", () => {
-  it("never tell readers to run the CLI from npm while the package is not published there", () => {
-    // `npx letterlock` would run whatever package holds that name on npm; nobody does yet (live.test.ts checks). When
-    // the owner publishes it, the README can say `npx letterlock` again and this test goes with the live check.
+  it("the README tells readers to install the CLI from npm, where the owner published it", () => {
+    // letterlock@0.1.0 is on npm, published by the owner (live.test.ts checks the registry names this repository).
     const readme = read("packages/letterlock/README.md");
-    expect(readme).not.toMatch(/\bnpx\s+letterlock\b/);
-    expect(readme).toContain("not published to npm yet");
+    expect(readme).toContain("npm i letterlock");
+    expect(readme).not.toContain("not published to npm yet");
   });
 
   it("no doc says the SDK has no drop helper: drop() and inbox() exist", () => {

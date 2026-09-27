@@ -57,9 +57,11 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
 // The names the docs point at, as the README describes them. A failure here means a name was taken: by the owner
 // (update the README, then this check) or by someone else (a squatter: see docs/SPEC.md §6 for the rpId's host).
 describe.skipIf(!live)("names the docs point at (LIVE=1, read-only)", () => {
-  it("npm has no package named letterlock yet, as the README says", async () => {
+  it("npm's letterlock is this package, published from this repository, as the README says", async () => {
     const r = await fetch("https://registry.npmjs.org/letterlock");
-    expect(r.status, "the npm name letterlock is taken now: if the owner published it, restore npx in the README").toBe(404);
+    expect(r.status, "npm has no package named letterlock: the README tells readers to install it").toBe(200);
+    const doc = (await r.json()) as { repository?: { url?: string } };
+    expect(doc.repository?.url, "npm's letterlock points at another repository: whose is it?").toContain("github.com/edycutjong/letterlock");
   });
 
   it(`the pinned rpId's host (${LETTERLOCK_RP_ID}) serves the Letterlock app, as the README says`, async () => {

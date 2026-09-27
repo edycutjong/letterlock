@@ -18,12 +18,10 @@ const envelope = await ll.sealTo("0x…recipient", new TextEncoder().encode("onl
 No passkey, no key material and no transaction: `sealTo` is one contract read and one HPKE seal. It throws
 `NO_KEY_PUBLISHED` when the recipient has no key.
 
-From a terminal: the package is **not published to npm yet**, so do not install or run a `letterlock` package from
-npm until this README says it is. Build the CLI from a clone of this repository:
+From a terminal (`npm i letterlock` installs the SDK and this CLI):
 
 ```sh
-pnpm install && pnpm --filter letterlock build
-alias letterlock="node $PWD/packages/letterlock/dist/cli.js"
+npm i -g letterlock                       # or prefix any command below with npx
 letterlock resolve agent:10260            # the key an address or an ERC-8004 agent published
 letterlock seal 0x…recipient note.txt --out envelope.json
 letterlock verify 0x…recipient            # seal a random nonce: whoever reads it back holds the passkey
