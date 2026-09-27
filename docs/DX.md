@@ -162,7 +162,8 @@ and the agent's HTTP errors are listed in [its README](../examples/agent-memory/
     card as it was then ("not live yet"). A card edited in place at the same URL needs one `setAgentURI` from the
     agent's owner with that same URL (`examples/agent-memory/scripts/set-agent-uri.ts`); after
     [that transaction](https://monadvision.com/tx/0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719)
-    trust8004 showed the live card (`deployments/143.json`, `agent.indexStatus`).
+    trust8004 showed the card of that day. The card edited since for the new hosts shows there once the owner's move
+    of the `tokenURI` emits the next such event (`deployments/143.json`, `agent.indexStatus`).
 12. **A preview SDK.** mera 0.2.0 declares Node 24 or later; the CLI never touches a passkey and runs on Node 20.19
     or later. mera's types use `Symbol.dispose`, so TypeScript needs `lib: esnext` or `skipLibCheck`.
 

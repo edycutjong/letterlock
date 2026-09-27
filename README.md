@@ -159,7 +159,7 @@ Transactions a judge can open:
   and a task sealed to `agent:10260`, opened by the agent and [answered sealed to its sender](https://monadvision.com/tx/0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640).
 
 The transactions behind each claim, with what each proves, are in [DEMO.md](DEMO.md#what-happened-on-mainnet),
-every one that emitted a directory event up to block 108,422,676 among them.
+every one that emitted a directory event up to block 108,575,659 among them.
 
 ## 📊 Engineering Rigor
 

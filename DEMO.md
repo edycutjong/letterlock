@@ -59,9 +59,11 @@ may seal to a published key, so the inbox never claims who wrote a note.
 Every row is a Monad mainnet transaction whose receipt was read back (status 1) on 2026-09-27 (UTC).
 Together they are every transaction that emitted an event from the directory up to block 108,575,659 (5
 `KeyPublished` and 8 `Dropped`, read with `eth_getLogs` from the deploy block), the directory's deploy, the agent's
-ERC-8004 registration and its owner's one `setAgentURI`, and the three gas drips the drip wallet has sent. The rows
-up to block 108,391,548 ran against the app's first host, `letterlock-app.vercel.app`, the rpId SDK 0.1.0 pinned;
-the last three, against `app.letterlock.edycu.dev`. Left out: the transfers that funded the project's own wallets.
+ERC-8004 registration and its owner's one `setAgentURI`, and the three gas drips the drip wallet has sent. The app's
+rows up to block 108,386,081 (its first two live checks and a judge's step 2) ran at its first host,
+`letterlock-app.vercel.app`, the rpId SDK 0.1.0 pinned, and its last three at `app.letterlock.edycu.dev`; the other
+rows never touched the app (the deploy, the registration, the smoke tests, the owner's transactions and the agent's
+`scripts/call.ts` runs). Left out: the transfers that funded the project's own wallets.
 
 | What | Transaction | Block | From |
 |---|---|---|---|
