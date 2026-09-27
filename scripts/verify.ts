@@ -1,7 +1,7 @@
 // pnpm verify: every test suite in the repository, then one screen of exact counts, read from each runner's own report.
 //
 //   pnpm verify                    all steps
-//   pnpm verify --only sdk,forge   some steps (sdk, forge, spike, demo, offline, seed)
+//   pnpm verify --only sdk,forge   some steps (sdk, forge, spike, demo, agent, offline, seed)
 //   pnpm verify --skip forge
 //   pnpm verify --json <file>      also write the summary as JSON
 //   pnpm verify --markdown <file>  also append it as a Markdown table (CI: $GITHUB_STEP_SUMMARY)
@@ -12,6 +12,7 @@
 //                                  skip, with the reason, when rpc.monad.xyz is unreachable)
 //   spike    spikes/prf-browser    pnpm test:unit (node:test; the browser run is pnpm spike:browser)
 //   demo     apps/demo             pnpm test (node:test)
+//   agent    examples/agent-memory pnpm test (vitest: the reference agent, with its chain tests on anvil)
 //   offline  scripts/verify_offline.ts: seal and open with the network switched off, and the fixture replay
 //   seed     scripts/test/*.test.ts: scripts/seed.ts end to end on anvil (node:test)
 // Counts come from vitest's JSON report, forge's --json output, node:test's TAP summary and verify_offline's result
@@ -41,37 +42,46 @@ const tap = (output: string): Counts => {
     return Number(m[1]);
   };
   const skippedNames = [...output.matchAll(/^\s*ok \d+ - (.+?) # SKIP(?: (.*))?$/gm)].map((m) => `${m[1]}${m[2] ? `: ${m[2]}` : ""}`);
+  const failedNames = [...output.matchAll(/^\s*not ok \d+ - (.+?)(?: # (?:TODO|SKIP).*)?$/gm)].map((m) => m[1]!);
   const passed = n("pass");
   const failed = n("fail") + n("cancelled");
   const skipped = n("skipped") + n("todo");
-  return { passed, failed, skipped, total: n("tests"), notes: skippedNames.map((s) => `skipped ${s}`) };
+  return { passed, failed, skipped, total: n("tests"), notes: [...failedNames.map((f) => `FAILED ${f}`), ...skippedNames.map((s) => `skipped ${s}`)] };
 };
 
-const STEPS: Step[] = [
-  {
-    key: "sdk",
-    name: "SDK: unit + anvil (vitest)",
-    cwd: "packages/letterlock",
-    command: (log) => ["pnpm", "test", "--reporter=dot", "--reporter=json", `--outputFile.json=${join(log, "sdk.json")}`],
-    parse: (_, log) => {
-      const r = JSON.parse(readFileSync(join(log, "sdk.json"), "utf8")) as {
-        numTotalTests: number; numPassedTests: number; numFailedTests: number; numPendingTests: number; numTodoTests: number;
-        testResults: { name: string; assertionResults: { status: string }[] }[];
-      };
-      const skippedByFile = new Map<string, number>();
-      for (const f of r.testResults) {
-        const n = f.assertionResults.filter((a) => a.status === "skipped" || a.status === "pending" || a.status === "todo").length;
-        if (n) skippedByFile.set(f.name.slice(f.name.indexOf("packages/letterlock/") + "packages/letterlock/".length), n);
-      }
-      return {
-        passed: r.numPassedTests,
-        failed: r.numFailedTests,
-        skipped: r.numPendingTests + r.numTodoTests,
-        total: r.numTotalTests,
-        notes: [...skippedByFile].map(([file, n]) => `skipped ${n} in ${file}${file.endsWith("live.test.ts") ? " (read-only checks against the live Monad RPCs: pnpm --filter letterlock test:live)" : ""}`),
-      };
-    },
+/** A vitest package run with its own `pnpm test`, counted from vitest's JSON report. */
+const vitest = (key: string, name: string, cwd: string, why: (file: string) => string = () => ""): Step => ({
+  key,
+  name,
+  cwd,
+  command: (log) => ["pnpm", "test", "--reporter=dot", "--reporter=json", `--outputFile.json=${join(log, `${key}.json`)}`],
+  parse: (_, log) => {
+    const r = JSON.parse(readFileSync(join(log, `${key}.json`), "utf8")) as {
+      numTotalTests: number; numPassedTests: number; numFailedTests: number; numPendingTests: number; numTodoTests: number;
+      testResults: { name: string; message?: string; assertionResults: { status: string; fullName?: string; title?: string }[] }[];
+    };
+    const skippedByFile = new Map<string, number>();
+    const failedNames: string[] = [];
+    for (const f of r.testResults) {
+      const file = f.name.slice(f.name.indexOf(`${cwd}/`) + cwd.length + 1);
+      const n = f.assertionResults.filter((a) => a.status === "skipped" || a.status === "pending" || a.status === "todo").length;
+      if (n) skippedByFile.set(file, n);
+      for (const a of f.assertionResults) if (a.status === "failed") failedNames.push(`${file}: ${a.fullName ?? a.title}`);
+      if (f.assertionResults.length === 0 && f.message) failedNames.push(`${file}: ${f.message.split("\n")[0]}`); // a file that failed to load
+    }
+    return {
+      passed: r.numPassedTests,
+      failed: r.numFailedTests,
+      skipped: r.numPendingTests + r.numTodoTests,
+      total: r.numTotalTests,
+      notes: [...failedNames.map((f) => `FAILED ${f}`), ...[...skippedByFile].map(([file, n]) => `skipped ${n} in ${file}${why(file)}`)],
+    };
   },
+});
+
+const STEPS: Step[] = [
+  vitest("sdk", "SDK: unit + anvil (vitest)", "packages/letterlock",
+    (file) => (file.endsWith("live.test.ts") ? " (read-only checks against the live Monad RPCs: pnpm --filter letterlock test:live)" : "")),
   {
     key: "forge",
     name: "Contracts (forge test)",
@@ -95,6 +105,7 @@ const STEPS: Step[] = [
   },
   { key: "spike", name: "PRF spike: unit (node:test)", cwd: "spikes/prf-browser", command: () => ["pnpm", "test:unit"], parse: tap },
   { key: "demo", name: "Demo app (node:test)", cwd: "apps/demo", command: () => ["pnpm", "test"], parse: tap },
+  vitest("agent", "Reference agent (vitest)", "examples/agent-memory"),
   {
     key: "offline",
     name: "Offline seal/open, no network",
@@ -180,7 +191,12 @@ for (const [i, step] of selected.entries()) {
   const ok = error === undefined;
   rows.push({ key: step.key, name: step.name, ok, ms: r.ms, ...(counts ? { counts } : {}), ...(error ? { error } : {}) });
   console.log(`  [${i + 1}/${selected.length}] ${step.name}: ${ok ? "PASS" : `FAIL (${error})`}${counts ? `, ${counts.passed} passed, ${counts.failed} failed, ${counts.skipped} skipped` : ""} (${(r.ms / 1000).toFixed(1)}s)`);
-  if (!ok) console.log(r.output.trimEnd().split("\n").slice(-15).map((l) => `      | ${l}`).join("\n"));
+  if (!ok) {
+    const failures = counts?.notes.filter((n) => n.startsWith("FAILED")) ?? [];
+    // the failing tests by name when the runner reported them, else the end of the output
+    const shown = failures.length ? failures.slice(0, 8) : r.output.trimEnd().split("\n").slice(-12);
+    console.log([...shown.map((l) => `      | ${l}`), `      | log: ${join(logDir, `${step.key}.log`)}`].join("\n"));
+  }
 }
 
 const pad = (s: string | number, n: number, left = false) => (left ? String(s).padEnd(n) : String(s).padStart(n));
