@@ -9,7 +9,9 @@ import { anvil, noChain, publicClient } from "./anvil/context.ts";
 
 const live = process.env.LIVE === "1";
 type Smoke = { publishedKey: string; epoch: number; kid: string; updatedAt: number; agentKey?: { agentId: number; publishedKey: string; epoch: number; kid: string; updatedAt: number }; dropBlock: number; envelopeBytes: number };
-type Rec = { address: string; deployer: string; dropTx: string; smokeTest: Smoke };
+/** agent.keys: every key published for agent 10260, in epoch order; the last one is what keyOfAgent returns now. */
+type AgentKey = { epoch: number; kid: string; publicKey?: string; updatedAt?: number };
+type Rec = { address: string; deployer: string; dropTx: string; smokeTest: Smoke; agent?: { agentId: number; keys: AgentKey[] } };
 const record = (chainId: number) => JSON.parse(readFileSync(new URL(`../../../deployments/${chainId}.json`, import.meta.url), "utf8")) as Rec;
 
 describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
@@ -21,16 +23,16 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
     expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([r.smokeTest.publishedKey, r.smokeTest.epoch, r.smokeTest.kid, r.smokeTest.updatedAt]);
   });
 
-  it("resolve('agent:10260') returns the agent's DEMO KEY through the live ERC-8004 registry", async () => {
-    const a = r.smokeTest.agentKey!;
-    const key = await ll.resolve(`agent:${a.agentId}`);
-    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([a.publishedKey, a.epoch, a.kid, a.updatedAt]);
+  it("resolve('agent:10260') returns the agent's latest recorded key (agent.keys) through the live ERC-8004 registry", async () => {
+    const a = r.agent!.keys.at(-1)!;
+    const key = await ll.resolve(`agent:${r.agent!.agentId}`);
+    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([a.publicKey, a.epoch, a.kid, a.updatedAt]);
   });
 
   it("resolve('agent:10260') through rpc-mainnet.monadinfra.com, which refuses JSON-RPC batches with HTTP 403", async () => {
-    const a = r.smokeTest.agentKey!;
-    const key = await letterlock({ chain: "monad", rpcUrl: "https://rpc-mainnet.monadinfra.com" }).resolve(`agent:${a.agentId}`);
-    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch]).toEqual([a.publishedKey, a.epoch]);
+    const a = r.agent!.keys.at(-1)!;
+    const key = await letterlock({ chain: "monad", rpcUrl: "https://rpc-mainnet.monadinfra.com" }).resolve(`agent:${r.agent!.agentId}`);
+    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch]).toEqual([a.publicKey, a.epoch]);
   });
 
   it("inbox(deployer) at the drop block finds the smoke test's envelope", async () => {

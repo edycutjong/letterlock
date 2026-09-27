@@ -29,9 +29,35 @@
     "registerCall": "register(string agentURI) on the IdentityRegistry; agentId read from its Registered(agentId, agentURI, owner) event",
     "registerBlock": 108289775,
     "tokenURI": "https://letterlock-agent.vercel.app/.well-known/agent-card.json",
-    "card": "ERC-8004 registration-v1 file, served with HTTP 200 by the Vercel project letterlock-agent (source: apps/agent). It lists the registration (agentId 10260) and sets active: false, because its POST /remember endpoint goes live in the next build phase and answers 404 today",
-    "cardSource": "apps/agent/public/.well-known/agent-card.json",
-    "indexedBy": "https://trust8004.xyz/agents/143:10260"
+    "card": "ERC-8004 registration-v1 file with A2A-style skills (seal-a-memory, answer-a-sealed-task), served with HTTP 200 by the Vercel project letterlock-agent from examples/agent-memory, which also serves the agent's endpoints POST /remember, POST /task and GET /health. The card URL is unchanged since registration (no setAgentURI); since 2026-09-27 it says active: true",
+    "cardSource": "examples/agent-memory/public/.well-known/agent-card.json",
+    "indexedBy": "https://trust8004.xyz/agents/143:10260",
+    "service": {
+      "url": "https://letterlock-agent.vercel.app",
+      "source": "examples/agent-memory",
+      "wallet": "0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4",
+      "walletUse": "pays for the agent's drops and nothing else",
+      "record": "examples/agent-memory/README.md: the first mainnet POST /remember (drop 0x00fdfadca4afca918ac9ef3a648c491c407e945c2a949041cb24bfe65a4dfbcd) and POST /task (answer drop 0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640)"
+    },
+    "keys": [
+      {
+        "epoch": 1,
+        "kid": "2fc259671e68693d",
+        "publishForAgentTx": "0x3a5be1d8643029ded9158bf36d73cd1cac4f4a9f24296ac55518539237e80c26",
+        "what": "the deploy smoke test's DEMO KEY (smokeTest.agentKey): deriveKeyPair() over a random stand-in, the address formula, published before the protocol required the agent formula (docs/SPEC.md §2). The reference agent does not hold it"
+      },
+      {
+        "epoch": 2,
+        "publicKey": "0xa38ed883578ddcf912a3d20f2f698ea3f15c00339c1656714402594db6324806",
+        "kid": "e5b30e2e52ec0dec",
+        "updatedAt": 1790478593,
+        "publisher": "0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3",
+        "publishForAgentTx": "0x072dc08d72aefacbe3fe05fedd2296c857c1181fbfa9f548c7ed9322594c294b",
+        "block": 108354286,
+        "gasUsed": 74652,
+        "what": "the reference agent's own key: deriveAgentKeyPair() (the agent formula) over a WebAuthn-style PRF of a 32-byte seed held by the agent's host and the operator, outside this repository (examples/agent-memory/src/agent-key.ts). Published by the agent's owner with examples/agent-memory/scripts/publish-agent-key.ts; keyOfAgent(10260) returned it at epoch 2 after the transaction"
+      }
+    ]
   },
   "publishTx": "0x35b8330e768a6c7529c0c9c4151d945ed83e3ef596c0c6ddca3486efe11ae233",
   "publishForAgentTx": "0x3a5be1d8643029ded9158bf36d73cd1cac4f4a9f24296ac55518539237e80c26",

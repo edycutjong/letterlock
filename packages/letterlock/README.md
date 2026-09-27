@@ -92,10 +92,11 @@ and `publishForAgent` refuse a key from any other passkey (or one rebuilt from i
   passkey ceremonies for the rpId and so derive every Letterlock key, the passkey accounts included (`docs/SPEC.md`
   §6): the host must be held by the Letterlock owner before anyone creates a real passkey for it, and moving to
   another host takes a new SDK release, since the SDK pins it.
-- **What is in the directory.** On Monad mainnet (`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`) the only keys so far
-  are two DEMO KEYs from the deploy smoke test (the deployer and agent 10260), derived from random bytes with no
-  passkey; the testnet key is a TEST KEY of the same kind. Whoever holds their stand-ins can open anything sealed to
-  them: do not seal real notes to them.
+- **What is in the directory.** On Monad mainnet (`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`) the deploy smoke test
+  published two DEMO KEYs (the deployer's, and agent 10260's epoch 1), derived from random bytes with no passkey; the
+  testnet key is a TEST KEY of the same kind. Whoever holds their stand-ins can open anything sealed to them: do not
+  seal real notes to them. Agent 10260 now resolves to epoch 2, the reference agent's own key
+  (`examples/agent-memory`), derived from a seed only the agent's host and its operator hold.
 - **Not hidden:** who sent an envelope (HPKE base mode is anonymous, and a copied envelope can be dropped again),
   and the recipient, epoch and timing of every `drop`, which are public onchain.
 - **No recovery.** If every synced copy of the passkey is lost, so is the key.

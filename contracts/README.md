@@ -16,12 +16,14 @@ Both deploy transactions carry the same creation code; only the constructor argu
 mainnet record, [`deployments/143.json`](../deployments/143.json), was made with [script/DeployMainnet.md](script/DeployMainnet.md)
 and holds the deploy and the first real mainnet transactions, all from the deployer: it registered ERC-8004 agent
 **#10260** in the IdentityRegistry (its agent card: <https://letterlock-agent.vercel.app/.well-known/agent-card.json>,
-source in `apps/agent`), then sent a `publish`, a `publishForAgent` for agent 10260 and a `drop` of a 490-byte
+source in `examples/agent-memory`), then sent a `publish`, a `publishForAgent` for agent 10260 and a `drop` of a 490-byte
 envelope sealed with the SDK's `seal()`. Both published keys are DEMO KEYs: the SDK's `deriveKeyPair()` over 32
 random bytes standing in for a passkey PRF output, with no passkey behind them. The stand-ins are kept outside the
 repository by the deployer's operator, so the drop can be opened again, and whoever holds them can open anything
 sealed to these keys: never seal a real note to them. `keyOf(deployer)` and `keyOfAgent(10260)` returned them, and
-the dropped envelope opened with the re-derived key.
+the dropped envelope opened with the re-derived key. Agent 10260 has since published epoch 2, the reference agent's
+own key (`examples/agent-memory`, `publishForAgent` transaction `0x072dc08d72aefacbe3fe05fedd2296c857c1181fbfa9f548c7ed9322594c294b`),
+so `keyOfAgent(10260)` now returns that key; the record is `agent.keys` in `deployments/143.json`.
 
 The testnet record, including a real `publish` and a real `drop`, is in [`deployments/10143.json`](../deployments/10143.json).
 The published key there is a TEST KEY: the SDK's `deriveKeyPair()` over 32 random bytes standing in for a
