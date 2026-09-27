@@ -11,7 +11,20 @@ import { privateKeyToAccount } from "viem/accounts";
 import { monad, monadTestnet } from "viem/chains";
 import { letterlockAbi } from "letterlock";
 import { CHAIN, DEPLOYMENT, SCAN_RPC } from "./chain.ts";
-import { DAY_SECONDS, HOUR_SECONDS, TRANSFER_GAS, type DripObservation, type DripRequest } from "./drip.ts";
+import {
+  DAY_SECONDS,
+  HOUR_SECONDS,
+  TRANSFER_GAS,
+  configuredPass,
+  laneFor,
+  precheckDrip,
+  verifyDripSignature,
+  type DripLane,
+  type DripObservation,
+  type DripPrecheck,
+  type DripRequest,
+  type Refusal,
+} from "./drip.ts";
 import { walletBidFeePerGas } from "./fees.ts";
 import { blocksAgo } from "./past-blocks.ts";
 
@@ -42,13 +55,18 @@ const recent = (m: Map<string, number[]>, key: string, windowMs: number, now: nu
   return kept;
 };
 
-/** Counts this request against the caller's IP; false when the IP is over either limit. */
-export const allowIp = (ip: string, now = Date.now()): boolean => {
+/**
+ * Counts this request against the caller's IP; false when the IP is over a limit that binds the request's lane. Every
+ * lane is held to IP_REQUESTS. IP_DRIPS binds the public only: judges who share one network (a venue's Wi-Fi, an
+ * office's NAT, one VPN exit) each get their drip, bounded still by the daily cap and the firewall's limit per IP.
+ */
+export const allowIp = (ip: string, lane: DripLane, now = Date.now()): boolean => {
   if (requestsByIp.size > 50_000) requestsByIp.clear(); // a flood of distinct IPs must not grow the map without bound
   const hits = recent(requestsByIp, ip, IP_REQUESTS.windowMs, now);
   hits.push(now);
   requestsByIp.set(ip, hits);
-  return hits.length <= IP_REQUESTS.max && recent(dripsByIp, ip, IP_DRIPS.windowMs, now).length < IP_DRIPS.max;
+  if (hits.length > IP_REQUESTS.max) return false;
+  return lane === "judge" || recent(dripsByIp, ip, IP_DRIPS.windowMs, now).length < IP_DRIPS.max;
 };
 export const wasDripped = (address: Address): boolean => {
   const key = address.toLowerCase();
@@ -73,6 +91,38 @@ export const dripAccount = () => {
   const key = process.env.LETTERLOCK_DRIP_PRIVATE_KEY?.trim();
   if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) return undefined;
   return privateKeyToAccount(key as Hex);
+};
+
+export type Admission = {
+  /** what decideDrip() needs from before the chain is read */
+  readonly pre: DripPrecheck;
+  /** the judges' lane when the request carries the configured pass (DRIP_JUDGE_PASS) */
+  readonly lane: DripLane;
+  /** true while a judges' pass is configured: the public lane then stops at publicDailyCap */
+  readonly reserve: boolean;
+  /** set when a check that needs no chain read refuses: the route answers it without reading the chain */
+  readonly refusal: Refusal | undefined;
+};
+
+/**
+ * The route's checks before any chain read, in its order: the kill switch, the chain, the signature's minute and
+ * signer, this IP's limits, this instance's funded addresses. The lane is decided first, from the pass compared whole,
+ * because the per-IP drips limit binds only the public's lane (allowIp).
+ */
+export const admitDrip = async (request: DripRequest, ip: string, now = Date.now()): Promise<Admission> => {
+  const enabled = process.env.DRIP_ENABLED === "true" && dripAccount() !== undefined;
+  const judgePass = configuredPass(process.env.DRIP_JUDGE_PASS);
+  const lane = laneFor(request.pass, judgePass);
+  const pre: DripPrecheck = {
+    enabled,
+    expectedChainId: DEPLOYMENT.chainId,
+    nowMs: now,
+    request,
+    signatureValid: enabled ? await verifyDripSignature(request) : false,
+    ipAllowed: enabled ? allowIp(ip, lane, now) : true,
+    alreadyDripped: wasDripped(request.address),
+  };
+  return { pre, lane, reserve: judgePass !== undefined, refusal: precheckDrip(pre) };
 };
 
 let pastCache: { at: number; day: bigint; hour: bigint } | undefined;

@@ -10,23 +10,11 @@
 // The drip wallet's key is read from LETTERLOCK_DRIP_PRIVATE_KEY (a Vercel environment variable) inside this handler
 // only; it is never logged or returned, and no client module imports lib/drip-server.ts. DRIP_ENABLED=true turns the
 // drip on; anything else (or no key) turns it off. DRIP_JUDGE_PASS, when set, keeps the last 30% of each day's cap for
-// requests that carry it (lib/drip.ts, JUDGE_RESERVE_PERCENT).
+// requests that carry it (lib/drip.ts, JUDGE_RESERVE_PERCENT), and frees them from the per-IP drips limit.
 import { NextResponse, type NextRequest } from "next/server";
 import { DEPLOYMENT, explorerTx } from "@/lib/chain.ts";
-import {
-  configuredPass,
-  dailyCapFrom,
-  decideDrip,
-  dripReply,
-  hourlyCapFrom,
-  laneFor,
-  parseDripRequest,
-  precheckDrip,
-  settleDrip,
-  verifyDripSignature,
-  type Refusal,
-} from "@/lib/drip.ts";
-import { allowIp, broadcastDrip, dripAccount, readChainState, recordDrip, waitForDrip, wasDripped } from "@/lib/drip-server.ts";
+import { dailyCapFrom, decideDrip, dripReply, hourlyCapFrom, parseDripRequest, settleDrip, type Refusal } from "@/lib/drip.ts";
+import { admitDrip, broadcastDrip, dripAccount, readChainState, recordDrip, waitForDrip, wasDripped } from "@/lib/drip-server.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,29 +43,19 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return refusal(parsed);
   const { request } = parsed;
 
-  const account = dripAccount();
-  const enabled = process.env.DRIP_ENABLED === "true" && account !== undefined;
+  // the kill switch, the signature, and this IP's limits for the request's lane (the judges' pass is read first)
   const ip = callerIp(req);
-  const pre = {
-    enabled,
-    expectedChainId: DEPLOYMENT.chainId,
-    nowMs: Date.now(),
-    request,
-    signatureValid: enabled ? await verifyDripSignature(request) : false,
-    ipAllowed: enabled ? allowIp(ip) : true,
-    alreadyDripped: wasDripped(request.address),
-  };
-  const early = precheckDrip(pre);
+  const { pre, lane, reserve, refusal: early } = await admitDrip(request, ip);
   if (early) return refusal(early);
+  const account = dripAccount()!; // admitted, so the drip is on and has its key
 
   return serial(async () => {
     let state;
     try {
-      state = await readChainState(request, account!.address);
+      state = await readChainState(request, account.address);
     } catch {
       return json(502, { error: "CHAIN_UNAVAILABLE", message: "the Monad RPC did not answer; nothing was sent" });
     }
-    const judgePass = configuredPass(process.env.DRIP_JUDGE_PASS);
     const decision = decideDrip({
       ...pre,
       nowMs: Date.now(),
@@ -85,8 +63,8 @@ export async function POST(req: NextRequest) {
       ...state,
       dailyCap: dailyCapFrom(process.env.DRIP_DAILY_CAP_MON, DEPLOYMENT.chainId),
       hourlyCap: hourlyCapFrom(process.env.DRIP_HOURLY_CAP_MON, DEPLOYMENT.chainId),
-      lane: laneFor(request.pass, judgePass),
-      reserve: judgePass !== undefined,
+      lane,
+      reserve,
     });
     if (!decision.ok) return refusal(decision);
     if ("funded" in decision) return json(200, { dripped: false, reason: "FUNDED" });
