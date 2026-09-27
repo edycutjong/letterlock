@@ -19,16 +19,52 @@ test("every SDK protocol error code except INPUT_INVALID (a form error) has a sl
 
 // The chain client's codes (publish, resolve, drop, inbox) are their own union in the SDK. No page calls the chain
 // client yet, so no slip shows them; this fails when the SDK adds one, or when a page starts calling the chain
-// client, which is when its failures need slips.
+// client, whatever the import form, which is when its failures need slips.
+const CHAIN_CLIENT = /\b(letterlock|meraAccount|toLetterlockError)\b/;
+/** the ways a source can reach the chain client at run time; `import type` is erased and reaches nothing */
+const callsChainClient = (src: string): boolean => {
+  const from = `\\s*from\\s*["']letterlock(?:/[^"']*)?["']`;
+  // a namespace import (`import * as sdk from "letterlock"`) hands the whole client to whatever uses `sdk`
+  if (new RegExp(`import\\s*\\*\\s*as\\s+\\w+${from}`).test(src)) return true;
+  // a dynamic import, the way a client-only chain client is lazy-loaded in a page
+  if (/\bimport\s*\(\s*["'`]letterlock(?:\/[^"'`]*)?["'`]\s*\)/.test(src)) return true;
+  // a value import or re-export naming the client (a default import, a brace list, or both)
+  for (const m of src.matchAll(new RegExp(`\\b(import|export)(\\s+type)?\\s*([^;]*?)${from}`, "g")))
+    if (!m[2] && CHAIN_CLIENT.test(m[3]!.replace(/\btype\s+\w+(\s+as\s+\w+)?/g, ""))) return true;
+  // a call, however the client was reached
+  return /\bletterlock\s*\(/.test(src);
+};
+
+test("the chain-client guard recognises every import form", () => {
+  for (const src of [
+    'import { letterlock } from "letterlock";',
+    "import { letterlock } from 'letterlock';",
+    'import { type Envelope, meraAccount } from "letterlock";',
+    'import * as sdk from "letterlock"; sdk.publish();',
+    'const { letterlock: client } = await import("letterlock");',
+    "const m = await import('letterlock');",
+    'export { toLetterlockError } from "letterlock";',
+    "const c = letterlock({ chainId: 143 });",
+  ])
+    assert.equal(callsChainClient(src), true, src);
+  for (const src of [
+    'import type { LetterlockErrorCode } from "letterlock";',
+    'import type { Envelope } from "letterlock";',
+    'import { type Envelope } from "letterlock";',
+    'import { EXAMPLE_TAMPERED, letter } from "@/lib/examples.ts";',
+  ])
+    assert.equal(callsChainClient(src), false, src);
+});
+
 test("the chain client's codes are not slips yet, and no page calls the chain client", () => {
   assert.deepEqual(sdkCodes("ChainErrorCode").sort(), ["CHAIN_UNAVAILABLE", "INSUFFICIENT_FUNDS", "NOT_AGENT_OWNER"]);
   const sources = ["app", "components", "lib"].flatMap((dir) =>
     readdirSync(new URL(`../${dir}/`, import.meta.url), { recursive: true, encoding: "utf8" })
       .filter((f) => /\.tsx?$/.test(f))
-      .map((f) => readFileSync(new URL(`../${dir}/${f}`, import.meta.url), "utf8")),
+      .map((f) => ({ f: `${dir}/${f}`, src: readFileSync(new URL(`../${dir}/${f}`, import.meta.url), "utf8") })),
   );
-  const importsChainClient = sources.some((src) => /import\s*\{[^}]*\b(letterlock|meraAccount|toLetterlockError)\b[^}]*\}\s*from\s*"letterlock"/.test(src));
-  assert.equal(importsChainClient, false, "a page calls the chain client: give its failures (CHAIN_UNAVAILABLE, INSUFFICIENT_FUNDS, NOT_AGENT_OWNER) slips");
+  const callers = sources.filter(({ src }) => callsChainClient(src)).map(({ f }) => f);
+  assert.deepEqual(callers, [], "a page calls the chain client: give its failures (CHAIN_UNAVAILABLE, INSUFFICIENT_FUNDS, NOT_AGENT_OWNER) slips");
 });
 
 test("every slip has a reason, a box line, a meaning and a recovery, with and without quoted values", () => {
