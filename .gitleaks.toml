@@ -1,0 +1,15 @@
+# gitleaks (https://github.com/gitleaks/gitleaks): its default rules, plus one allowlist.
+#
+# deployments/*.json record the X25519 PUBLIC keys the deploy smoke tests published on Monad ("publishedKey"). They
+# are public by design (anyone reads them with keyOf / keyOfAgent), and the generic-api-key rule flags them only
+# because the field name contains "Key". The allowlist takes a line only when the whole line is that one JSON field,
+# so a private key, a token or a seed anywhere else, the same files included, still fails.
+#   gitleaks git --log-opts="--all" .      # every commit of every branch, messages and patches
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "X25519 public keys published on chain, in the deployment records"
+regexTarget = "line"
+regexes = ['''^\s*"publishedKey": "0x[0-9a-f]{64}",?\s*$''']
