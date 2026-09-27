@@ -64,6 +64,31 @@ importers:
         specifier: ^5.9.0
         version: 5.9.3
 
+  examples/agent-memory:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^2.4.0
+        version: 2.4.0
+      letterlock:
+        specifier: workspace:*
+        version: link:../../packages/letterlock
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      esbuild:
+        specifier: ^0.27.7
+        version: 0.27.7
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@types/node@26.6.3)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.27.7))
+
   packages/letterlock:
     dependencies:
       '@category-labs/mera':

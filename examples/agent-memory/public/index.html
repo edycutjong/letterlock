@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Letterlock memory agent</title>
+  <meta name="description" content="ERC-8004 agent #10260 on Monad mainnet. It seals notes to a person's Letterlock address, and answers tasks sealed to it. What it seals, it cannot open.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,600&family=IBM+Plex+Mono&family=Public+Sans:wght@400;600&display=swap">
+  <style>
+    :root {
+      --bg: #F3EEE3; --sheet: #F8F4EB; --ink: #1E1B16; --muted: #6E6556; --before: #2F5D9E; --rule: #CFC4AF;
+      --live: #2E6B3F; --warn: #9A3B1E; --code-bg: #EFE8DA;
+      --display: "Bodoni Moda", "Didot", "Bodoni 72", serif;
+      --body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+      --data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #16140F; --sheet: #1E1B15; --ink: #EDE6D6; --muted: #A89E8B; --before: #8FB2E8; --rule: #3A352B;
+        --live: #7CC08E; --warn: #E59A7C; --code-bg: #242017; color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #16140F; --sheet: #1E1B15; --ink: #EDE6D6; --muted: #A89E8B; --before: #8FB2E8; --rule: #3A352B;
+      --live: #7CC08E; --warn: #E59A7C; --code-bg: #242017; color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--body); }
+    main { max-width: 44rem; margin: 0 auto; padding: 3.5rem 1rem 4rem; }
+    header { display: flex; gap: 1rem; align-items: center; }
+    header img { width: 64px; height: 64px; flex: none; }
+    h1 { font: italic 600 2.1rem/1.1 var(--display); margin: 0; }
+    .sub { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.95rem; }
+    h2 { font: italic 600 1.45rem/1.2 var(--display); margin: 2.75rem 0 0.75rem; }
+    .lede { font-size: 1.12rem; margin: 1.75rem 0; }
+    .status { background: var(--sheet); border: 1px solid var(--rule); border-left: 4px solid var(--muted); padding: 1rem 1.15rem; margin: 1.75rem 0; }
+    .status[data-state="live"] { border-left-color: var(--live); }
+    .status[data-state="down"] { border-left-color: var(--warn); }
+    .status strong { letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 0.35rem; }
+    .status[data-state="live"] strong { color: var(--live); }
+    .status[data-state="down"] strong { color: var(--warn); }
+    .status dl { margin: 0.5rem 0 0; border: 0; padding: 0; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.45rem 1.25rem; margin: 1rem 0 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    .facts { border-top: 1px solid var(--rule); padding-top: 1.25rem; margin-top: 2.75rem; }
+    code { font: 0.88rem var(--data); overflow-wrap: anywhere; }
+    pre { background: var(--code-bg); border: 1px solid var(--rule); padding: 0.9rem 1rem; overflow-x: auto; margin: 0.75rem 0; }
+    pre code { font-size: 0.82rem; line-height: 1.55; overflow-wrap: normal; white-space: pre; }
+    ul { padding-left: 1.2rem; margin: 0.5rem 0; }
+    li { margin: 0.3rem 0; }
+    a { color: var(--before); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible { outline: 2px solid var(--before); outline-offset: 3px; }
+    .note { color: var(--muted); font-size: 0.93rem; }
+    @media (max-width: 30rem) { dl { grid-template-columns: 1fr; } dt { margin-top: 0.5rem; } h1 { font-size: 1.75rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="/icon.svg" alt="" width="64" height="64">
+      <div>
+        <h1>Letterlock memory agent</h1>
+        <p class="sub">ERC-8004 agent #10260 on Monad mainnet</p>
+      </div>
+    </header>
+
+    <p class="lede">It seals notes to a person's Letterlock address: it reads their passkey-derived key from the Letterlock
+      directory on Monad, encrypts to it with HPKE and drops the envelope onchain. Only their passkey, on any device it
+      syncs to, can open it. Once a note is sent, the agent cannot open it either.</p>
+
+    <div class="status" id="status" role="status" aria-live="polite" data-state="unknown">
+      <strong id="status-title">Checking…</strong>
+      <span id="status-text">Reading <a href="/health"><code>/health</code></a>.</span>
+      <dl id="status-facts" hidden>
+        <dt>Wallet</dt><dd id="s-wallet"></dd>
+        <dt>Drops today</dt><dd id="s-drops"></dd>
+        <dt>Agent key</dt><dd id="s-key"></dd>
+      </dl>
+    </div>
+
+    <h2>Seal a memory</h2>
+    <p>Name a recipient (an address, or <code>agent:&lt;id&gt;</code>) and up to 1,000 characters. The agent resolves the
+      recipient's key with one <code>keyOf</code> / <code>keyOfAgent</code> read, seals the text to it and drops it on
+      the directory. A recipient without a published key gets nothing.</p>
+<pre><code>curl -X POST https://letterlock-agent.vercel.app/remember \
+  -H 'content-type: application/json' \
+  -d '{"to":"0x…","text":"the dentist moved to Thursday 10:40"}'</code></pre>
+    <p class="note">Answers <code>{ envelope, dropTx, kid, epoch, directory }</code>. The recipient finds the envelope in
+      their inbox (the directory's <code>Dropped</code> logs) and opens it with one passkey prompt.</p>
+
+    <h2>Send it a sealed task</h2>
+    <p>Another agent, or anyone, seals a task to <code>agent:10260</code> with the key <code>keyOfAgent(10260)</code>
+      returns, and posts it with the address to answer. The agent opens it with its own key and drops an answer sealed
+      to that address, quoting the task with its SHA-256.</p>
+<pre><code>POST /task
+{ "from": "0x… or agent:&lt;id&gt;",
+  "envelope": { …sealed to agent:10260… } }
+
+inside the seal:
+{ "v": 1, "replyTo": "&lt;the same as from&gt;", "nonce": "&lt;32 hex digits&gt;",
+  "issuedAt": &lt;unix seconds&gt;, "text": "&lt;at most 1,000 characters&gt;" }</code></pre>
+    <p class="note">The reply address is sealed inside the task, so a copied task posted with another <code>from</code>
+      is refused, and each nonce is answered once.</p>
+
+    <h2>What it never sees</h2>
+    <ul>
+      <li>What it sealed. It seals to the recipient's published key and keeps no copy.</li>
+      <li>Anything in its logs but the route, the status, an error code, the drop's transaction and its size: no text,
+        no envelope, no address, no IP.</li>
+    </ul>
+
+    <h2>Limits</h2>
+    <ul>
+      <li>1,000 characters per note or task, 16 KiB per request.</li>
+      <li>5 drops per 10 minutes and 20 per day from one address; 150 drops a day in all, counted onchain.</li>
+      <li>It keeps 0.1 MON for gas, and stops sending below it.</li>
+      <li>A kill switch (<code>AGENT_ENABLED</code>) turns every endpoint that sends anything off.</li>
+    </ul>
+
+    <dl class="facts">
+      <dt>ERC-8004 agent</dt>
+      <dd><a href="https://monadvision.com/tx/0xb6b41dd5800042005b96b46d8245f0311b6461bc5cdbc90347952c3393896cf1">#10260</a>, registry <a href="https://monadvision.com/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"><code>0x8004A169…a432</code></a></dd>
+      <dt>Agent key</dt>
+      <dd><code>keyOfAgent(10260)</code>, epoch 2, kid <code>e5b30e2e52ec0dec</code>: <a href="https://monadvision.com/tx/0x072dc08d72aefacbe3fe05fedd2296c857c1181fbfa9f548c7ed9322594c294b">published</a> by the agent's owner. Epoch 1 was a demo key from the deploy smoke test; the agent does not hold it.</dd>
+      <dt>Directory</dt>
+      <dd><a href="https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"><code>0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e</code></a></dd>
+      <dt>Agent card</dt>
+      <dd><a href="/.well-known/agent-card.json"><code>/.well-known/agent-card.json</code></a></dd>
+      <dt>Health</dt>
+      <dd><a href="/health"><code>/health</code></a></dd>
+    </dl>
+  </main>
+  <script>
+    (async () => {
+      const box = document.getElementById("status");
+      const title = document.getElementById("status-title");
+      const text = document.getElementById("status-text");
+      try {
+        const res = await fetch("/health", { cache: "no-store" });
+        const h = await res.json();
+        const d = h.limits && h.limits.dailyDrops;
+        box.dataset.state = h.ok ? "live" : "down";
+        title.textContent = h.ok ? "Live" : h.enabled ? "Not answering" : "Switched off";
+        text.textContent = h.ok
+          ? "Both endpoints answer. Every drop is a real transaction on Monad mainnet."
+          : "The agent is not sending right now; /health says why.";
+        document.getElementById("s-wallet").textContent = h.wallet ? `${h.wallet.balance} (keeps ${h.wallet.reserve})` : "not configured";
+        document.getElementById("s-drops").textContent = d && d.used !== null ? `${d.used} of ${d.cap}` : "unknown";
+        const k = h.key && h.key.published;
+        document.getElementById("s-key").textContent = k && typeof k === "object"
+          ? `epoch ${k.epoch}, kid ${k.kid}${h.key.matches ? ", held by this agent" : ", NOT the key this agent holds"}`
+          : "unknown";
+        document.getElementById("status-facts").hidden = false;
+      } catch {
+        box.dataset.state = "down";
+        title.textContent = "Unreachable";
+        text.textContent = "/health did not answer.";
+      }
+    })();
+  </script>
+</body>
+</html>
