@@ -24,6 +24,50 @@
         }
       },
       "diagnosis": "The drip landed; the publish that followed was never included. Driving the same page with a virtual passkey and a faked eth_getBalance (nothing spent) showed viem preparing the publish with eth_fillTransaction: Monad mainnet filled maxFeePerGas 152 gwei and viem multiplied it by 1.2, so the signed publish capped its fee at 182.4 gwei, and rpc.monad.xyz answered eth_sendRawTransaction with 'Signer had insufficient balance': a sender must hold gas limit x fee cap = 70,863 x 182.4 gwei = 0.0129254112 MON, and the drip (1.5 x 70,863 x 102 gwei) sent 0.010842039. Monad testnet's RPC does not check this, so the testnet end-to-end run passed. Fix: the drip covers the publish at the wallet's bid plus 10% (0.01421795232 MON at a 100 gwei base fee). The virtual passkey of this run is gone, so its account 0xceff4e8c0d9b090b36449865320a7387f7f0332f keeps the 0.010842039 MON and can never publish or spend it."
+    },
+    {
+      "site": "https://letterlock-app.vercel.app",
+      "network": "Monad mainnet",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "startedAt": "2026-09-27T05:49:40.559Z",
+      "steps": {
+        "create + drip + publish": {
+          "address": "0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C",
+          "seconds": 3.423,
+          "dripTx": "0x2d9646ea1c6d9833ae2642f184016dda9b1dbb0e93ab723eb08318c480a62acb",
+          "dripAmount": "0.01421795232",
+          "dripWalletSpent": "0.01635995232",
+          "dripBlock": 108386048,
+          "publishTx": "0xd49f881173dc3d3c2ab9cb8bb50b58dd090b3e13300715169d171844f2187ddf",
+          "publishBlock": 108386054,
+          "publishGas": 70863,
+          "publishFeeCapGwei": 182.4,
+          "publishNeeded": "0.0129254112",
+          "publicKey": "0xe376395f0fad1d636a0dec7399d85a9298ce54f5047642205d18967f8a86b40c",
+          "epoch": 1
+        },
+        "register": {
+          "lookup": "found",
+          "line": "listed"
+        },
+        "seal + open pasted": {
+          "kid": "a5688c9d9e69cfcc",
+          "bytes": 427,
+          "opened": true
+        },
+        "agent writes, inbox opens": {
+          "agentDropTx": "0x44428957ac2831cc02792d212e5adc802310e73f7b989b7822eb2c793d0602d9",
+          "agentDropBlock": 108386081,
+          "agentWallet": "0xde8a4a3c3be2802bf9be78cfc1de1a5a0a4c47a4",
+          "opened": true
+        },
+        "storage cleared + reopen": {
+          "sameAddress": true,
+          "opened": true
+        }
+      },
+      "finishedAt": "2026-09-27T05:49:58.209Z"
     }
   ]
 }

@@ -76,8 +76,9 @@ drips an hour and 20 in the day, and a judge then still gets a drip, and 8 more 
   "nothing was sent" is said only when the broadcast itself failed.
 - **Kill switch:** `DRIP_ENABLED=true` turns it on; anything else, or no key, turns it off.
 - **The key** is the Vercel environment variable `LETTERLOCK_DRIP_PRIVATE_KEY` (production, sensitive), read in the
-  route handler only. No client module imports `lib/drip-server.ts` (a test checks), and a scan of the 19 scripts
-  the production pages load (1,167,767 bytes, on the deployment of commit b424f0f) found neither the key nor its name.
+  route handler only, as is `DRIP_JUDGE_PASS`. No client module imports `lib/drip-server.ts` (a test checks), and a
+  scan of 7 production pages and the 19 scripts they load (1,935,271 bytes, deployment `dpl_8cqyaknmxH3kuaUyDimQEtgQFwhQ`)
+  found neither value nor either name.
 
 The drip pays for a first key only: a rotation and a posted letter are paid from the account's own MON, and the page
 says how much to send, before any passkey prompt, when the account holds too little.
@@ -139,9 +140,23 @@ pnpm smoke https://letterlock-app.vercel.app                            # read-o
   unsigned drip refused.
 - **Live** (`scripts/live-mainnet.mjs`): create and publish on the production site with a virtual passkey; it
   spends a real drip, so it records every run in `e2e-results/mainnet-live.json` and needs `--again` after the first.
-  The first run (2026-09-27): the drip landed and the publish that followed was refused by the RPC for the reason
-  under **Amount** above; the drip was fixed. Its account `0xceff4e8c0d9b090b36449865320a7387f7f0332f` keeps
+  The first run (2026-09-27, 03:37 UTC): the drip landed and the publish that followed was refused by the RPC for the
+  reason under **Amount** above; the drip was fixed. Its account `0xceff4e8c0d9b090b36449865320a7387f7f0332f` keeps
   0.010842039 MON that nothing can spend: its virtual passkey is gone.
+  The second run (2026-09-27, 05:49 UTC, deployment `dpl_8cqyaknmxH3kuaUyDimQEtgQFwhQ`) passed every step, 3.4 s
+  from the click to the published key:
+  - the drip, [`0x2d9646ea…2acb`](https://monadvision.com/tx/0x2d9646ea1c6d9833ae2642f184016dda9b1dbb0e93ab723eb08318c480a62acb)
+    (block 108,386,048): 0.01421795232 MON from the drip wallet to the passkey account
+    `0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C`, more than the 0.0129254112 MON its publish needed at the 182.4 gwei
+    fee cap it was signed with;
+  - the publish, [`0xd49f8811…7ddf`](https://monadvision.com/tx/0xd49f881173dc3d3c2ab9cb8bb50b58dd090b3e13300715169d171844f2187ddf)
+    (block 108,386,054, 70,863 gas): sent by that passkey account, `KeyPublished(who = 0x4f48…463C, epoch 1)`, the
+    first key in the mainnet directory that the deployer did not post;
+  - the register found it; a note sealed to it in the page opened pasted; the reference agent's drop
+    [`0x44428957…02d9`](https://monadvision.com/tx/0x44428957ac2831cc02792d212e5adc802310e73f7b989b7822eb2c793d0602d9)
+    (block 108,386,081, from its own wallet) opened from the inbox, and again after the storage was cleared.
+  Its virtual passkey is gone too: the register marks the key as a test key (`lib/known-keys.json`), and its account
+  keeps 0.00698992632 MON.
 
 ## Deploy
 

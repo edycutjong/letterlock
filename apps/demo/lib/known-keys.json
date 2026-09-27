@@ -1,4 +1,11 @@
 {
   "about": "Keys in the directories that the app's own tests posted: a browser's virtual authenticator (Chrome DevTools) stood in for a passkey and was deleted after the run, so nothing sealed to these keys can ever be opened. The register marks their lines.",
-  "keys": []
+  "keys": [
+    {
+      "chainId": 143,
+      "address": "0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C",
+      "txHash": "0xd49f881173dc3d3c2ab9cb8bb50b58dd090b3e13300715169d171844f2187ddf",
+      "note": "Test key from the app’s live check: a browser’s virtual passkey, deleted after the run. Nothing sealed to it can be opened"
+    }
+  ]
 }
