@@ -338,9 +338,10 @@
   align-items: start;
 }
 
+/* two columns only while each holds "Create my encryption address" on one line (scripts/checks/label-wrap.mjs) */
 .buttonGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22.5rem), 1fr));
   gap: 24px;
 }
 
@@ -393,9 +394,6 @@
   .row3 {
     grid-template-columns: minmax(0, 1fr);
   }
-  .buttonGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .film {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     row-gap: 18px;
@@ -413,6 +411,10 @@
 }
 
 @media (max-width: 479.98px) {
+  /* a phone's plate keeps its sides narrow, so the button it shows has the width a page gives it */
+  .buttonCol .plate {
+    padding-inline: 6px;
+  }
   .swatches {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 18px 14px;

@@ -64,10 +64,13 @@
   color: var(--ink);
 }
 
+/* a container, so a card too narrow for its facts' two columns stacks each label over its value wherever it is laid
+   out (a kit plate beside another at 760-1150 px, not only a phone) */
 .facts {
   margin: 18px 0 0;
   display: grid;
   gap: 0;
+  container-type: inline-size;
 }
 
 .row {
@@ -134,12 +137,14 @@
   gap: 2px;
 }
 
+/* a transaction hash is never split, and its arrow stays on its line (scripts/checks/label-wrap.mjs) */
 .txLink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   width: fit-content;
   min-height: 28px;
+  white-space: nowrap;
 }
 
 .when {
@@ -192,6 +197,15 @@
   font-size: var(--fs-small);
   line-height: 1.45;
   color: var(--muted);
+}
+
+/* the value column (the facts less 92 px of label and 12 of gap) would be narrower than a transaction link: 0x, 14
+   digits, an ellipsis and the arrow, 158 px */
+@container (max-width: 267.98px) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 @media (max-width: 479.98px) {

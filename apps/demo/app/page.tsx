@@ -78,12 +78,15 @@ export default function YourAddress() {
             </span>
             <h3>Receive</h3>
             <p>Any app or agent looks you up and seals to that key without asking you. Opening it takes your passkey.</p>
-            {/* the arrow is drawn: the mono face has no → glyph, and a fallback font would break the data line */}
+            {/* the arrow is drawn: the mono face has no → glyph, and a fallback font would break the data line. It is
+                kept with the call it leads to, so a narrow column breaks the chain before the arrow, never after it */}
             <code className="data">
               keyOf(address)
-              <ArrowRightIcon size={14} className={styles.then} />
-              <span className="visually-hidden"> then </span>
-              seal()
+              <span className={styles.nobreak}>
+                <ArrowRightIcon size={14} className={styles.then} />
+                <span className="visually-hidden"> then </span>
+                seal()
+              </span>
             </code>
           </li>
         </ol>

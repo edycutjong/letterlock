@@ -43,6 +43,15 @@
   padding: 0 26px;
 }
 
+/* phones: a large button's sides and icon gap close up, so "Create my encryption address" keeps to one line from
+   340 px (scripts/checks/label-wrap.mjs); narrower still, a label wraps onto two balanced lines (see .label) */
+@media (max-width: 479.98px) {
+  .button[data-size="lg"] {
+    padding: 0 16px;
+    gap: 10px;
+  }
+}
+
 .button[data-tone="airmail"] {
   --btn-bg: var(--before);
   --btn-edge: color-mix(in srgb, var(--before) 72%, var(--ink));

@@ -90,6 +90,10 @@
   vertical-align: -2px;
 }
 
+.tail {
+  white-space: nowrap;
+}
+
 @media (max-width: 639.98px) {
   .lookup {
     grid-template-columns: minmax(0, 1fr);

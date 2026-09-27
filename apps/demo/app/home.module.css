@@ -107,6 +107,10 @@
   border-radius: 2px;
 }
 
+.nobreak {
+  white-space: nowrap;
+}
+
 /* the arrow between two calls, one character wide */
 .then {
   display: inline-block;

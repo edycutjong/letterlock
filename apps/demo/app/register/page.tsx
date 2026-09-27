@@ -118,8 +118,12 @@ export default function Register() {
             <dt>Contract</dt>
             <dd>
               <a className={`${styles.factLink} data`} href={DIRECTORY.explorer} target="_blank" rel="noreferrer">
-                {DIRECTORY.address}
-                <ArrowOutIcon size={14} />
+                {DIRECTORY.address.slice(0, -4)}
+                {/* the arrow never starts a line of its own: it stays with the address's last four digits */}
+                <span className={styles.tail}>
+                  {DIRECTORY.address.slice(-4)}
+                  <ArrowOutIcon size={14} />
+                </span>
                 <span className="visually-hidden"> (opens the explorer)</span>
               </a>
             </dd>

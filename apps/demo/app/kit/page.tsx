@@ -404,7 +404,7 @@ export default function Kit() {
               })}
             </div>
             <h3 className={styles.h3}>Other actions, same stamp</h3>
-            <div className={styles.row3} role="group" aria-label="Other button states">
+            <div className={styles.row2} role="group" aria-label="Other button states">
               <Specimen name="ink" detail="no prompt">
                 <Button>Seal</Button>
               </Specimen>
