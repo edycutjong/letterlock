@@ -1,8 +1,9 @@
 name: ci
 
-# pnpm verify: the SDK (with its anvil chain tests), the contracts, the PRF spike's unit tests, the demo app's tests, the
-# offline seal/open with the envelope fixture replay, and the seed script on anvil; one screen of exact counts at the end.
-# No secret is used or needed.
+# pnpm typecheck, then pnpm verify: the SDK (with its anvil chain tests), the contracts, the PRF spike's unit tests, the
+# demo app's tests, the reference agent, the offline seal/open with the envelope fixture replay (in a network namespace),
+# the scripts' own tests (the seed script on anvil among them) and the readiness checks' tests; one screen of exact
+# counts at the end. No secret is used or needed.
 
 on:
   push:
@@ -31,6 +32,9 @@ jobs:
       LETTERLOCK_REQUIRE_ANVIL: "1"
       # LETTERLOCK_REQUIRE_FORK stays unset: the Monad mainnet fork tests skip, with the RPC error, when rpc.monad.xyz is
       # unreachable from the runner, so an RPC outage does not fail CI (the mainnet deploy pre-flight sets it).
+      # The offline seal/open must run with the network taken away by the OS (scripts/lib/os-sandbox.ts: a network
+      # namespace here), never with the in-process guard alone.
+      LETTERLOCK_REQUIRE_NETWORK_SANDBOX: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,6 +56,18 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      # Ubuntu 24.04 lets an unprivileged user make a user namespace, which `unshare --user --net` needs, only with this
+      # AppArmor restriction off. The last line fails the job here, with the reason, if a namespace still cannot be made.
+      - name: Allow a network namespace for the offline proof
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare --user --map-root-user --net true
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Verify
         run: pnpm verify --markdown "$GITHUB_STEP_SUMMARY"
