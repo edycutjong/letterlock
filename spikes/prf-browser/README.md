@@ -150,20 +150,24 @@ pnpm --filter prf-browser-spike check:page   # check-page.mjs: taps the real but
 node check-page.mjs --url https://letterlock-spike.vercel.app/   # the same checks against the live page
 ```
 
-Results on 2026-09-26 with Chromium 153 virtual authenticators, page build `77d39d6`:
+Results on 2026-09-27 with Chromium 153 virtual authenticators, page build `b7e4a3e` (the build the live page
+serves since that day; check-page reads the stamp back from it):
 
-- `pnpm typecheck` (the SDK and this page, `tsc --strict`): no errors.
-- `test:unit`: **29/29**.
-- `check-page.mjs`: **40/40** on the local production build and **41/41** on the live page; the live run adds the
-  CSP header check. (An earlier round, against live build `d657646`, had 9 of its checks fail, each on a defect
-  fixed since.)
+- `pnpm --filter prf-browser-spike typecheck` (`tsc --strict`): no errors.
+- `test:unit`: **30/30**. In a clone without the private planning folder next to it, 27 pass and the 3
+  planning-file checks skip.
+- `check-page.mjs`: **40/40** on the local production build and **42/42** on the live page; the live run adds the
+  CSP header check and the build stamp check. (An earlier round, against live build `d657646`, had 9 of its checks
+  fail, each on a defect fixed since.)
 - `run-spike.mjs`: **13/14 passed, 1 SKIP**. The SKIP is the cross-device check, which is this human run.
-- The SDK's own suite (`pnpm --filter letterlock test`): **59/59**.
+- The SDK's own suite (`pnpm --filter letterlock test`): **222 passed, 9 skipped** (the live-RPC checks, which run
+  with `LIVE=1`).
 
-Not everything is covered by `check-page.mjs`: the build stamp, the strict typecheck and the planning-file
-names are covered by the unit tests and `tsc`. (Commit `209dfd6` said check-page covered every finding of that
-audit; that overstated it.) `check-page.mjs` covers the following:
+Not everything is covered by `check-page.mjs`: how the build stamp is computed, the strict typecheck and the
+planning-file names are covered by the unit tests and `tsc`. (Commit `209dfd6` said check-page covered every
+finding of that audit; that overstated it.) `check-page.mjs` covers the following:
 - the rpId shown on the page with its test-only caveat, and the fingerprint matching the note's `kid`;
+- on a deployed page, a build stamp that names a commit in this repository's history, built clean;
 - the QR code decoding (jsQR) to exactly the link, also for a 200-byte note, and coming back after the
   self-check and after a reload on the creating device;
 - the prompt count against Chromium's authenticator log (CDP `WebAuthn.credentialAdded`/`credentialAsserted`),
@@ -201,7 +205,9 @@ cd "$DEPLOY" && vercel link --yes --project letterlock-spike && vercel deploy --
 
 The build stamp is the last commit that changed the page, the SDK it bundles, or `pnpm-lock.yaml`, plus
 `+dirty` when any of them has uncommitted changes. Markdown is ignored. Commits elsewhere in the repo leave it
-unchanged.
+unchanged. A history rewrite renames every commit, so a page built before one names a commit that no longer
+exists: the live page did until it was rebuilt from the rewritten history on 2026-09-27, and
+`check-page.mjs --url` now fails on such a stamp. Redeploy after any rewrite.
 
 The deploy is static files only, with no environment variables and no secrets. `vercel.json` sets a self-only
 Content-Security-Policy, `Referrer-Policy: no-referrer`, `nosniff`, and a Permissions-Policy that limits passkeys to

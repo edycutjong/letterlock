@@ -10,8 +10,10 @@
 import { build, preview } from "vite";
 import { chromium } from "playwright";
 import jsQR from "jsqr";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { buildStamp } from "./build-stamp.ts";
 
 const here = import.meta.dirname;
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
@@ -108,6 +110,12 @@ const fpOf = (page) => page.evaluate(() => [...document.querySelectorAll("#fp sp
 // missing elements read as "" (a FAIL line), not a 30 s timeout: an old or broken build still gets a full report
 const text = (page, sel) => page.locator(sel).innerText({ timeout: 3000 }).catch(() => "");
 const raw = (page, sel) => page.locator(sel).textContent({ timeout: 3000 }).then((t) => t ?? "", () => ""); // DOM text, before CSS text-transform
+// A deployed page's build stamp must name a commit a reader can find: one in this repository's history, built from
+// committed inputs. A history rewrite renames every commit, so a page built before one names a commit that no longer
+// exists (the live page did until it was rebuilt on 2026-09-27): redeploy it (README, "Build and deploy").
+const inHistory = (commit) => {
+  try { execFileSync("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: here, stdio: "ignore" }); return true; } catch { return false; }
+};
 const attr = (page, sel, name) => page.locator(sel).getAttribute(name, { timeout: 3000 }).catch(() => null);
 const fact = (page, label) => page.evaluate((l) => {
   const dt = [...document.querySelectorAll("#facts dt")].find((d) => d.textContent === l);
@@ -160,6 +168,12 @@ try {
   check("page loads over " + new URL(PAGE).protocol.replace(":", "") + " and its JS runs", res.ok() && (await mac.page.evaluate(() => typeof window.spike.create)) === "function",
     { status: res.status(), build: await raw(mac.page, "#build") });
   if (PAGE.startsWith("https:")) check("deployed page sends a Content-Security-Policy", !!res.headers()["content-security-policy"], res.headers()["content-security-policy"]);
+  if (PAGE.startsWith("https:")) {
+    const stamp = await raw(mac.page, "#build");
+    const [, commit, dirty] = /^([0-9a-f]{7,40})(\+dirty)?$/.exec(stamp) ?? [];
+    check("deployed build stamp names a commit in this repository's history, built clean", !!commit && !dirty && inHistory(commit),
+      { build: stamp, pageInputsNow: buildStamp(here) });
+  }
   check("page states the rpId = location.hostname", (await text(mac.page, "#rpid")) === host, host);
   const rpidNote = await text(mac.page, "#rpid-note");
   check("page says on screen that a hostname rpId is acceptable only for this test (production pins one rpId)",
