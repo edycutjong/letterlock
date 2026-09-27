@@ -16,13 +16,18 @@ const envelope = await ll.sealTo("0x…recipient", new TextEncoder().encode("onl
 ```
 
 No passkey, no key material and no transaction: `sealTo` is one contract read and one HPKE seal. It throws
-`NO_KEY_PUBLISHED` when the recipient has no key. From a terminal:
+`NO_KEY_PUBLISHED` when the recipient has no key.
+
+From a terminal: the package is **not published to npm yet**, so do not install or run a `letterlock` package from
+npm until this README says it is. Build the CLI from a clone of this repository:
 
 ```sh
-npx letterlock resolve agent:10260            # the key an address or an ERC-8004 agent published
-npx letterlock seal 0x…recipient note.txt --out envelope.json
-npx letterlock verify 0x…recipient            # seal a random nonce: whoever reads it back holds the passkey
-npx letterlock inbox 0x…recipient --from-block 108289180
+pnpm install && pnpm --filter letterlock build
+alias letterlock="node $PWD/packages/letterlock/dist/cli.js"
+letterlock resolve agent:10260            # the key an address or an ERC-8004 agent published
+letterlock seal 0x…recipient note.txt --out envelope.json
+letterlock verify 0x…recipient            # seal a random nonce: whoever reads it back holds the passkey
+letterlock inbox 0x…recipient --from-block 108289180
 ```
 
 ## Receive: publish a key and open (browser)
@@ -79,8 +84,11 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
   localhost could never be re-derived in production), and a key that does not carry its rpId: publish the key object
   `createEncryptionAddress`, `deriveFromPasskey` or `deriveForAgent` returned, not `{ publicKey, epoch }` rebuilt
   from it. `unsafeAllowAnyRpId: true` lifts this, for tests only. Browsers let a page use only its own domain as the
-  rpId, so people publish their key on the Letterlock app itself, and other apps only seal to them. **The Letterlock
-  app is not deployed at that host yet.**
+  rpId, so people publish their key on the Letterlock app itself, and other apps only seal to them. **Nothing is
+  deployed at that host yet** (HTTP 404 `DEPLOYMENT_NOT_FOUND` on 2026-09-27). Whoever serves pages there can run
+  passkey ceremonies for the rpId and so derive every Letterlock key, the passkey accounts included (`docs/SPEC.md`
+  §6): the host must be held by the Letterlock owner before anyone creates a real passkey for it, and moving to
+  another host takes a new SDK release, since the SDK pins it.
 - **What is in the directory.** On Monad mainnet (`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`) the only keys so far
   are two DEMO KEYs from the deploy smoke test (the deployer and agent 10260), derived from random bytes with no
   passkey; the testnet key is a TEST KEY of the same kind. Whoever holds their stand-ins can open anything sealed to

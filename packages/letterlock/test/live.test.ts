@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createPublicClient, http, keccak256 } from "viem";
 import { monad } from "viem/chains";
 import { describe, expect, it } from "vitest";
-import { DEPLOYMENTS, isLetterlockError, letterlock } from "../src/index.ts";
+import { DEPLOYMENTS, LETTERLOCK_RP_ID, isLetterlockError, letterlock } from "../src/index.ts";
 import { anvil, noChain, publicClient } from "./anvil/context.ts";
 
 const live = process.env.LIVE === "1";
@@ -49,6 +49,20 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
     const code = await mainnet.getCode({ address: r.address as `0x${string}` });
     const local = await publicClient().getCode({ address: anvil().directory });
     expect(keccak256(code!)).toBe(keccak256(local!));
+  });
+});
+
+// The names the docs point at, as the README describes them. A failure here means a name was taken: by the owner
+// (update the README, then this check) or by someone else (a squatter: see docs/SPEC.md §6 for the rpId's host).
+describe.skipIf(!live)("names the docs point at (LIVE=1, read-only)", () => {
+  it("npm has no package named letterlock yet, as the README says", async () => {
+    const r = await fetch("https://registry.npmjs.org/letterlock");
+    expect(r.status, "the npm name letterlock is taken now: if the owner published it, restore npx in the README").toBe(404);
+  });
+
+  it(`nothing is deployed at the pinned rpId's host (${LETTERLOCK_RP_ID}) yet, as the README says`, async () => {
+    const r = await fetch(`https://${LETTERLOCK_RP_ID}/`, { redirect: "manual" });
+    expect([r.status, r.headers.get("x-vercel-error")], "something is served at the rpId's host now: whose is it?").toEqual([404, "DEPLOYMENT_NOT_FOUND"]);
   });
 });
 

@@ -140,10 +140,16 @@ recipient, epoch, directory or chain.
   `LETTERLOCK_RP_ID` (`letterlock-app.vercel.app`). Keys derived on another origin (localhost, preview deploys)
   cannot be re-derived in production. The chain client refuses `publish`, `rotate` and `publishForAgent` when its
   rpId is another one, unless it was created with `unsafeAllowAnyRpId: true`, for tests. It publishes a key only
-  when the key carries the client's rpId: keys from `createEncryptionAddress`, `deriveFromPasskey` and `deriveForAgent` record theirs,
-  and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it could come from any passkey.
-  `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another rpId. Reads and seals are not
-  pinned: sealing needs no passkey.
+  when the key carries the client's rpId: keys from `createEncryptionAddress`, `deriveFromPasskey` and
+  `deriveForAgent` record theirs, and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it
+  could come from any passkey. `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another
+  rpId. Reads and seals are not pinned: sealing needs no passkey.
+- **Whoever serves the rpId's host** can run passkey ceremonies for it, and so gets the PRF output of every
+  Letterlock passkey: every encryption key (§2) and the passkey account's key (§7). The host must stay under the
+  Letterlock owner's control for as long as keys derived under it are in use. `letterlock-app.vercel.app` is a
+  Vercel project name, held only while that project exists; a domain the owner registers is sturdier. Since the SDK
+  pins the rpId, moving to another host takes a new release. On 2026-09-27 nothing was deployed there (HTTP 404,
+  `DEPLOYMENT_NOT_FOUND`), and the directory's keys so far are demo keys (§8).
 - **A compromised device during `open`** exposes that epoch's key. Rotate to recover forward secrecy for new
   notes.
 
