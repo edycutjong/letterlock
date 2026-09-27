@@ -6,6 +6,8 @@ import { Bodoni_Moda, IBM_Plex_Mono, Public_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { DevBanner } from "@/components/DevBanner";
+import { LETTERLOCK_RP_ID } from "@/lib/chain.ts";
 import { DIRECTORY } from "@/lib/deployment.ts";
 import { tokenValue } from "@/lib/tokens.ts";
 
@@ -35,15 +37,36 @@ const data = IBM_Plex_Mono({
   variable: "--nf-data",
 });
 
+const TITLE = "Letterlock: a passkey becomes an encryption address";
+const DESCRIPTION =
+  "Your passkey derives an encryption key and posts its public half to a register on Monad. Anyone can seal a note to your address; only your passkey opens it, on any device it syncs to.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(`https://${LETTERLOCK_RP_ID}`),
   title: {
-    default: "Letterlock: a passkey becomes an encryption address",
+    default: TITLE,
     template: "%s · Letterlock",
   },
-  description:
-    "Your passkey derives an encryption key and posts its public half to a register on Monad. Anyone can seal a note to your address; only your passkey opens it, on any device it syncs to.",
+  description: DESCRIPTION,
   applicationName: "Letterlock",
+  openGraph: {
+    type: "website",
+    siteName: "Letterlock",
+    url: "/",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [{ url: "/og-image.png", width: 2400, height: 1260, alt: "Letterlock: a wax seal pressed over an address line on a manila envelope" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ["/og-image.png"],
+  },
 };
+
+// Every page is rendered per request: its scripts carry that request's CSP nonce (middleware.ts).
+export const dynamic = "force-dynamic";
 
 export const viewport: Viewport = {
   themeColor: tokenValue("--bg"),
@@ -58,6 +81,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           Skip to content
         </a>
         <div className="margin-rule" aria-hidden="true" />
+        <DevBanner />
         <SiteHeader network={DIRECTORY.network} chainId={DIRECTORY.chainId} />
         {children}
         <SiteFooter />

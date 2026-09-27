@@ -1,0 +1,8 @@
+.banner {
+  padding: 8px var(--gutter);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--bg-elevated);
+  background-color: var(--ink);
+  text-align: center;
+}
