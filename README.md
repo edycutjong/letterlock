@@ -6,16 +6,16 @@
 
   <p>One passkey, one encryption address, on every device the passkey syncs to.</p>
 
-  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 25.578 ms over N = 1,000 (<code>pnpm bench</code>), and 705 tests pass in a fresh clone (<code>pnpm verify</code>).</p>
+  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 28.628 ms over N = 1,000 (<code>pnpm bench</code>), and 712 tests pass in a fresh clone (<code>pnpm verify</code>).</p>
 
   <br/>
 
-  [![Landing page](https://img.shields.io/badge/%E2%9C%89%EF%B8%8F_Landing-Page-1E1B16?style=for-the-badge)](https://letterlock-site.vercel.app)
-  [![Pitch deck](https://img.shields.io/badge/%F0%9F%97%82%EF%B8%8F_Pitch-Deck-6E6556?style=for-the-badge)](https://letterlock-site.vercel.app/pitch/)
-  [![Live App](https://img.shields.io/badge/%F0%9F%9A%80_Live-App-2F5D9E?style=for-the-badge)](https://letterlock-app.vercel.app)
+  [![Landing page](https://img.shields.io/badge/%E2%9C%89%EF%B8%8F_Landing-Page-1E1B16?style=for-the-badge)](https://letterlock.edycu.dev)
+  [![Pitch deck](https://img.shields.io/badge/%F0%9F%97%82%EF%B8%8F_Pitch-Deck-6E6556?style=for-the-badge)](https://letterlock.edycu.dev/pitch/)
+  [![Live App](https://img.shields.io/badge/%F0%9F%9A%80_Live-App-2F5D9E?style=for-the-badge)](https://app.letterlock.edycu.dev)
   [![Judge Path](https://img.shields.io/badge/%E2%9A%96%EF%B8%8F_Judge-Path,_2_min-A3261E?style=for-the-badge)](DEMO.md)
   [![npm](https://img.shields.io/badge/%F0%9F%93%A6_npm-letterlock-CB3837?style=for-the-badge)](https://www.npmjs.com/package/letterlock)
-  [![Agent](https://img.shields.io/badge/%F0%9F%A4%96_ERC--8004-Agent_10260-1B1A17?style=for-the-badge)](https://letterlock-agent.vercel.app)
+  [![Agent](https://img.shields.io/badge/%F0%9F%A4%96_ERC--8004-Agent_10260-1B1A17?style=for-the-badge)](https://agent.letterlock.edycu.dev)
   [![Built for Monad Metropolis](https://img.shields.io/badge/Monad-Metropolis_2026-836EF9?style=for-the-badge)](https://monad.xyz/developers/hackathons/metropolis)
 
   <br/>
@@ -48,8 +48,8 @@
   </tr>
 </table>
 
-Screenshots of the production app on Monad mainnet, 2026-09-27. The note in the second one was sealed in the page to
-the reference agent's published key and never sent.
+Screenshots of the production app at app.letterlock.edycu.dev on Monad mainnet, 2026-09-27, 21:33 UTC. The note in the
+second one was sealed in the page to the reference agent's published key and never sent.
 
 ## 💡 The Problem & Solution
 
@@ -125,7 +125,7 @@ verified a passkey's P256 signature with Monad's `0x0100` precompile, the road t
 vouches for its key (SPEC §7).
 
 **One honest limitation:** a passkey is bound to the site that made it, so people publish and open on the Letterlock
-app (`letterlock-app.vercel.app`, the SDK's pinned rpId), and every other app only seals to them.
+app (`app.letterlock.edycu.dev`, the SDK's pinned rpId), and every other app only seals to them.
 
 ## ⛓️ Live Deployment
 
@@ -136,14 +136,21 @@ own passkey account, which a one-time gas drip funds.
 |---|---|
 | Directory, Monad mainnet | [`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`](https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e), deployed in block 108,289,180 ([tx](https://monadvision.com/tx/0x9766a31cb8910e2d1f953176454230e51388acd91fc78dc589b406d15b8f0a03)); Sourcify [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/143/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e) of the creation and runtime bytecode |
 | Directory, Monad testnet | [`0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a`](https://testnet.monadvision.com/address/0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a), the same creation code, agent path disabled (no registry on testnet) |
-| App | <https://letterlock-app.vercel.app>, the WebAuthn rpId every Letterlock key is derived under |
-| Reference agent | <https://letterlock-agent.vercel.app>: ERC-8004 agent 10260 ([card](https://letterlock-agent.vercel.app/.well-known/agent-card.json), `GET /health`) |
-| SDK and CLI | [`letterlock@0.1.0`](https://www.npmjs.com/package/letterlock) on npm, published 2026-09-27 |
+| App | <https://app.letterlock.edycu.dev>, the WebAuthn rpId every Letterlock key is derived under, on the owner's own domain since SDK 0.1.1. The rpId 0.1.0 pinned, `letterlock-app.vercel.app`, answers every request with a 308 there |
+| Reference agent | <https://agent.letterlock.edycu.dev>: ERC-8004 agent 10260 ([card](https://agent.letterlock.edycu.dev/.well-known/agent-card.json), `GET /health`). Its `tokenURI` still names the card at its first host, `letterlock-agent.vercel.app`, which serves the same deployment |
+| Landing page and deck | <https://letterlock.edycu.dev> and <https://letterlock.edycu.dev/pitch/> |
+| SDK and CLI | [`letterlock`](https://www.npmjs.com/package/letterlock) on npm: 0.1.0, published 2026-09-27, pins `letterlock-app.vercel.app`; 0.1.1 in this repository pins `app.letterlock.edycu.dev` ([CHANGELOG](packages/letterlock/CHANGELOG.md)) |
 | Records | [deployments/143.json](deployments/143.json) and [deployments/10143.json](deployments/10143.json): every transaction, the verification, the gas |
 
 Transactions a judge can open:
 
-- A passkey account, made by the app's live check in Chromium with a virtual authenticator, publishes its own key:
+- A passkey account, made by the app's live check at app.letterlock.edycu.dev in Chromium with a virtual
+  authenticator (not a real passkey), publishes its own key under the new rpId:
+  [gas drip](https://monadvision.com/tx/0xbb56739007c7a575ec6c2a3f1085b51c84d50e06b207d76bec9934da71b49a7a),
+  [publish from the passkey account](https://monadvision.com/tx/0x28f3f506813f6f3992a87892bd44c422614990749699b12a1c65467fa6b3312c),
+  and [the agent's letter to it](https://monadvision.com/tx/0x760ea678082271d53ecf404621a6b95bad1f742c020061699366c3644f80eec7),
+  asked from `/judge` and listed in its inbox.
+- The same at letterlock-app.vercel.app, the rpId SDK 0.1.0 pinned, on 2026-09-27:
   [gas drip](https://monadvision.com/tx/0x2d9646ea1c6d9833ae2642f184016dda9b1dbb0e93ab723eb08318c480a62acb),
   [publish from the passkey account](https://monadvision.com/tx/0xd49f881173dc3d3c2ab9cb8bb50b58dd090b3e13300715169d171844f2187ddf),
   and [the agent's letter to it](https://monadvision.com/tx/0x44428957ac2831cc02792d212e5adc802310e73f7b989b7822eb2c793d0602d9),
@@ -158,15 +165,15 @@ every one that emitted a directory event up to block 108,422,676 among them.
 
 | Metric | Value |
 |---|---|
-| Tests | `pnpm verify` in a fresh clone: 705 passed, 0 failed, 12 skipped, in 8 suites (SDK 222, contracts 111, PRF spike 27, app 99, agent 95, offline 73, scripts 32, readiness 46). Skipped: the SDK's 9 live checks, which pass 9 of 9 with `LIVE=1`, and 3 checks that no file, commit or message names one of the author's private planning notes, which run only next to that folder (there: 708 passed, 9 skipped) |
-| Latency | resolve + seal p50 25.578 ms, p95 29.636 ms, p99 32.436 ms against Monad mainnet's public RPC, N = 1,000, 0 failed calls ([bench/RESULTS.md](bench/RESULTS.md)) |
-| Sealing cost | seal alone (HPKE, local CPU) p50 3.534 ms |
+| Tests | `pnpm verify` in a fresh clone: 712 passed, 0 failed, 13 skipped, in 8 suites (SDK 225, contracts 111, PRF spike 27, app 102, agent 96, offline 73, scripts 32, readiness 46). Skipped: the SDK's 10 live checks, which pass 10 of 10 with `LIVE=1`, and 3 checks that no file, commit or message names one of the author's private planning notes, which run only next to that folder (there: 715 passed, 10 skipped) |
+| Latency | resolve + seal p50 28.628 ms, p95 35.453 ms, p99 55.888 ms against Monad mainnet's public RPC, N = 1,000, 0 failed calls ([bench/RESULTS.md](bench/RESULTS.md)) |
+| Sealing cost | seal alone (HPKE, local CPU) p50 5.653 ms |
 | Gas, mainnet receipts | publish 70,863 · drop of 490 bytes 45,780 · `publishForAgent` 108,799 (first key) and 74,652 (rotation) |
 | Offline proof | seal and open with the network taken away by the OS (`sandbox-exec` on macOS, a network namespace in CI): 73 checks, 14 envelope fixtures replayed |
 | Contract | 111 forge tests: unit, fuzz, invariant, mainnet fork against the live registry, gas snapshots |
-| End to end | the whole flow on testnet in Chromium with a PRF-capable virtual authenticator, and a live check on mainnet that published a passkey account's key ([records](apps/demo/e2e-results)) |
+| End to end | the whole flow on testnet in Chromium with a PRF-capable virtual authenticator, and live checks on mainnet in which a passkey account published its own key, at each host the rpId has had ([records](apps/demo/e2e-results)) |
 | Design QA | 25 checks and axe on 6 routes at 1280 and 390 px: 0 failures, 0 violations |
-| Secrets | gitleaks over every commit's patch and every commit message ([.gitleaks.toml](.gitleaks.toml); `pnpm readiness` runs both): no leaks. The drip's and the agent's keys live in Vercel's sensitive environment variables and with the operator, never in the repository or a page's bundle |
+| Secrets | gitleaks over every commit's patch and every commit message ([.gitleaks.toml](.gitleaks.toml); `pnpm readiness` runs both): no leaks. The drip's and the agent's keys live in Vercel's sensitive environment variables and with the operator, never in the repository or a page's bundle: the 8 page loads of the production app on 2026-09-27 (the judges' link among them), their 18 scripts and 4 stylesheets held no secret's value or name, and none of their 95 strings of 64 hex digits is a project wallet's key |
 
 ### Attacks defeated
 
@@ -180,6 +187,7 @@ every one that emitted a directory event up to block 108,422,676 among them.
 | Starve the registry call so "no owner" reads as "no key" | only `ERC721NonexistentToken` means no owner; anything else reverts | [LetterlockRegistryCall.t.sol:66](contracts/test/LetterlockRegistryCall.t.sol#L66), [:135](contracts/test/LetterlockRegistryCall.t.sol#L135) |
 | Publish another passkey's key under a passkey account | the client refuses a key that does not name the account's passkey, before signing | [client.test.ts:333](packages/letterlock/test/client.test.ts#L333), [:382](packages/letterlock/test/client.test.ts#L382) |
 | Publish a key derived on another origin (localhost, a preview) | one pinned rpId; a key from another rpId is refused | [client.test.ts:483](packages/letterlock/test/client.test.ts#L483) |
+| Make a key under the rpId 0.1.0 pinned, `letterlock-app.vercel.app` | every request there is a 308 to the app's host, before any page is served | [hosts.test.ts:16](apps/demo/test/hosts.test.ts#L16) |
 | Hand an agent's server the owner's own key | `publishForAgent` takes only a key derived for that agent | [client.test.ts:601](packages/letterlock/test/client.test.ts#L601) |
 | Drain the gas drip with fresh accounts, or shut the judges' lane by sending it MON | hourly and daily caps counted from the wallet's own history on chain | [drip.test.ts:334](apps/demo/test/drip.test.ts#L334), [:382](apps/demo/test/drip.test.ts#L382) |
 | Drain the agent's wallet with concurrent requests across instances | each drop checked when it is signed, one at a time, counted by nonce | [spend-race.test.ts:105](examples/agent-memory/test/spend-race.test.ts#L105) |
@@ -192,8 +200,10 @@ every one that emitted a directory event up to block 108,422,676 among them.
    never shows a sender; the agent seals a nonce and a time inside each task.
 2. **Metadata is public.** The recipient, the epoch and the timing of every `drop` are on chain.
 3. **No recovery.** If every synced copy of the passkey is lost, so is the key.
-4. **The rpId's host can derive every key.** Whoever serves `letterlock-app.vercel.app` can run passkey ceremonies
-   for it. It is a Vercel project name; a registered domain would be sturdier, and moving takes an SDK release.
+4. **The rpId's host can derive every key.** Whoever serves `app.letterlock.edycu.dev`, or a subdomain of it, can run
+   passkey ceremonies for it. It is on the owner's own domain, which must stay registered and pointed at the app for
+   as long as keys derived under it are in use; moving again takes an SDK release, as 0.1.1's move from
+   `letterlock-app.vercel.app`, a Vercel project name, did.
 5. **Opening happens on the Letterlock app.** A browser lets a page use only its own domain as the rpId, so other
    apps seal and recipients open there.
 6. **The RPC is trusted for reads.** The client checks the chain id and the directory's code, but a `keyOf` answer
@@ -209,8 +219,8 @@ every one that emitted a directory event up to block 108,422,676 among them.
 12. **Inbox scans are slow on the default RPC**, 100 blocks per request from the deploy block. Pass `fromBlock`, use
     `rpc1.monad.xyz`, or index `Dropped` yourself.
 13. **The first keys in the directory are this project's own**: demo keys from the deploy smoke test (random bytes
-    in place of a passkey) and a test key from the app's live check. The register labels each; do not seal real
-    notes to them.
+    in place of a passkey) and test keys from the app's live checks (virtual passkeys, deleted after each run). The
+    register labels each; do not seal real notes to them.
 
 ## 🚀 Getting Started
 
@@ -258,14 +268,14 @@ format, gas snapshots, ABI exports and deployment records.
 ```text
 contracts/            the directory contract, its tests, the deploy script and runbook
 packages/letterlock/  the SDK and CLI (npm: letterlock)
-apps/demo/            the app at letterlock-app.vercel.app, with the gas drip
-examples/agent-memory/ the reference agent at letterlock-agent.vercel.app (ERC-8004 #10260)
+apps/demo/            the app at app.letterlock.edycu.dev, with the gas drip
+examples/agent-memory/ the reference agent at agent.letterlock.edycu.dev (ERC-8004 #10260)
 spikes/prf-browser/   the day-one spike: real WebAuthn PRF, and the P256 check against 0x0100
 scripts/              verify, bench, the offline proof, seed, readiness
 deployments/          the mainnet and testnet records
 bench/                results.json (every sample) and RESULTS.md
 docs/                 SPEC.md, ARCHITECTURE.md, DX.md
-site/                 the landing page and the pitch deck, at letterlock-site.vercel.app
+site/                 the landing page and the pitch deck, at letterlock.edycu.dev
 ```
 
 ## 🗺️ Roadmap
@@ -275,18 +285,18 @@ site/                 the landing page and the pitch deck, at letterlock-site.ve
 - [x] The app on the pinned rpId, every flow live on mainnet, with a gas drip
 - [x] The reference agent, ERC-8004 #10260, sealing notes and answering sealed tasks
 - [x] Reproducible proof: `pnpm verify`, `pnpm bench`, the offline proof, CI
+- [x] The rpId on a domain the owner registered: `app.letterlock.edycu.dev` (SDK 0.1.1)
 - [ ] The P256 binding in the contract, so a key proves which passkey vouches for it
 - [ ] Recovery: a second passkey, or a social rotation
-- [ ] A registered domain for the rpId
 - [ ] An indexer for `Dropped`, so an inbox is one request
 - [ ] Sender authentication for apps that need it (HPKE auth mode)
 
 ## 📽️ Demo Materials
 
-- **Landing page:** <https://letterlock-site.vercel.app>, and the pitch deck at <https://letterlock-site.vercel.app/pitch/> (both in [site/](site))
-- **Live app:** <https://letterlock-app.vercel.app>, and the judges' route at <https://letterlock-app.vercel.app/judge>
+- **Landing page:** <https://letterlock.edycu.dev>, and the pitch deck at <https://letterlock.edycu.dev/pitch/> (both in [site/](site))
+- **Live app:** <https://app.letterlock.edycu.dev>, and the judges' route at <https://app.letterlock.edycu.dev/judge>
 - **The judge's script:** [DEMO.md](DEMO.md): two paths, the mainnet transactions behind each claim (every directory event among them), and how to reproduce the numbers
-- **Reference agent:** <https://letterlock-agent.vercel.app>
+- **Reference agent:** <https://agent.letterlock.edycu.dev>
 - **Benchmark:** [bench/RESULTS.md](bench/RESULTS.md)
 
 ## 📄 License

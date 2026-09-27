@@ -167,7 +167,7 @@ recipient, epoch, directory or chain.
   `letterlock-app`; that host serves the Letterlock app, where passkeys for the rpId are made. Whoever controls the
   domain's registration or its DNS controls the host, so the domain must be renewed for as long as the keys are in
   use. SDK 0.1.0 pinned `letterlock-app.vercel.app`, a Vercel project name held only while that project exists (once
-  released, anyone could claim it and derive every key); 0.1.1 moved the pin, and since 2026-09-28 the old host
+  released, anyone could claim it and derive every key); 0.1.1 moved the pin, and since 2026-09-27 (21:20 UTC) the old host
   answers every request with a 308 to the new one, so no key is made there. Since the SDK pins the rpId, moving to
   another host takes a new release. The only keys derived under the old rpId are the app's live-check test keys; the
   directory's other keys are demo keys and the reference agent's seed-derived key (§8).

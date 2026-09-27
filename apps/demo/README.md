@@ -1,8 +1,11 @@
 # Letterlock app
 
-**Live: <https://letterlock-app.vercel.app>**, on Monad mainnet (chain 143), against the directory
+**Live: <https://app.letterlock.edycu.dev>**, on Monad mainnet (chain 143), against the directory
 `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`. The host is the WebAuthn rpId every Letterlock key is derived under
-(`LETTERLOCK_RP_ID` in the SDK): passkeys made anywhere else can never open anything here.
+(`LETTERLOCK_RP_ID` in the SDK, since 0.1.1): passkeys made anywhere else can never open anything here. The app's
+first host, `letterlock-app.vercel.app` (the rpId SDK 0.1.0 pinned), answers every request with a 308 to the same
+path and query here (`next.config.ts`, `test/hosts.test.ts`), so no page is served there and no passkey is made
+under the old rpId; an old link, a judges' link with its pass included, lands on the same page here.
 
 Every flow calls the `letterlock` SDK in the browser; nothing on these pages is simulated. The only example content
 is the sample card on the home page before this device has an address, and the `/kit` gallery, and both are stamped
@@ -14,7 +17,7 @@ Example.
 | `/seal` | `resolve` as the address is typed (the register line found, or the `NO_KEY_PUBLISHED` slip), `sealTo` on this device (the wax presses), then **Post to their inbox** (`drop`, from your passkey account when it holds the gas) or copy the envelope JSON. Sealing needs no passkey. |
 | `/open` | `inbox(address)`: the directory's `Dropped` events, read again every 5 seconds from the last finalized block. **Open with passkey** (`open`): the seal cracks and the text rises. **Find my inbox with my passkey** derives the address again on a device that stores nothing; **Paste an envelope** opens one handed over any other way. |
 | `/register` (also `/integrations/verify`) | Every `KeyPublished` event, newest first, each linked to its transaction at every width (under its key on phones and portrait tablets), read again every 5 seconds; a live `keyOf` / `keyOfAgent` lookup; the directory's Sourcify record, fetched when the page loads. |
-| `/judge` | The three steps, live: create an address; ask the reference agent (ERC-8004 agent 10260, `POST https://letterlock-agent.vercel.app/remember`) to write to it; open it here or on another device (a QR code of the inbox). |
+| `/judge` | The three steps, live: create an address; ask the reference agent (ERC-8004 agent 10260, `POST https://agent.letterlock.edycu.dev/remember`) to write to it; open it here or on another device (a QR code of the inbox). |
 | `/kit` | The design system, every component in every state. |
 
 Every SDK error code has a returned-to-sender slip (`lib/error-copy.ts`), the chain client's included
@@ -91,7 +94,12 @@ after 12 public drips and 0.045 MON sent in, judges still get drips all day.
   route handler only, as is `DRIP_JUDGE_PASS`. No client module imports `lib/drip-server.ts` (a test checks), and a
   scan of 8 production page loads (the judges' link among them) and the 19 scripts and 4 stylesheets they load
   (2,046,474 bytes, deployment `dpl_BQrbMVrs6CYmQFP34kjzMXxGAo8E`) found neither value nor either name, and none of
-  its 42 strings of 64 hex digits is the key of a project wallet.
+  its 42 strings of 64 hex digits is the key of a project wallet. The same scan at https://app.letterlock.edycu.dev
+  (deployment `dpl_29jedP11xhiGbCoJuSthwacpufwP`, 2026-09-27), over the 8 pages themselves too, their 18 scripts and
+  4 stylesheets (1,938,052 bytes), checked the values of the drip's and the agent's keys, the agent's seed, the
+  judges' pass and the testnet deployer's key, and their names: none appears, except that the two pages opened with
+  the judges' link hold the pass they were asked for with (Next.js writes the request's URL into the page's router
+  data, and the page is served `private, no-store`). None of the 95 strings of 64 hex digits is a project wallet's key.
 
 The drip pays for a first key only: a rotation and a posted letter are paid from the account's own MON, and the page
 says how much to send, before any passkey prompt, when the account holds too little.
@@ -106,13 +114,14 @@ says how much to send, before any passkey prompt, when the account holds too lit
 - **Top up:** send MON to the drip wallet, `0x679f4d96bB36fE383110E3Ef6F46daAf92fb315b`, at any time: the caps count
   the transfers the wallet sent, so MON coming in never changes what the route pays in a day. It held 59 drips' worth
   on 2026-09-27; top up before judging if `drip-status` shows fewer than the judges will need.
-- **The judges' link:** `https://letterlock-app.vercel.app/judge?pass=<DRIP_JUDGE_PASS>`. The pass is kept outside
+- **The judges' link:** `https://app.letterlock.edycu.dev/judge?pass=<DRIP_JUDGE_PASS>` (a link made for the first
+  host still works: its 308 keeps the pass). The pass is kept outside
   this repository, with the owner, and goes only in the submission's private judge-access field; a pass seen in
   public gives anyone the judges' lane. To change it: `vercel env rm DRIP_JUDGE_PASS production --yes`, then
   `printf %s "$NEW" | vercel env add DRIP_JUDGE_PASS production --sensitive`, redeploy, and send the new link.
   Then confirm the deployment holds that pass, spending nothing: with the pass in the environment as
   `LETTERLOCK_DRIP_JUDGE_PASS` (sourced from the file it is kept in, never typed on a command line),
-  `pnpm smoke https://letterlock-app.vercel.app` posts it with chainId 1 and expects 400 `WRONG_CHAIN` in lane `judge`:
+  `pnpm smoke https://app.letterlock.edycu.dev` posts it with chainId 1 and expects 400 `WRONG_CHAIN` in lane `judge`:
   the route's admission refuses it before any chain read. Every drip answer from the admission on names its `lane`
   (`"judge"` or `"public"`), which tells nothing about the pass to anyone who does not hold it.
 - **If a script takes the public lane during judging:** `printf 0 | vercel env add DRIP_HOURLY_CAP_MON production`
@@ -129,7 +138,7 @@ says how much to send, before any passkey prompt, when the account holds too lit
 
 `middleware.ts` gives every page a fresh nonce and the policy of `lib/csp.ts`: scripts only with that nonce
 (`'strict-dynamic'`, no eval), connections only to `rpc.monad.xyz`, `rpc1.monad.xyz` (the log scans),
-`letterlock-agent.vercel.app` and the Sourcify server, no frames, no plugins, no foreign forms. Every page is
+`agent.letterlock.edycu.dev` and the Sourcify server, no frames, no plugins, no foreign forms. Every page is
 rendered per request so it can carry its nonce. Every response carries `nosniff`, `no-referrer`, `DENY` framing,
 HSTS, `Cross-Origin-Opener-Policy: same-origin` and a `Permissions-Policy` that allows passkeys on this origin only.
 No analytics and no third-party script.
@@ -143,10 +152,10 @@ one) make passkeys for its own host, for the end-to-end tests on `localhost`.
 ## Tests
 
 ```sh
-pnpm test                 # 99 unit tests: the drip's rules, the page's chain failures, agent calls and actions, the deployment records, slips, tokens, examples
+pnpm test                 # 102 unit tests: the drip's rules, the page's chain failures, agent calls and actions, the hosts, the deployment records, slips, tokens, examples
 pnpm build && pnpm qa     # design checks on 6 routes at 5 widths: 25 checks, axe (the slips' headings too), overflow, the colour law
 set -a; source ~/.config/monad/testnet-deployer.env; set +a; pnpm e2e   # testnet, below
-pnpm smoke https://letterlock-app.vercel.app                            # read-only, below
+pnpm smoke https://app.letterlock.edycu.dev                             # read-only, below
 ```
 
 - **End to end** (`scripts/e2e.mjs`, 13 tests): a testnet build on `localhost`, driven in Chromium with a WebAuthn
@@ -164,12 +173,15 @@ pnpm smoke https://letterlock-app.vercel.app                            # read-o
   in the public lane (and in the judges' lane with `LETTERLOCK_DRIP_JUDGE_PASS` set), and axe's heading order with
   the `NO_KEY_PUBLISHED` and `CHAIN_UNAVAILABLE` slips on `/seal`. On the production host also: the home page with the
   register unreadable offers "Post my key" and "Read the register again" and none of a posted key's actions, with
-  its slip's heading in order, and `/judge` says it is not known whether a letter went out when the agent answers 500 (its
-  POST answered inside the browser, never sent). 26 of 26 passed on deployment `dpl_99mjvsFKfLtHtyGwwVntE8f5rVqo`
-  (2026-09-27, 07:32 UTC), with `LETTERLOCK_DRIP_JUDGE_PASS` set: the deployment's judges' pass is the one kept with
-  the owner.
+  its slip's heading in order, `/judge` says it is not known whether a letter went out when the agent answers 500 (its
+  POST answered inside the browser, never sent), and the first host, `letterlock-app.vercel.app`, answers every route,
+  a query and a POST to `/api/drip` with a 308 to the same path here. 27 of 27 passed on deployment
+  `dpl_29jedP11xhiGbCoJuSthwacpufwP` at https://app.letterlock.edycu.dev (2026-09-27, 21:48 UTC), with
+  `LETTERLOCK_DRIP_JUDGE_PASS` set: the deployment's judges' pass is the one kept with the owner. (At the first host,
+  26 of 26 passed on `dpl_99mjvsFKfLtHtyGwwVntE8f5rVqo`, 2026-09-27, 07:32 UTC.)
 - **Live** (`scripts/live-mainnet.mjs`): create and publish on the production site with a virtual passkey; it
   spends a real drip, so it records every run in `e2e-results/mainnet-live.json` and needs `--again` after the first.
+  The first two runs were at `letterlock-app.vercel.app`, the rpId SDK 0.1.0 pinned.
   The first run (2026-09-27, 03:37 UTC): the drip landed and the publish that followed was refused by the RPC for the
   reason under **Amount** above; the drip was fixed. Its account `0xceff4e8c0d9b090b36449865320a7387f7f0332f` keeps
   0.010842039 MON that nothing can spend: its virtual passkey is gone.
@@ -187,12 +199,32 @@ pnpm smoke https://letterlock-app.vercel.app                            # read-o
     (block 108,386,081, from its own wallet) opened from the inbox, and again after the storage was cleared.
   Its virtual passkey is gone too: the register marks the key as a test key (`lib/known-keys.json`), and its account
   keeps 0.00698992632 MON.
+  The third run (2026-09-27, 21:22 UTC, deployment `dpl_FxsxM26EcvMb9264Y9qVzSugXj2Q`) was the first at
+  https://app.letterlock.edycu.dev, under the rpId SDK 0.1.1 pins, with a virtual authenticator (not a real passkey):
+  - the drip, [`0xbb567390…9a7a`](https://monadvision.com/tx/0xbb56739007c7a575ec6c2a3f1085b51c84d50e06b207d76bec9934da71b49a7a)
+    (block 108,571,339): 0.01421795232 MON to the passkey account `0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5`;
+  - the publish, [`0x28f3f506…312c`](https://monadvision.com/tx/0x28f3f506813f6f3992a87892bd44c422614990749699b12a1c65467fa6b3312c)
+    (block 108,571,344, 70,863 gas): sent by that account, epoch 1, kid `f30f499bd79f022e`, 3.4 s from the click;
+  - then the run stopped at a step of its own: it pressed **Look up** on `/register` before React had hydrated the
+    page, so the form submitted natively and the result never showed (the register listed the key). The browser
+    closed and the virtual passkey with it, so the key is a test key in `lib/known-keys.json`, and the account keeps
+    0.00698992632 MON. The script now waits for hydration before any click; no second create was run.
+- **The judge's step 2, no passkey** (`scripts/live-judge-agent.mjs`, one agent drop, recorded in
+  `e2e-results/judge-agent-live.json`): `/judge` on https://app.letterlock.edycu.dev, given the third run's address
+  as a device that made it would store it, asked the agent at https://agent.letterlock.edycu.dev to write to it. The
+  agent's log shows the preflight answered 204 (it does so only for an allowed origin) and `POST /remember` 200; the
+  drop [`0x760ea678…eec7`](https://monadvision.com/tx/0x760ea678082271d53ecf404621a6b95bad1f742c020061699366c3644f80eec7)
+  (block 108,572,093, 43,485 gas, 396 bytes, from the agent's wallet) is sealed to the key `keyOf` returns (epoch 1,
+  kid `f30f499bd79f022e`), and the app's inbox for the address lists it. The script's own check of the request's
+  `Origin` read null (Playwright's `request.headers()` leaves it out; it reads `allHeaders()` now), so the drop was
+  checked again read-only (`--verify`) instead of sending another.
 
 ## Deploy
 
 The Vercel project `letterlock-app` builds from the repository root with Root Directory `apps/demo` and installs
-only this app's graph (`pnpm install --frozen-lockfile --filter letterlock-demo...`). Deploy a clean export of a
-commit, so nothing uncommitted is uploaded:
+only this app's graph (`pnpm install --frozen-lockfile --filter letterlock-demo...`). Its production domain is
+`app.letterlock.edycu.dev` (an A record at the domain's DNS host points it at Vercel); `letterlock-app.vercel.app`
+stays attached so that its 308 keeps answering. Deploy a clean export of a commit, so nothing uncommitted is uploaded:
 
 ```sh
 mkdir -p /tmp/letterlock-deploy/.vercel && git archive HEAD | tar -x -C /tmp/letterlock-deploy

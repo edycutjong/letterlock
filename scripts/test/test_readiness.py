@@ -261,7 +261,7 @@ class ExplorerLinks(unittest.TestCase):
         self.assertEqual(R.explorer_target(f"https://monadvision.com/tx/{self.TX}"), ("143", "tx", self.TX))
         self.assertEqual(R.explorer_target(f"https://testnet.monadvision.com/address/{self.DIRECTORY}"), ("10143", "address", self.DIRECTORY))
         self.assertEqual(R.explorer_target(f"https://monadscan.com/address/{self.DIRECTORY}/"), ("143", "address", self.DIRECTORY))
-        for other in ("https://monadvision.com/token/0x1", "https://notmonadvision.com/tx/0x1", "https://letterlock-app.vercel.app/open"):
+        for other in ("https://monadvision.com/token/0x1", "https://notmonadvision.com/tx/0x1", "https://app.letterlock.edycu.dev/open"):
             self.assertIsNone(R.explorer_target(other))
 
     def test_a_mistyped_transaction_or_an_unused_address_fails_and_http_is_never_asked(self):

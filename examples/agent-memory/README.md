@@ -1,7 +1,8 @@
 # Letterlock memory agent
 
 The reference agent for Letterlock: ERC-8004 agent **#10260** on Monad mainnet, live at
-<https://letterlock-agent.vercel.app>. It uses the `letterlock` SDK from this repository the way any app or agent
+<https://agent.letterlock.edycu.dev> (and, on the same deployment, at its first host,
+<https://letterlock-agent.vercel.app>). It uses the `letterlock` SDK from this repository the way any app or agent
 would, with no passkey of its own:
 
 - **`POST /remember`** seals a note to a person's (or an agent's) Letterlock address and drops it on the directory.
@@ -12,9 +13,12 @@ would, with no passkey of its own:
 - **`GET /health`** shows the chain, the directory, the agent's wallet and balance, the key it holds against the key
   published for it, and the limits.
 
-Its ERC-8004 registration file (the agent's `tokenURI`) is
-[`/.well-known/agent-card.json`](https://letterlock-agent.vercel.app/.well-known/agent-card.json), served from
-`public/`: `"active": true`, the endpoints, and two A2A-style skills (`seal-a-memory`, `answer-a-sealed-task`).
+Its ERC-8004 registration file is
+[`/.well-known/agent-card.json`](https://agent.letterlock.edycu.dev/.well-known/agent-card.json), served from
+`public/`: `"active": true`, the endpoints at agent.letterlock.edycu.dev, and two A2A-style skills (`seal-a-memory`,
+`answer-a-sealed-task`). The agent's `tokenURI` still names the same file at the first host,
+<https://letterlock-agent.vercel.app/.well-known/agent-card.json>, which keeps serving it and the API until the owner
+moves the `tokenURI` (below, "Deploy").
 
 ## Live on mainnet
 
@@ -25,6 +29,7 @@ Its ERC-8004 registration file (the agent's `tokenURI`) is
 | `POST /task` from `0xFa72…02b3`: the task sealed to `agent:10260` through `resolve()` → `keyOfAgent`, epoch 2 | [`0x59d435ff…2640`](https://monadvision.com/tx/0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640) (the answer's drop) | 108,355,072 | 68,543 | a 1,102-byte answer in the sender's inbox; opened, it names the task's nonce (`62b87a52786381027af838949c070585`), quotes the task in full (the answer quoted whole tasks then) and names the key it was sealed to (`e5b30e2e52ec0dec`) |
 | `POST /remember` to `0xFa72…02b3`, after the wallet began to check each drop as it signs it (`src/spend.ts`) | [`0x7d349cf0…2177`](https://monadvision.com/tx/0x7d349cf09186f503dba730b06dbdfef182ff643114de0a00cb1a957ad1862177) | 108,371,264 | 44,162 | a 420-byte envelope, read back from the recipient's inbox, identical to the one the agent returned; opened, the text matched. It paid 102 gwei under a 182.4 gwei fee cap: 0.004504524 MON |
 | `setAgentURI(10260, the same card URL)` from its owner (`scripts/set-agent-uri.ts --send`), so that indexers fetch the edited card | [`0x92789014…5719`](https://monadvision.com/tx/0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719) | 108,391,548 | 71,772 | the registry emitted `URIUpdated` and `MetadataUpdate(10260)`; `tokenURI(10260)` is unchanged, and trust8004 now shows the live card (`deployments/143.json`, `agent.indexStatus`) |
+| `POST /remember` from the app's `/judge` at app.letterlock.edycu.dev to agent.letterlock.edycu.dev, for `0xCE31…0CA5` (the app's third live check: a test key from a virtual passkey) | [`0x760ea678…eec7`](https://monadvision.com/tx/0x760ea678082271d53ecf404621a6b95bad1f742c020061699366c3644f80eec7) | 108,572,093 | 43,485 | a 396-byte envelope sealed to the key `keyOf` returns (epoch 1, kid `f30f499bd79f022e`), the one the agent answered the page with, listed in the app's inbox; the agent's log shows the page's preflight answered 204 and the POST 200. Its passkey is gone, so it stays sealed |
 
 The first two drops came from the agent's wallet, [`0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4`](https://monadvision.com/address/0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4),
 at 102 gwei: 0.004615296 and 0.006991386 MON. After them it held 0.988393318 MON at nonce 2, and `/health` counted
@@ -33,8 +38,10 @@ counted 5 of the 10 drops the wallet allowed itself that day. The recipient, the
 (`deployments/143.json`), whose stand-in the deployer's operator keeps outside this repository; that is what made
 both envelopes openable for this check.
 
-The checks were `scripts/call.ts` against the production URL: each answer is read back with the SDK's `inbox()` over
-the drop's block and must be byte-for-byte the envelope the agent returned, then opened.
+The checks up to the `setAgentURI` were `scripts/call.ts` against the production URL, then
+`https://letterlock-agent.vercel.app`: each answer is read back with the SDK's `inbox()` over the drop's block and
+must be byte-for-byte the envelope the agent returned, then opened. The last row is the app's
+`scripts/live-judge-agent.mjs` (`apps/demo/e2e-results/judge-agent-live.json`).
 
 ## Testnet integration run
 
@@ -62,16 +69,23 @@ key `keyOfAgent` returns, is the table above and `test/chain.test.ts`.
 
 Every answer is JSON, with `cache-control: no-store`. An error is `{ "error": { "code", "message" } }`.
 
-A web page may ask the agent to send only from the Letterlock app (`https://letterlock-app.vercel.app`, whose
-`/judge` route asks it from the page) or from the agent's own page: a POST, or its CORS preflight, from any other
-origin answers 403 `ORIGIN_NOT_ALLOWED`, so no site can make its visitors' browsers spend the agent's gas. Requests
-with no `Origin` header (servers, other agents, curl) are not affected, and `GET /health` answers any origin.
-`AGENT_ALLOWED_ORIGINS` replaces the list.
+A web page may ask the agent to send only from the Letterlock app (`https://app.letterlock.edycu.dev`, whose
+`/judge` route asks it from the page) or from the agent's own page (`https://agent.letterlock.edycu.dev`): a POST, or
+its CORS preflight, from any other origin answers 403 `ORIGIN_NOT_ALLOWED`, so no site can make its visitors'
+browsers spend the agent's gas. Requests with no `Origin` header (servers, other agents, curl) are not affected, and
+`GET /health` answers any origin. `AGENT_ALLOWED_ORIGINS` replaces the list.
+
+The app's first origin, `https://letterlock-app.vercel.app` (the rpId SDK 0.1.0 pinned), is not on the list. Every
+request there answers a 308 to the app, so no page runs on it; a tab left open from before the move holds passkeys
+made under the old rpId, and a reload takes it to the app. An allowed origin is a standing grant to spend this wallet
+from browsers, and a `vercel.app` name is released with its project, so the list keeps no origin that only
+redirects. The agent's own first host still serves this deployment, and its page sends no POST
+(`test/app.test.ts`, "the app's retired origin").
 
 ### `POST /remember`
 
 ```sh
-curl -X POST https://letterlock-agent.vercel.app/remember \
+curl -X POST https://agent.letterlock.edycu.dev/remember \
   -H 'content-type: application/json' \
   -d '{"to":"0x…","text":"the dentist moved to Thursday 10:40"}'
 ```
@@ -191,7 +205,7 @@ day would take a wallet of 15.3 MON. `/health` reports the figures of the moment
 
 ## Running it during judging
 
-- **Check it:** `curl -s https://letterlock-agent.vercel.app/health`. `ok` is `false`, and the page says so, when the
+- **Check it:** `curl -s https://agent.letterlock.edycu.dev/health`. `ok` is `false`, and the page says so, when the
   agent is switched off, its wallet is at its reserve, its key does not match, or it has sent the drops it allows
   itself today (`limits.dailyDrops`: `used` of `allowedToday`, until `resetsAt`).
 - **Refill:** send MON to the wallet, `0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4`. The day's allowance rises at
@@ -251,7 +265,7 @@ names.
 
 ```sh
 pnpm install                 # at the repository root
-pnpm --filter letterlock-agent-memory test        # 95 tests: unit, HTTP with a fake chain, and anvil end to end
+pnpm --filter letterlock-agent-memory test        # 96 tests: unit, HTTP with a fake chain, and anvil end to end
 pnpm --filter letterlock-agent-memory typecheck
 ```
 
@@ -305,8 +319,13 @@ vercel firewall publish --yes
 node scripts/build.mjs && vercel deploy --prebuilt --prod
 ```
 
-The card's URL is the agent's `tokenURI` in the IdentityRegistry, so its content changes in place. Indexers fetch it
-again only on a registry event, so after an edit the owner sends `setAgentURI` with the same URL
-(`scripts/set-agent-uri.ts`, simulate first, then `--send`); a new URL takes the same transaction. Preview
+The project's production domain is `agent.letterlock.edycu.dev` (an A record at the domain's DNS host points it at
+Vercel), and `letterlock-agent.vercel.app` stays attached to it: both serve the same deployment, and nothing there
+redirects, so a POST to either is answered. The card's URL is the agent's `tokenURI` in the IdentityRegistry, so its
+content changes in place. Indexers fetch it again only on a registry event, so after an edit the owner sends
+`setAgentURI` with the same URL (`scripts/set-agent-uri.ts`, simulate first, then `--send`); a new URL takes the same
+transaction. The move of the `tokenURI` to `https://agent.letterlock.edycu.dev/.well-known/agent-card.json` is
+simulated (77,382 gas from the owner's address, `deployments/143.json`, `agent.tokenURIMove`) and waits for the
+owner; until it is sent, `tokenURI(10260)` names the card at `letterlock-agent.vercel.app`, which must keep serving. Preview
 deployments get none of the production variables (`AGENT_ENABLED` included), so their POST endpoints answer 503
 `AGENT_DISABLED`.

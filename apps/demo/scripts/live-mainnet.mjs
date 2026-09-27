@@ -48,7 +48,7 @@ const txOf = (href) => /\/tx\/(0x[0-9a-f]{64})/i.exec(href ?? "")?.[1];
 /**
  * Waits until React has hydrated the element `selector` names. Before that a click on a form's button submits it
  * natively (the register's lookup reloads as /register?q=…, which the page does not read) or does nothing: the
- * 2026-09-28 run lost its register step to that race.
+ * run of 2026-09-27, 21:22 UTC lost its register step to that race.
  */
 const hydrated = (page, selector) =>
   page.waitForFunction((s) => {

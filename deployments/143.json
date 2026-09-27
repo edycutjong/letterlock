@@ -21,7 +21,7 @@
   "preflight": "forge build --force, then LETTERLOCK_REQUIRE_FORK=true forge test: 111 passed, 0 failed, 0 skipped, including the 9 mainnet fork tests against the live registry and test_scriptArtifactDeploysTheCurrentSource",
   "agentId": 10260,
   "agentRegisterTx": "0xb6b41dd5800042005b96b46d8245f0311b6461bc5cdbc90347952c3393896cf1",
-  "agentCardUrl": "https://letterlock-agent.vercel.app/.well-known/agent-card.json",
+  "agentCardUrl": "https://agent.letterlock.edycu.dev/.well-known/agent-card.json",
   "agent": {
     "agentId": 10260,
     "agentRegistry": "eip155:143:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
@@ -29,16 +29,18 @@
     "registerCall": "register(string agentURI) on the IdentityRegistry; agentId read from its Registered(agentId, agentURI, owner) event",
     "registerBlock": 108289775,
     "tokenURI": "https://letterlock-agent.vercel.app/.well-known/agent-card.json",
-    "card": "ERC-8004 registration-v1 file with A2A-style skills (seal-a-memory, answer-a-sealed-task), served with HTTP 200 by the Vercel project letterlock-agent from examples/agent-memory, which also serves the agent's endpoints POST /remember, POST /task and GET /health. The card URL is unchanged since registration; since 2026-09-27 the card says active: true, and the owner set the same URL again with setAgentURI (agent.setAgentURI) so that indexers fetch it again",
+    "tokenURINote": "the registered URL, unchanged on chain: the card at letterlock-agent.vercel.app, which serves the same deployment as agent.letterlock.edycu.dev (agent.tokenURIMove)",
+    "card": "ERC-8004 registration-v1 file with A2A-style skills (seal-a-memory, answer-a-sealed-task), served with HTTP 200 by the Vercel project letterlock-agent from examples/agent-memory, which also serves the agent's endpoints POST /remember, POST /task and GET /health. Since 2026-09-27 (21:20 UTC) the project answers at https://agent.letterlock.edycu.dev, the host the card names for every endpoint, and still at https://letterlock-agent.vercel.app, where the tokenURI names the card: both serve the same deployment. Since 2026-09-27 the card says active: true, and the owner set the registered URL again with setAgentURI (agent.setAgentURI) so that indexers fetch it again",
     "cardSource": "examples/agent-memory/public/.well-known/agent-card.json",
     "indexedBy": "https://trust8004.xyz/agents/143:10260",
     "indexStatus": "current: on 2026-09-27 at 13:34 UTC trust8004's agent API (https://trust8004.xyz/api/app/agents/143%3A10260) reported metadataUpdatedAt 1790489844000 and metadataEventBlock 108391548, the setAgentURI transaction's block and time, with active: true, and its page shows the live card's description. Before that transaction it still showed the card as fetched at registration (metadataUpdatedAt 1790459115000, block 108289775), which said 'Status: not live yet': it fetches a card again only on an onchain Registered, MetadataSet or URIUpdated event",
     "service": {
-      "url": "https://letterlock-agent.vercel.app",
+      "url": "https://agent.letterlock.edycu.dev",
       "source": "examples/agent-memory",
       "wallet": "0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4",
       "walletUse": "pays for the agent's drops and nothing else",
-      "record": "examples/agent-memory/README.md: the first mainnet POST /remember (drop 0x00fdfadca4afca918ac9ef3a648c491c407e945c2a949041cb24bfe65a4dfbcd) and POST /task (answer drop 0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640)"
+      "record": "examples/agent-memory/README.md: the first mainnet POST /remember (drop 0x00fdfadca4afca918ac9ef3a648c491c407e945c2a949041cb24bfe65a4dfbcd) and POST /task (answer drop 0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640)",
+      "alsoAt": "https://letterlock-agent.vercel.app (the same deployment; the tokenURI names its card)"
     },
     "keys": [
       {
@@ -72,6 +74,12 @@
       "status": 1,
       "events": "URIUpdated(10260, the card URL, the owner) and ERC-4906 MetadataUpdate(10260), both from the IdentityRegistry",
       "tokenURIAfter": "https://letterlock-agent.vercel.app/.well-known/agent-card.json"
+    },
+    "tokenURIMove": {
+      "to": "https://agent.letterlock.edycu.dev/.well-known/agent-card.json",
+      "call": "setAgentURI(10260, the URL above) on the IdentityRegistry, from the agent's owner, with examples/agent-memory/scripts/set-agent-uri.ts --uri <the URL> --send",
+      "simulated": "2026-09-27 21:46 UTC, from the owner's address with no key (scripts/set-agent-uri.ts without --send): ok, 77,382 gas, at most 0.009440604 MON at the current fee cap",
+      "status": "prepared, not sent: the owner sends it; tokenURI above is what the registry returns until then"
     }
   },
   "publishTx": "0x35b8330e768a6c7529c0c9c4151d945ed83e3ef596c0c6ddca3486efe11ae233",

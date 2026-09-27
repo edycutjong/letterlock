@@ -15,8 +15,9 @@ upgrade path, and no function accepts value.
 Both deploy transactions carry the same creation code; only the constructor argument, the registry, differs. The
 mainnet record, [`deployments/143.json`](../deployments/143.json), was made with [script/DeployMainnet.md](script/DeployMainnet.md)
 and holds the deploy and the first real mainnet transactions, all from the deployer: it registered ERC-8004 agent
-**#10260** in the IdentityRegistry (its agent card: <https://letterlock-agent.vercel.app/.well-known/agent-card.json>,
-source in `examples/agent-memory`), then sent a `publish`, a `publishForAgent` for agent 10260 and a `drop` of a 490-byte
+**#10260** in the IdentityRegistry (its agent card, the URL its `tokenURI` names:
+<https://letterlock-agent.vercel.app/.well-known/agent-card.json>, also at
+<https://agent.letterlock.edycu.dev/.well-known/agent-card.json>; source in `examples/agent-memory`), then sent a `publish`, a `publishForAgent` for agent 10260 and a `drop` of a 490-byte
 envelope sealed with the SDK's `seal()`. Both published keys are DEMO KEYs: the SDK's `deriveKeyPair()` over 32
 random bytes standing in for a passkey PRF output, with no passkey behind them. The stand-ins are kept outside the
 repository by the deployer's operator, so the drop can be opened again, and whoever holds them can open anything
