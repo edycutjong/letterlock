@@ -3,14 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Letterlock demo app: the postal-register design system, the five routes and the /kit gallery. Static example content until the SDK is wired in.",
+  "description": "Letterlock app: the postal-register design system and the five routes, live on Monad mainnet (a testnet build for the end-to-end tests), with the gas drip for a first publish and the /kit gallery.",
   "scripts": {
     "dev": "next dev -p 3217",
     "build": "next build",
     "start": "next start -p 3217",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "node --test \"test/*.test.ts\"",
-    "qa": "node scripts/qa.mjs"
+    "qa": "node scripts/qa.mjs",
+    "e2e": "node --test-reporter=spec scripts/e2e.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "letterlock": "workspace:*",
