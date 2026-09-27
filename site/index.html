@@ -439,6 +439,17 @@ pre.tty .ln{display:block}
   .btn{box-shadow:none}
   .faq details{break-inside:avoid}
 }
+.card .inset .zoom{display:block;cursor:zoom-in}
+.card .inset .zoom:focus-visible{outline:2px solid var(--before);outline-offset:-2px}
+.lightbox{border:0;padding:0;margin:auto;background:transparent;max-width:min(96vw,1600px);max-height:96vh;overflow:visible}
+.lightbox::backdrop{background:rgba(30,27,22,.82)}
+.lightbox[open]{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.lightbox img{display:block;max-width:min(96vw,1600px);max-height:calc(96vh - 56px);width:auto;height:auto;border:1px solid var(--rule);border-radius:3px;background:var(--sheet);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.lb-close{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid var(--sheet);border-radius:3px;background:var(--ink);color:var(--sheet);font:600 14px/1 var(--font-body);cursor:pointer;transition:background .15s var(--ease-out),color .15s var(--ease-out)}
+.lb-close:hover{background:var(--sheet);color:var(--ink)}
+.lb-close:focus-visible{outline:2px solid var(--sheet);outline-offset:3px}
+.lb-close svg{width:14px;height:14px}
+@media (prefers-reduced-motion:no-preference){.lightbox[open]{animation:lb-in .18s var(--ease-out)}@keyframes lb-in{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}}
 </style>
 </head>
 <body>
@@ -759,7 +770,7 @@ pre.tty .ln{display:block}
         <svg class="ic" viewBox="0 0 44 44" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6 11h20M6 18h14M6 25h11"/><circle cx="27.5" cy="25.5" r="7.5"/><path d="M33 31l6 6"/></svg>
         <h3>Resolve</h3>
         <p>Any app reads <code class="data">keyOf(address)</code>. An agent's key resolves only while its ERC-8004 owner is the one who posted it. The register, as the live app reads it:</p>
-        <div class="inset"><img src="assets/screens/register.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The live app's /register page: every key posted to the directory on Monad mainnet, newest first, each with its epoch, key strip and transaction."></div>
+        <div class="inset"><a class="zoom" href="assets/screens/register.webp" aria-label="Open the full-size screenshot of the live app's /register page"><img src="assets/screens/register.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The live app's /register page: every key posted to the directory on Monad mainnet, newest first, each with its epoch, key strip and transaction."></a></div>
         <span class="chip">keyOf · keyOfAgent · IdentityRegistry 0x8004…a432</span>
       </article>
       <article class="card w3">
@@ -917,9 +928,34 @@ pre.tty .ln{display:block}
   </footer>
 </div>
 
+<dialog class="lightbox" id="lightbox" aria-label="Full-size screenshot">
+  <button type="button" class="lb-close" aria-label="Close the screenshot"><svg viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>Close</button>
+  <img alt="">
+</dialog>
+
 <script>
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // screenshots open in a lightbox with a close button; Esc and a tap outside the image close it too
+  const lb = document.getElementById('lightbox');
+  if (lb && typeof lb.showModal === 'function') {
+    const lbImg = lb.querySelector('img');
+    let opener = null;
+    document.querySelectorAll('a[href$=".webp"]').forEach((a) => a.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      const img = a.querySelector('img');
+      lbImg.src = a.getAttribute('href');
+      lbImg.alt = img ? img.alt : '';
+      opener = a;
+      lb.showModal();
+      lb.querySelector('.lb-close').focus();
+    }));
+    lb.querySelector('.lb-close').addEventListener('click', () => lb.close());
+    lb.addEventListener('click', (e) => { if (e.target === lb) lb.close(); });
+    lb.addEventListener('close', () => { lbImg.removeAttribute('src'); if (opener) opener.focus(); });
+  }
 
   // copy the command
   document.querySelectorAll('button.copy').forEach((b) => b.addEventListener('click', async () => {
