@@ -161,7 +161,7 @@ export function JudgeRoute() {
             <div className={styles.actions}>
               <p className={styles.fact}>{host.reason}</p>
               <ButtonLink href={`https://${LETTERLOCK_RP_ID}/judge`} size="md" icon={<ArrowRightIcon />}>
-                Go to {LETTERLOCK_RP_ID}
+                Go to the live site
               </ButtonLink>
             </div>
           ) : (

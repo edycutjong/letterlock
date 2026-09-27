@@ -166,6 +166,11 @@
   color: var(--muted);
 }
 
+/* a superseded line's transaction link is pencil too, and turns airmail blue under the pointer like every link */
+.table tr[data-state="superseded"] a:global(.data):hover {
+  color: var(--before);
+}
+
 /* ---- narrower than an iPad in landscape: addressee · epoch · key ---- */
 
 @media (max-width: 1023.98px) {

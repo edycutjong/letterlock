@@ -172,7 +172,7 @@ export function AddressDesk({ intro, example }: AddressDeskProps) {
       <div className={styles.elsewhere}>
         <p>{host.reason}</p>
         <ButtonLink href={`https://${LETTERLOCK_RP_ID}/`} icon={<ArrowRightIcon />}>
-          Go to {LETTERLOCK_RP_ID}
+          Go to the live site
         </ButtonLink>
       </div>
     );

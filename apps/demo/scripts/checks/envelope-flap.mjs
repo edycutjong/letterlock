@@ -1,13 +1,14 @@
 // An open envelope folds its flap back above the pocket. The flap must stay inside the envelope's own figure, so it
 // never lies over the text above it, whatever the length of the letter standing in front of it, while it rests and
 // while it swings; and the letter must still stand in the pocket. Checked
-//   - on every open envelope qa.mjs loads, and on /open with the letter cut to one short line (a real decrypted note
-//     can be that short);
+//   - on every open envelope qa.mjs loads, and on /seal (the letter being written stands in the open envelope) with
+//     the letter cut to one short line (a real note can be that short);
 //   - frame by frame through the swing: every transition in the figure is paused and stepped from 0 to 900 ms, in
-//     the kit's replay (sealed and opened with its own buttons), and on the /open letter and a letterless kit
+//     the kit's replay (sealed and opened with its own buttons), and on the /seal letter and a letterless kit
 //     envelope switched the way the component switches them (the letter is mounted as the flap opens and kept while
 //     it closes). At each step the flap is also drawn in the right order: in front of the letter once it lies over
-//     the pocket, behind it while it is folded back and the letter stands out.
+//     the pocket, behind it while it is folded back and the letter stands out. (/open shows a letter only once a
+//     passkey has opened it; it is the same component.)
 import { openPage } from "./_lib.mjs";
 
 export const name = "envelope-flap";
@@ -145,25 +146,25 @@ export async function page(page, { fail }) {
 }
 
 export async function run({ browser, base, routes, fail }) {
-  if (routes.includes("/open")) {
+  if (routes.includes("/seal")) {
     for (const width of [390, 820, 1024, 1280]) {
-      const { page, context } = await openPage(browser, base, "/open", { width });
+      const { page, context } = await openPage(browser, base, "/seal", { width });
       await page.evaluate(() => {
         const p = document.querySelector('figure[data-flap="open"][data-letter] [class*="Envelope_note__"] p');
         p.textContent = "Your code is 4412.";
       });
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-      judge(await page.evaluate(measure), fail, `/open @${width} with a one-line letter`);
+      judge(await page.evaluate(measure), fail, `/seal @${width} with a one-line letter`);
       await context.close();
     }
 
-    const reader = 'section[aria-labelledby="reader-title"] figure';
+    const reader = 'section[aria-labelledby="sealed-title"] figure';
     for (const width of [390, 820, 1280])
       for (const text of [undefined, "Your code is 4412."])
         for (const opening of [true, false]) {
-          const { page, context } = await openPage(browser, base, "/open", { width });
+          const { page, context } = await openPage(browser, base, "/seal", { width });
           await page.evaluate(STEP);
-          const where = `/open @${width} letter${text ? " (one line)" : ""}, ${opening ? "opening" : "closing"}`;
+          const where = `/seal @${width} letter${text ? " (one line)" : ""}, ${opening ? "opening" : "closing"}`;
           judgeSwing(await page.evaluate(SWITCH, { sel: reader, opening, text }), fail, where);
           await context.close();
         }

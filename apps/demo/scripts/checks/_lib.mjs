@@ -103,3 +103,25 @@ export async function pngDiff(page, a, b, threshold = 24) {
     { a: a.toString("base64"), b: b.toString("base64"), threshold },
   );
 }
+
+/**
+ * The pages read the chain, so a check that needs a live state brings it about the way a person would. The address
+ * used is the directory's deployer (deployments/<chain>.json): it has a key and letters on both chains.
+ */
+import { readFileSync } from "node:fs";
+const chainRecord = JSON.parse(
+  readFileSync(new URL(`../../../../deployments/${process.env.NEXT_PUBLIC_LETTERLOCK_CHAIN === "monad-testnet" ? "10143" : "143"}.json`, import.meta.url), "utf8"),
+);
+export const KNOWN_ADDRESS = chainRecord.deployer;
+
+/** /register: the live register has been read (its table has lines). */
+export const registerRead = (page) =>
+  page.waitForFunction(() => document.querySelectorAll('section[aria-labelledby="live-title"] tbody tr').length > 0, null, { timeout: 60_000 });
+
+/** /register or /seal: look KNOWN_ADDRESS up and wait for the line keyOf returned. */
+export async function lookUpKnown(page, route) {
+  const field = route === "/seal" ? page.locator('main form input[name="to"]') : page.locator('form[role="search"] input[name="q"]');
+  await field.fill(KNOWN_ADDRESS);
+  if (route !== "/seal") await field.press("Enter");
+  await page.locator('tr[data-state="found"]').first().waitFor({ timeout: 30_000 });
+}
