@@ -112,8 +112,11 @@
   border-radius: 2px;
 }
 
+/* a plain plate lays its specimen across its width, at the specimen's own height: a plate as tall as its row must
+   not stretch a register frame or a field taller than the pages draw them (scripts/checks/specimen-fit.mjs) */
 .plate[data-plain] {
-  place-items: stretch;
+  justify-items: stretch;
+  align-items: start;
   background-image: none;
   background-color: transparent;
   border-style: dashed;
