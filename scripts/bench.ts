@@ -7,7 +7,8 @@
 // Read-only: no key, no transaction. The recipient is the mainnet directory's deployer, whose published key is the
 // deploy smoke test's DEMO KEY (deployments/143.json); every resolve must return exactly that key and epoch.
 //
-// Timed with performance.now(), one operation at a time (nothing overlaps), in this order in every round:
+// Timed with performance.now(), one operation at a time (nothing overlaps); every round runs these four, in this order
+// in even rounds and in the reverse order in odd ones:
 //   resolve         ll.resolve(deployer): one keyOf eth_call over HTTPS. The client's one-time chain and directory
 //                   checks run before the first round and are timed on their own, as the cold first resolve
 //   seal            seal() of a fixed note to the key that resolve returned: HPKE on this machine, no network
@@ -123,22 +124,29 @@ const warmupFailures = failures.length;
 const samples = { resolve: [] as number[], seal: [] as number[], resolveAndSeal: [] as number[], rpcRoundTrip: [] as number[] };
 let envelopeBytes = 0;
 const firstBlock = await rpc.getBlockNumber({ cacheTime: 0 });
-for (let i = 0; i < N; i++) {
+// One round: resolve then seal its result, the SDK's sealTo, and a plain round trip. The order is reversed every other
+// round, so no operation always runs right after another one.
+const resolveThenSeal = async (i: number) => {
   const r = await timed(i, "resolve", () => ll.resolve(recipient));
-  if (r) {
-    samples.resolve.push(r.ms);
-    checkKey(i, r.value);
-    const s = await timed(i, "seal", () => seal({ chainId: ll.chainId, directory: ll.directory, to: r.value, plaintext }));
-    if (s) {
-      samples.seal.push(s.ms);
-      checkEnvelope(i, s.value);
-      envelopeBytes = encodeEnvelope(s.value).length;
-    }
-  }
+  if (!r) return;
+  samples.resolve.push(r.ms);
+  checkKey(i, r.value);
+  const s = await timed(i, "seal", () => seal({ chainId: ll.chainId, directory: ll.directory, to: r.value, plaintext }));
+  if (!s) return;
+  samples.seal.push(s.ms);
+  checkEnvelope(i, s.value);
+  envelopeBytes = encodeEnvelope(s.value).length;
+};
+const sealTo = async (i: number) => {
   const c = await timed(i, "resolve+seal", () => ll.sealTo(recipient, plaintext));
   if (c) { samples.resolveAndSeal.push(c.ms); checkEnvelope(i, c.value); }
+};
+const roundTrip = async (i: number) => {
   const b = await timed(i, "rpc round trip", () => rpc.getBlockNumber({ cacheTime: 0 }));
   if (b) samples.rpcRoundTrip.push(b.ms);
+};
+for (let i = 0; i < N; i++) {
+  for (const op of i % 2 === 0 ? [resolveThenSeal, sealTo, roundTrip] : [roundTrip, sealTo, resolveThenSeal]) await op(i);
   if ((i + 1) % 50 === 0) console.log(`  ${i + 1}/${N} rounds`);
 }
 const lastBlock = await rpc.getBlockNumber({ cacheTime: 0 });
@@ -237,7 +245,7 @@ const g = ctx.sdk.git;
 const md = `# Benchmark: resolve + seal on Monad mainnet
 
 Measured ${results.generatedAt.slice(0, 16).replace("T", " ")} UTC with \`${results.command}\` (scripts/bench.ts). Every number below is
-copied from [results.json](results.json), which also holds all ${N * 4} raw samples.
+copied from [results.json](results.json), which also holds all ${Object.values(samples).reduce((n, v) => n + v.length, 0)} raw samples.
 
 **resolve + seal: p50 ${L.resolveAndSeal.p50} ms · p95 ${L.resolveAndSeal.p95} ms · p99 ${L.resolveAndSeal.p99} ms** over N = ${L.resolveAndSeal.n}, against the
 public RPC ${rpcShown}. Sealing alone takes p50 ${L.seal.p50} ms on this machine; the rest is one \`keyOf\` read over the network.
@@ -287,7 +295,7 @@ ${forgeSnapshot.publish_firstKey_tx!.toLocaleString("en-US")}, rotation ${forgeS
 | Time zone of the machine | ${ctx.timeZone} |
 | SDK | letterlock ${VERSION}${g ? `, runtime code at \`${g.sdkCommit.slice(0, 7)}\` (${g.sdkCommitDate})${g.sdkDirty ? ", **with uncommitted changes**" : ""}; checkout \`${g.head.slice(0, 7)}\`` : ""} |
 | RPC | ${rpcShown} (Monad's public endpoint), mainnet blocks ${ctx.chain.blocks[0]} to ${ctx.chain.blocks[1]} |
-| N | ${N} rounds after ${WARMUP} warm-up rounds; each round times resolve, seal, resolve + seal and an rpc round trip, in that order |
+| N | ${N} rounds after ${WARMUP} warm-up rounds; each round times resolve, seal, resolve + seal and an rpc round trip, in that order in even rounds and reversed in odd ones |
 | Percentiles | nearest-rank (every value is a measured sample) |
 
 The network dominates \`resolve\`: it tracks the plain \`eth_blockNumber\` round trip from this machine to the RPC, so
