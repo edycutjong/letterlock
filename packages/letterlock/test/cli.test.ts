@@ -8,7 +8,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../src/cli/program.ts";
 import { VERSION, decodeEnvelope, fingerprint, open, toHex } from "../src/index.ts";
-import { client, ctx, fund, fundedAccount, noChain, standIn } from "./anvil/context.ts";
+import { client, ctx, fund, fundedAccount, noChain, publicClient, standIn, testClient } from "./anvil/context.ts";
+import { rpcProxy } from "./anvil/proxy.ts";
 
 type Result = { code: number; stdout: string; stderr: string };
 const cli = async (argv: string[], o: { stdin?: string; env?: Record<string, string> } = {}): Promise<Result> => {
@@ -23,6 +24,21 @@ const cli = async (argv: string[], o: { stdin?: string; env?: Record<string, str
 };
 const chain = () => (ctx.ok ? ["--rpc", ctx.rpcUrl, "--directory", ctx.directory] : []);
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
+
+/**
+ * The "not final yet" note of `inbox --to-block latest`: printed exactly when the last block scanned is past the
+ * finalized one, and naming the finalized block. inbox() reads "latest" and "finalized" in parallel, and other test
+ * files mine blocks on the same chain meanwhile, so the finalized block can catch up with the last block scanned between
+ * the two reads: then there is no note, and that block is final. Returns whether the note was printed.
+ */
+const finalityNote = async (stdout: string): Promise<boolean> => {
+  const last = /, blocks \d+\.\.(\d+) \(/.exec(stdout.split("\n")[0] ?? "")?.[1];
+  expect(last, stdout).toBeDefined();
+  const note = /^blocks after (\d+) are not final yet: a drop there can still vanish or move$/m.exec(stdout)?.[1];
+  if (note !== undefined) expect(BigInt(note)).toBeLessThan(BigInt(last!));
+  else expect(BigInt(last!)).toBeLessThanOrEqual((await publicClient().getBlock({ blockTag: "finalized" })).number);
+  return note !== undefined;
+};
 
 describe("letterlock CLI without a chain", () => {
   it("--version prints the package version", async () => {
@@ -165,8 +181,37 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     expect(j.envelopes.map((e) => e.transactionHash)).toEqual([tx]);
     expect(text(await open(decodeEnvelope(JSON.stringify(j.envelopes[0]!.envelope)), keys))).toBe("dropped by the CLI");
     const human = await cli(["inbox", recipient, "--from-block", block!, "--to-block", "latest", ...chain()]);
-    expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)\nblocks after \d+ are not final yet/);
+    expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)\n/);
+    await finalityNote(human.stdout);
     expect((await cli(["inbox", recipient, "--from-block", block!, "--to-block", "soon", ...chain()])).code).toBe(2);
+  });
+
+  // inbox() reads eth_blockNumber and the finalized block in parallel; a proxy decides which answer comes first
+  const racing = async (first: "latest" | "finalized", mineBetween: number) => {
+    let firstAnswered!: () => void;
+    const answered = new Promise<void>((r) => { firstAnswered = r; });
+    const isFirst = (method: string, params: unknown[]) => (first === "latest" ? method === "eth_blockNumber" : method === "eth_getBlockByNumber" && params[0] === "finalized");
+    const isSecond = (method: string, params: unknown[]) => (first === "latest" ? method === "eth_getBlockByNumber" && params[0] === "finalized" : method === "eth_blockNumber");
+    const proxy = await rpcProxy(ctx.ok ? ctx.rpcUrl : "", {
+      intercept: async (req, upstream) => {
+        if (isFirst(req.method, req.params)) { const reply = await upstream(); firstAnswered(); return reply; }
+        if (isSecond(req.method, req.params)) { await answered; if (mineBetween) await testClient().mine({ blocks: mineBetween }); return upstream(); }
+        return undefined;
+      },
+    });
+    try {
+      const r = await cli(["inbox", recipient, "--from-block", String(publishedBlock), "--to-block", "latest", "--rpc", proxy.url, "--directory", ctx.ok ? ctx.directory : ""]);
+      expect([r.code, r.stderr]).toEqual([0, ""]);
+      return await finalityNote(r.stdout);
+    } finally { await proxy.close(); }
+  };
+
+  it("inbox --to-block latest, the finalized block read first: the note names it, below the last block scanned", async () => {
+    expect(await racing("finalized", 0)).toBe(true);
+  });
+
+  it("inbox --to-block latest, two blocks finalized between its two reads: no note, and the last block scanned is final", async () => {
+    expect(await racing("latest", 2)).toBe(false);
   });
 
   it.each([["no --to-block", []], ["--to-block finalized", ["--to-block", "finalized"]]])(
