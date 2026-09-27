@@ -58,6 +58,9 @@ type Record143 = {
   dropTx: Hex;
   gasUsed: Record<string, number>;
   smokeTest: { publishedKey: Hex; epoch: number; kid: string; envelopeBytes: number };
+  agentId?: number;
+  /** Every key agent `agentId` has had, oldest first; epochs after the first carry their own transaction and gas. */
+  agent?: { keys?: { epoch: number; publishForAgentTx?: Hex; gasUsed?: number }[] };
 };
 const record = JSON.parse(readFileSync(join(ROOT, "deployments/143.json"), "utf8")) as Record143;
 if (record.chainId !== 143 || record.address !== DEPLOYMENTS.monad.directory)
@@ -154,13 +157,24 @@ const finishedAt = new Date();
 const loadAtEnd = loadAverage();
 
 // Gas: the receipts of the directory's own mainnet transactions, next to what deployments/143.json recorded.
-const TXS = [
-  { name: "deploy", hash: record.deployTx, what: "Letterlock deploy (creation code + registry argument)" },
-  { name: "agentRegister", hash: record.agentRegisterTx, what: "ERC-8004 register() of agent 10260 (the registry's gas, not Letterlock's)" },
-  { name: "publish", hash: record.publishTx, what: "publish(pub, 1): an address's first key" },
-  { name: "publishForAgent", hash: record.publishForAgentTx, what: "publishForAgent(10260, pub, 1): an agent's first key (reads the live registry)" },
-  { name: "drop", hash: record.dropTx, what: `drop() of a ${record.smokeTest.envelopeBytes}-byte envelope` },
-] as const;
+// Every transaction deployments/143.json records, with the gas it records for it: the deploy smoke test's five, then each
+// later key of the agent (a rotation: publishForAgent at the next epoch).
+const agentId = record.agentId ?? 10260;
+const TXS: { name: string; hash: Hex; what: string; recorded: number | undefined }[] = [
+  { name: "deploy", hash: record.deployTx, what: "Letterlock deploy (creation code + registry argument)", recorded: record.gasUsed.deploy },
+  { name: "agentRegister", hash: record.agentRegisterTx, what: `ERC-8004 register() of agent ${agentId} (the registry's gas, not Letterlock's)`, recorded: record.gasUsed.agentRegister },
+  { name: "publish", hash: record.publishTx, what: "publish(pub, 1): an address's first key", recorded: record.gasUsed.publish },
+  { name: "publishForAgent", hash: record.publishForAgentTx, what: `publishForAgent(${agentId}, pub, 1): an agent's first key (reads the live registry)`, recorded: record.gasUsed.publishForAgent },
+  { name: "drop", hash: record.dropTx, what: `drop() of a ${record.smokeTest.envelopeBytes}-byte envelope`, recorded: record.gasUsed.drop },
+  ...(record.agent?.keys ?? [])
+    .filter((k) => k.epoch > 1 && k.publishForAgentTx !== undefined && k.publishForAgentTx !== record.publishForAgentTx)
+    .map((k) => ({
+      name: `publishForAgent epoch ${k.epoch}`,
+      hash: k.publishForAgentTx!,
+      what: `publishForAgent(${agentId}, pub, ${k.epoch}): the agent's key rotated to epoch ${k.epoch}`,
+      recorded: k.gasUsed,
+    })),
+];
 type GasRow = {
   name: string; what: string; tx: Hex; block: number; status: string; gasUsed: number; gasLimit: number;
   effectiveGasPriceGwei: string; costMON: string; recordedGasUsed: number | null; matchesRecord: boolean; explorer: string;
@@ -179,8 +193,8 @@ for (const t of TXS) {
     gasLimit: Number(tx.gas),
     effectiveGasPriceGwei: formatGwei(receipt.effectiveGasPrice),
     costMON: formatEther(costWei),
-    recordedGasUsed: record.gasUsed[t.name] ?? null,
-    matchesRecord: record.gasUsed[t.name] === Number(receipt.gasUsed),
+    recordedGasUsed: t.recorded ?? null,
+    matchesRecord: t.recorded === Number(receipt.gasUsed),
     explorer: `${DEPLOYMENTS.monad.explorer}/tx/${t.hash}`,
   });
 }
@@ -280,7 +294,7 @@ ${results.gas.source}. Cost is the receipt's gas used times its effective gas pr
 |---|---|---|---|---|---|---|
 ${gas.map((x) => `| ${x.what} | ${x.gasUsed.toLocaleString("en-US")} | ${x.gasLimit.toLocaleString("en-US")} | ${x.effectiveGasPriceGwei} | ${x.costMON} | ${x.matchesRecord ? "matches" : `**differs** (${x.recordedGasUsed})`} | [${x.tx.slice(0, 10)}…](${x.explorer}) |`).join("\n")}
 
-No mainnet rotation has happened yet, so there is no receipt for one. For scale only, forge's gas snapshot
+${gas.some((x) => x.name.startsWith("publishForAgent epoch")) ? "An agent key has been rotated on mainnet (above); no address key has been yet, so there is no receipt for an address's rotation" : "No mainnet rotation has happened yet, so there is no receipt for one"}. For scale only, forge's gas snapshot
 (contracts/snapshots/Letterlock.json, a local EVM run of each call as its own transaction; not a receipt): first publish
 ${forgeSnapshot.publish_firstKey_tx!.toLocaleString("en-US")}, rotation ${forgeSnapshot.publish_rotate_tx!.toLocaleString("en-US")}, drop of a 1 KiB envelope ${forgeSnapshot.drop_toAddress_1KiB_tx!.toLocaleString("en-US")}, of a 16 KiB one ${forgeSnapshot.drop_toAddress_16KiB_tx!.toLocaleString("en-US")}.
 
@@ -325,7 +339,7 @@ console.log([
   line("resolve+seal", L.resolveAndSeal),
   line("rpc round trip", L.rpcRoundTrip),
   `  cold first resolve ${L.coldFirstResolve} ms · envelope ${envelopeBytes} bytes · failures ${failures.length} · mismatches ${mismatches.length}`,
-  ...gas.map((x) => `  gas ${x.name.padEnd(16)} ${String(x.gasUsed).padStart(9)}  ${x.costMON} MON  ${x.matchesRecord ? "matches deployments/143.json" : "DIFFERS from deployments/143.json"}`),
+  ...gas.map((x) => `  gas ${x.name.padEnd(26)} ${String(x.gasUsed).padStart(9)}  ${x.costMON} MON  ${x.matchesRecord ? "matches deployments/143.json" : "DIFFERS from deployments/143.json"}`),
   opts["no-write"] ? "  (--no-write: nothing written)" : "  wrote bench/results.json and bench/RESULTS.md",
 ].join("\n"));
 process.exitCode = mismatches.length || gas.some((x) => !x.matchesRecord || x.status !== "success") ? 1 : 0;
