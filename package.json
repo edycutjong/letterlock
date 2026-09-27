@@ -5,7 +5,14 @@
   "packageManager": "pnpm@10.34.5",
   "scripts": {
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "spike:browser": "pnpm --filter prf-browser-spike test"
+    "typecheck": "pnpm -r typecheck && tsc -p scripts",
+    "spike:browser": "pnpm --filter prf-browser-spike test",
+    "bench": "node scripts/bench.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "letterlock": "workspace:*",
+    "typescript": "^5.9.3",
+    "viem": "^2.56.9"
   }
 }

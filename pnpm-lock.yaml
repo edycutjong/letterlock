@@ -6,7 +6,20 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      letterlock:
+        specifier: workspace:*
+        version: link:packages/letterlock
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@5.9.3)
 
   apps/demo:
     dependencies:
