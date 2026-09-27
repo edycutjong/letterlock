@@ -110,6 +110,11 @@ says how much to send, before any passkey prompt, when the account holds too lit
   this repository, with the owner, and goes only in the submission's private judge-access field; a pass seen in
   public gives anyone the judges' lane. To change it: `vercel env rm DRIP_JUDGE_PASS production --yes`, then
   `printf %s "$NEW" | vercel env add DRIP_JUDGE_PASS production --sensitive`, redeploy, and send the new link.
+  Then confirm the deployment holds that pass, spending nothing: with the pass in the environment as
+  `LETTERLOCK_DRIP_JUDGE_PASS` (sourced from the file it is kept in, never typed on a command line),
+  `pnpm smoke https://letterlock-app.vercel.app` posts it with chainId 1 and expects 400 `WRONG_CHAIN` in lane `judge`:
+  the route's admission refuses it before any chain read. Every drip answer from the admission on names its `lane`
+  (`"judge"` or `"public"`), which tells nothing about the pass to anyone who does not hold it.
 - **If a script takes the public lane during judging:** `printf 0 | vercel env add DRIP_HOURLY_CAP_MON production`
   and redeploy. Every request without the judges' pass is then refused `HOURLY_CAP`, and the judges' link still pays
   (`test/drip.test.ts`). To undo it: `vercel env rm DRIP_HOURLY_CAP_MON production --yes`, and redeploy.
@@ -138,8 +143,8 @@ one) make passkeys for its own host, for the end-to-end tests on `localhost`.
 ## Tests
 
 ```sh
-pnpm test                 # 97 unit tests: the drip's rules, the page's chain failures, agent calls and actions, the deployment records, slips, tokens, examples
-pnpm build && pnpm qa     # design checks on 6 routes at 5 widths: 24 checks, axe, overflow, the colour law
+pnpm test                 # 99 unit tests: the drip's rules, the page's chain failures, agent calls and actions, the deployment records, slips, tokens, examples
+pnpm build && pnpm qa     # design checks on 6 routes at 5 widths: 25 checks, axe (the slips' headings too), overflow, the colour law
 set -a; source ~/.config/monad/testnet-deployer.env; set +a; pnpm e2e   # testnet, below
 pnpm smoke https://letterlock-app.vercel.app                            # read-only, below
 ```
@@ -155,9 +160,11 @@ pnpm smoke https://letterlock-app.vercel.app                            # read-o
   violation, the register's real lines and a live lookup, each line's transaction link on a 390 px phone, the
   `CHAIN_UNAVAILABLE` slip (and none of the RPC client's report) with the RPCs cut off, the field error for a
   malformed recipient on `/seal`, a note sealed in the page (never sent), a live inbox, the social card, an unsigned
-  drip refused, and a stale signed one refused by the drip's checks before any chain read. On the production host
-  also: the home page with the register unreadable offers "Post my key" and "Read the register again" and none of a
-  posted key's actions, and `/judge` says it is not known whether a letter went out when the agent answers 500 (its
+  drip refused, a stale signed one refused by the drip's checks before any chain read, a request for chain 1 answered
+  in the public lane (and in the judges' lane with `LETTERLOCK_DRIP_JUDGE_PASS` set), and axe's heading order with
+  the `NO_KEY_PUBLISHED` and `CHAIN_UNAVAILABLE` slips on `/seal`. On the production host also: the home page with the
+  register unreadable offers "Post my key" and "Read the register again" and none of a posted key's actions, with
+  its slip's heading in order, and `/judge` says it is not known whether a letter went out when the agent answers 500 (its
   POST answered inside the browser, never sent). 21 of 21 passed on deployment `dpl_BQrbMVrs6CYmQFP34kjzMXxGAo8E`.
 - **Live** (`scripts/live-mainnet.mjs`): create and publish on the production site with a virtual passkey; it
   spends a real drip, so it records every run in `e2e-results/mainnet-live.json` and needs `--again` after the first.

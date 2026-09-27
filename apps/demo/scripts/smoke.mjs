@@ -3,13 +3,19 @@
 // deploy smoke test's publish transaction among them), each with its transaction link on a phone too, and a live
 // keyOf lookup finds the deployer's key; with the RPCs unreachable the register shows the CHAIN_UNAVAILABLE slip, not
 // the RPC client's report; /seal names the accepted forms for a malformed recipient; the drip refuses an unsigned
-// request and a stale signed one. On the production host also: with the register unreadable, the home page offers
+// request and a stale signed one, and names the lane of a request for chain 1 (refused before any chain read): the
+// public's without a pass, the judges' with LETTERLOCK_DRIP_JUDGE_PASS set in the environment (never printed); a slip
+// under /seal's h1 keeps axe's heading order. On the production host also: with the register unreadable, the home page offers
 // "Post my key" and "Read the register again", none of a posted key's actions; and /judge, when the agent's answer
 // leaves it open whether a letter went out, says so (the agent's POST is answered inside the browser, never sent).
-// Sends no transaction and makes no passkey.
+// Sends no transaction and makes no passkey. It POSTs to the drip four times: run it at most once in 10 minutes from
+// one IP, or the firewall's per-IP limit (six) answers first.
 //
+//   set -a; source ~/.config/monad/drip-judge-pass.env; set +a; node scripts/smoke.mjs https://letterlock-app.vercel.app
+//                                                                  (also confirms the deployment's judges' pass)
 //   node scripts/smoke.mjs https://letterlock-app.vercel.app      (production, Monad mainnet)
 //   node scripts/smoke.mjs http://127.0.0.1:3217                   (a local build)
+import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -23,6 +29,13 @@ const fail = (m) => {
   console.log(`FAIL ${m}`);
 };
 const pass = (m) => console.log(`ok   ${m}`);
+/** axe's heading-order on the page as it is now: a slip's heading never skips a level below the page's h1 */
+const headingOrder = async (page, what) => {
+  const { violations } = await new AxeBuilder({ page }).withRules(["heading-order"]).analyze();
+  const levels = await page.evaluate(() => [...document.querySelectorAll("main h1, main h2, main h3, main h4")].map((h) => h.tagName).join(" "));
+  if (violations.length) fail(`${what}: axe heading-order (${levels})`);
+  else pass(`${what}: headings in order (${levels})`);
+};
 
 const ROUTES = ["/", "/seal", "/open", "/register", "/judge", "/kit"];
 const HEADERS = ["x-content-type-options", "referrer-policy", "x-frame-options", "permissions-policy", "strict-transport-security", "cross-origin-opener-policy"];
@@ -73,6 +86,13 @@ try {
       if (!named) fail("/seal?to=0x1234: no error beside the To field");
       else pass("/seal?to=0x1234: the field names the two accepted forms");
       await typo.close();
+      // a recipient without a key: the NO_KEY_PUBLISHED slip sits under the page's h1, so its heading is an h2
+      const nokey = await context.newPage();
+      await nokey.goto(`${base}/seal?to=0x0000000000000000000000000000000000000001`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      const slip = await nokey.locator('[data-code="NO_KEY_PUBLISHED"]').first().waitFor({ timeout: 30_000 }).then(() => true, () => false);
+      if (!slip) fail("/seal?to=0x…0001: no NO_KEY_PUBLISHED slip");
+      else await headingOrder(nokey, "/seal with the NO_KEY_PUBLISHED slip");
+      await nokey.close();
       // sealing is local: a keyOf read and HPKE in the page; nothing is sent
       await page.locator('main form input[name="to"]').fill(record.deployer);
       await page.locator('tr[data-state="found"]').first().waitFor({ timeout: 30_000 });
@@ -124,6 +144,12 @@ try {
     const text = await page.locator("main").innerText();
     if (!slip || /viem@|Request body|HTTP request failed/.test(text)) fail(`/register with the RPCs unreachable: ${slip ? "viem's report is on the page" : "no CHAIN_UNAVAILABLE slip"}`);
     else pass("/register with the RPCs unreachable: the CHAIN_UNAVAILABLE slip, and none of the RPC client's report");
+    // and /seal's lookup, cut off the same way: its slip is under the page's h1
+    const seal = await cut.newPage();
+    await seal.goto(`${base}/seal?to=${record.deployer}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    if (await seal.locator('[data-code="CHAIN_UNAVAILABLE"]').first().waitFor({ timeout: 30_000 }).then(() => true, () => false))
+      await headingOrder(seal, "/seal with the CHAIN_UNAVAILABLE slip");
+    else fail("/seal with the RPCs unreachable: no CHAIN_UNAVAILABLE slip");
     await cut.close();
   }
   // Two checks that need the passkey host (production): this device "remembers" the deployer's address, which is public
@@ -151,6 +177,8 @@ try {
     const posted = await page.getByRole("link", { name: /Seal a note to yourself|Open your inbox/ }).count();
     if (!again || post !== 1 || posted) fail(`/ with the register unreadable: "Read the register again" ${again}, "Post my key" ${post}, a posted key's actions ${posted}`);
     else pass("/ with the register unreadable: \"Post my key\" and \"Read the register again\", none of a posted key's actions");
+    if (await page.locator("[data-code]").first().waitFor({ timeout: 10_000 }).then(() => true, () => false)) await headingOrder(page, "/ with the register unreadable, its slip shown");
+    else fail("/ with the register unreadable: no slip says why");
     await ctx.close();
   }
   if (onHost) {
@@ -214,6 +242,33 @@ try {
     else if (r.status === 401 && b.error === "STALE_SIGNATURE") pass("/api/drip: a stale signed request passes the drip's admission to STALE_SIGNATURE (401), nothing read or sent");
     else if (r.status === 503 && b.error === "DRIP_DISABLED" && !onHost) pass("/api/drip: this build's drip is switched off (503 DRIP_DISABLED)");
     else fail(`/api/drip: a stale signed request answered ${r.status} ${JSON.stringify(b)}`);
+  }
+  {
+    // the lane a request was admitted to, confirmed without spending: a request for chain 1 is refused WRONG_CHAIN by the
+    // admission, before any chain read, and the answer names its lane. Without a pass it is the public's lane; with
+    // LETTERLOCK_DRIP_JUDGE_PASS in the environment (sourced from where it is kept, never typed on a command line and
+    // never printed here) it must be the judges' lane, or the deployment holds a different pass than the judges' link
+    const wrongChain = async (pass) => {
+      const a = privateKeyToAccount(generatePrivateKey());
+      const minute = Math.floor(Date.now() / 60_000);
+      const signature = await a.signMessage({ message: `letterlock-drip:${a.address.toLowerCase()}:1:${minute}` });
+      const r = await fetch(base + "/api/drip", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address: a.address, chainId: 1, minute, signature, ...(pass === undefined ? {} : { pass }) }),
+      });
+      return { status: r.status, body: await r.json().catch(() => ({})) };
+    };
+    const judgePass = process.env.LETTERLOCK_DRIP_JUDGE_PASS?.trim();
+    for (const [lane, pass] of [["public", undefined], ...(judgePass ? [["judge", judgePass]] : [])]) {
+      const what = lane === "judge" ? "a request with the judges' pass" : "a request without a pass";
+      const { status, body } = await wrongChain(pass);
+      if (status === 429 && typeof body.error === "object") fail(`/api/drip: ${what} met the firewall's 429 for this IP; run the smoke again in 10 minutes`);
+      else if (status === 503 && body.error === "DRIP_DISABLED" && !onHost && body.lane === lane) pass(`/api/drip: ${what} is in the ${lane} lane (this build's drip is switched off)`);
+      else if (status === 400 && body.error === "WRONG_CHAIN" && body.lane === lane) pass(`/api/drip: ${what} is admitted to the ${lane} lane (400 WRONG_CHAIN, nothing read or sent)`);
+      else fail(`/api/drip: ${what} answered ${status} ${body.error} in lane ${body.lane}, want 400 WRONG_CHAIN in lane ${lane}`);
+    }
+    if (!judgePass) console.log("skip /api/drip: the judges' lane (set LETTERLOCK_DRIP_JUDGE_PASS in the environment to confirm the deployment's pass)");
   }
 } finally {
   await browser.close();

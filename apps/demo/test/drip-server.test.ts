@@ -68,3 +68,26 @@ test("the route admits through admitDrip: the lane is known before the IP is cou
   assert.match(route, /await admitDrip\(request, ip\)/);
   assert.doesNotMatch(route, /allowIp\(/, "the route does not count the IP itself");
 });
+
+test("the pass can be confirmed without spending: with chainId 1 it is refused WRONG_CHAIN before any chain read, in the judges' lane", async () => {
+  const ip = "192.0.2.80";
+  const signed = async (pass?: string) => {
+    const a = privateKeyToAccount(generatePrivateKey());
+    const minute = unixMinute(Date.now());
+    const signature = await a.signMessage({ message: dripMessage(a.address, 1, minute) });
+    return { address: a.address, chainId: 1, minute, signature, ...(pass === undefined ? {} : { pass }) };
+  };
+  const judge = await admitDrip(await signed(PASS), ip);
+  assert.deepEqual([judge.lane, judge.refusal?.code, judge.refusal?.status], ["judge", "WRONG_CHAIN", 400]);
+  const pub = await admitDrip(await signed(`${PASS.slice(0, -1)}x`), ip);
+  assert.deepEqual([pub.lane, pub.refusal?.code], ["public", "WRONG_CHAIN"]);
+});
+
+test("every drip answer from the admission on names its lane", () => {
+  const route = readFileSync(new URL("../app/api/drip/route.ts", import.meta.url), "utf8");
+  assert.match(route, /if \(early\) return refusal\(early, lane\)/);
+  assert.match(route, /if \(!decision\.ok\) return refusal\(decision, lane\)/);
+  assert.match(route, /reason: "FUNDED", lane \}/);
+  assert.match(route, /"CHAIN_UNAVAILABLE", message: [^}]*, lane \}/);
+  assert.match(route, /json\(reply\.status, \{ \.\.\.reply\.body, lane \}\)/);
+});
