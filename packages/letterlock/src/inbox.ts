@@ -70,6 +70,13 @@ const messageOf = (e: unknown): string => {
   return parts.join(" | ");
 };
 
+/** A block number option: a non-negative safe integer or bigint. Anything else is INPUT_INVALID, never a RangeError. */
+const blockNumberOf = (name: string, v: unknown): bigint => {
+  if (typeof v === "bigint" && v >= 0n) return v;
+  if (typeof v === "number" && Number.isSafeInteger(v) && v >= 0) return BigInt(v);
+  throw new LetterlockError("INPUT_INVALID", `${name} must be a non-negative integer (a safe integer or a bigint), got ${typeof v === "string" ? JSON.stringify(v) : String(v)}`);
+};
+
 /** The next range to try after a refusal: the limit the RPC named, else a tenth. */
 export const narrowRange = (range: number, message: string): number => {
   const named = /limited to (?:a )?(\d+) range/i.exec(message) ?? /(?:max(?:imum)?|up to|at most|limit(?:ed)? (?:of|to)) (\d+) blocks?/i.exec(message) ?? /(\d+) block range/i.exec(message);
@@ -95,10 +102,10 @@ export const readInbox = async (
   const start = o.fromBlock ?? ctx.deployBlock;
   if (start === undefined)
     throw new LetterlockError("INPUT_INVALID", "inbox() needs fromBlock for a directory whose deploy block the client does not know (pass deployBlock to letterlock())");
-  const fromBlock = BigInt(start);
+  const fromBlock = blockNumberOf("fromBlock", start);
+  const until = o.toBlock === undefined ? undefined : blockNumberOf("toBlock", o.toBlock);
   let range = o.blockRange ?? 10_000;
   if (!Number.isSafeInteger(range) || range < 1) throw new LetterlockError("INPUT_INVALID", `blockRange must be a positive integer, got ${range}`);
-  if (fromBlock < 0n) throw new LetterlockError("INPUT_INVALID", "fromBlock must not be negative");
   const concurrency = o.concurrency ?? 4;
   if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new LetterlockError("INPUT_INVALID", `concurrency must be a positive integer, got ${concurrency}`);
   await ctx.ready?.();
@@ -108,7 +115,7 @@ export const readInbox = async (
     try { return await f(); } catch (e) { throw toLetterlockError(e, what); }
   };
   const head = await call("inbox: eth_blockNumber", () => client.getBlockNumber({ cacheTime: 0 }));
-  const toBlock = o.toBlock === undefined ? head : BigInt(o.toBlock) < head ? BigInt(o.toBlock) : head;
+  const toBlock = until === undefined || until > head ? head : until;
 
   const args = agentId === undefined
     ? { to: recipient as `0x${string}`, toAgent: NO_AGENT }

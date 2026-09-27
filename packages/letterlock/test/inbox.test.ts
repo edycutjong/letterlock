@@ -145,5 +145,20 @@ describe.skipIf(noChain)("inbox", () => {
     expect(await code(client({ deployBlock: undefined, directory: "0x000000000000000000000000000000000000bEEF" }).inbox(recipient))).toBe("INPUT_INVALID");
     expect(await code(client({ rpcUrl: "http://127.0.0.1:9" }).inbox(recipient, { fromBlock: 1n }))).toBe("CHAIN_UNAVAILABLE");
   });
+
+  it.each([
+    ["fromBlock 1.5", { fromBlock: 1.5 }],
+    ["fromBlock NaN", { fromBlock: Number.NaN }],
+    ["fromBlock -1", { fromBlock: -1 }],
+    ["fromBlock 2^53", { fromBlock: 2 ** 53 }],
+    ["fromBlock '5'", { fromBlock: "5" as never }],
+    ["toBlock NaN", { fromBlock: 1n, toBlock: Number.NaN }],
+    ["toBlock -5", { fromBlock: 1n, toBlock: -5 }],
+    ["toBlock -5n", { fromBlock: 1n, toBlock: -5n }],
+    ["toBlock 2.5", { fromBlock: 1n, toBlock: 2.5 }],
+  ])("%s → INPUT_INVALID (a LetterlockError), before any request", async (_, o) => {
+    const e = await client({ rpcUrl: "http://127.0.0.1:9" }).inbox(recipient, o).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+  });
 });
 
