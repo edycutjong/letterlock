@@ -8,7 +8,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../src/cli/program.ts";
 import { VERSION, decodeEnvelope, deriveKeyPair, fingerprint, open, toHex } from "../src/index.ts";
-import { client, ctx, fund, fundedAccount, noChain } from "./anvil/context.ts";
+import { client, ctx, fund, fundedAccount, noChain, standIn } from "./anvil/context.ts";
 
 type Result = { code: number; stdout: string; stderr: string };
 const cli = async (argv: string[], o: { stdin?: string; env?: Record<string, string> } = {}): Promise<Result> => {
@@ -65,7 +65,7 @@ describe("letterlock CLI without a chain", () => {
 
 describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
   let recipient: string;
-  const keys = deriveKeyPair(new Uint8Array(32).fill(91), 1);
+  const keys = standIn(91, 1);
   let dir: string;
 
   beforeAll(async () => {

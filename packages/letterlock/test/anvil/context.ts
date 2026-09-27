@@ -3,7 +3,7 @@
 import { createPublicClient, createTestClient, createWalletClient, http, parseAbi, parseEther, zeroAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { inject } from "vitest";
-import { letterlock, letterlockAbi, type LetterlockConfig } from "../../src/index.ts";
+import { LETTERLOCK_RP_ID, deriveKeyPair, letterlock, letterlockAbi, type LetterlockConfig } from "../../src/index.ts";
 import { DEPLOYER, startAnvil } from "./global-setup.ts";
 
 export const ctx = inject("anvil");
@@ -31,6 +31,13 @@ export const client = (over: Partial<LetterlockConfig> = {}) => {
 };
 
 export const fund = async (address: Address, mon = "10") => testClient().setBalance({ address, value: parseEther(mon) });
+
+/**
+ * A stand-in for a key a passkey derived on the production rpId: deriveKeyPair() over 32 bytes of `fill`, no passkey,
+ * labelled with LETTERLOCK_RP_ID as createEncryptionAddress() and deriveFromPasskey() label theirs, so that a
+ * production client publishes it.
+ */
+export const standIn = (fill: number, epoch = 1) => ({ ...deriveKeyPair(new Uint8Array(32).fill(fill), epoch), rpId: LETTERLOCK_RP_ID });
 
 /** A new random key with MON on anvil. */
 export const fundedAccount = async (mon = "10"): Promise<PrivateKeyAccount> => {

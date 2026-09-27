@@ -126,9 +126,11 @@ recipient, epoch, directory or chain.
 - **Domain change.** PRF output is bound to the WebAuthn rpId. Letterlock pins ONE production rpId,
   `LETTERLOCK_RP_ID` (`letterlock-app.vercel.app`). Keys derived on another origin (localhost, preview deploys)
   cannot be re-derived in production. The chain client refuses `publish`, `rotate` and `publishForAgent` when its
-  rpId is another one, or when the key carries another rpId (keys from `createEncryptionAddress` and
-  `deriveFromPasskey` record theirs), unless it was created with `unsafeAllowAnyRpId: true`, for tests. Reads and
-  seals are not pinned: sealing needs no passkey.
+  rpId is another one, unless it was created with `unsafeAllowAnyRpId: true`, for tests. It publishes a key only
+  when the key carries the client's rpId: keys from `createEncryptionAddress` and `deriveFromPasskey` record theirs,
+  and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it could come from any passkey.
+  `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another rpId. Reads and seals are not
+  pinned: sealing needs no passkey.
 - **A compromised device during `open`** exposes that epoch's key. Rotate to recover forward secrecy for new
   notes.
 

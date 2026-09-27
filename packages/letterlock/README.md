@@ -75,7 +75,9 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
 
 - **One rpId.** PRF output is bound to the WebAuthn rpId, so Letterlock pins one: `LETTERLOCK_RP_ID`
   (`letterlock-app.vercel.app`). `publish`, `rotate` and `publishForAgent` refuse any other rpId (a key derived on
-  localhost could never be re-derived in production); `unsafeAllowAnyRpId: true` lifts this, for tests only. Browsers
+  localhost could never be re-derived in production), and a key that does not carry its rpId: publish the key object
+  `createEncryptionAddress` or `deriveFromPasskey` returned, not `{ publicKey, epoch }` rebuilt from it.
+  `unsafeAllowAnyRpId: true` lifts this, for tests only. Browsers
   let a page use only its own domain as the rpId, so people publish their key on the Letterlock app itself, and other
   apps only seal to them. **The Letterlock app is not deployed at that host yet.**
 - **What is in the directory.** On Monad mainnet (`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`) the only keys so far

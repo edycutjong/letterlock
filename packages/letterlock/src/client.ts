@@ -33,7 +33,10 @@ export type LetterlockConfig = {
   readonly deployBlock?: bigint;
   /** The rpId keys are derived and opened under. Default: LETTERLOCK_RP_ID, the only one publish() accepts. */
   readonly rpId?: string;
-  /** Tests only: let publish(), rotate() and publishForAgent() run under an rpId other than LETTERLOCK_RP_ID. */
+  /**
+   * Tests only: let publish(), rotate() and publishForAgent() run under an rpId other than LETTERLOCK_RP_ID, and take a
+   * key that carries no rpId. A key that names another rpId than the client's is refused even then.
+   */
   readonly unsafeAllowAnyRpId?: boolean;
   /** How often to poll for a receipt, in ms. Default: viem's, from Monad's block time (500 ms). */
   readonly pollingInterval?: number;
@@ -50,7 +53,10 @@ export type ResolvedKey = RecipientKey & {
   readonly directory: Address;
 };
 
-/** What publish needs: the public half and its epoch. The rpId, when present, must be the client's. */
+/**
+ * What publish needs: the public half, its epoch, and the rpId it was derived under, which must be the client's (the
+ * keys createEncryptionAddress() and deriveFromPasskey() return carry it). Only `unsafeAllowAnyRpId` accepts no rpId.
+ */
 export type PublishableKey = { readonly publicKey: Uint8Array; readonly epoch: number; readonly rpId?: string };
 
 export type WriteResult = {
@@ -211,6 +217,11 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       throw new LetterlockError("INPUT_INVALID", `${action}: keys.publicKey must be the 32-byte X25519 public key`);
     if (!Number.isInteger(keys.epoch) || keys.epoch < 1 || keys.epoch > MAX_EPOCH)
       throw new LetterlockError("INPUT_INVALID", `${action}: keys.epoch must be an integer in 1..${MAX_EPOCH}, got ${keys.epoch}`);
+    // The key must say where it was derived: a key rebuilt as { publicKey, epoch } has lost that, and could come from
+    // any passkey. Only unsafeAllowAnyRpId (tests) takes a key without an rpId; none takes a key from another rpId.
+    if (keys.rpId === undefined && config.unsafeAllowAnyRpId !== true)
+      throw new LetterlockError("INPUT_INVALID",
+        `${action}: the key carries no rpId. Pass the key createEncryptionAddress() or deriveFromPasskey() returned (it records the rpId "${rpId}" it was derived under), not one rebuilt from its fields`);
     if (keys.rpId !== undefined && keys.rpId !== rpId)
       throw new LetterlockError("INPUT_INVALID", `${action}: the key was derived under rpId "${keys.rpId}", and this client publishes for "${rpId}"`);
   };

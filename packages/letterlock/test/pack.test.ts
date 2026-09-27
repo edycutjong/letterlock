@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { build } from "esbuild";
 import { beforeAll, describe, expect, it } from "vitest";
 import { VERSION } from "../src/index.ts";
-import { anvil, client, fundedAccount, noChain } from "./anvil/context.ts";
+import { anvil, client, fundedAccount, noChain, standIn } from "./anvil/context.ts";
 import { deriveKeyPair } from "../src/index.ts";
 
 const pkgDir = fileURLToPath(new URL("..", import.meta.url));
@@ -71,7 +71,7 @@ describe("npm package", () => {
 
   it.skipIf(noChain)("the bin resolves a key on the anvil directory", async () => {
     const account = await fundedAccount();
-    const keys = deriveKeyPair(new Uint8Array(32).fill(101), 1);
+    const keys = standIn(101, 1);
     await client().publish({ account, keys });
     const { stdout } = await run(process.execPath, [dist("cli.js"), "resolve", account.address, "--json", "--rpc", anvil().rpcUrl, "--directory", anvil().directory]);
     expect(JSON.parse(stdout)).toMatchObject({ recipient: account.address.toLowerCase(), epoch: 1, chainId: 143 });

@@ -15,7 +15,7 @@ import {
   type ChainErrorCode,
   type LetterlockErrorCode,
 } from "../src/index.ts";
-import { Fault, anvil, client, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs } from "./anvil/context.ts";
+import { Fault, anvil, client, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs, standIn } from "./anvil/context.ts";
 import { rpcProxy } from "./anvil/proxy.ts";
 import { softAuthenticator } from "./soft-authenticator.ts";
 
@@ -35,7 +35,7 @@ describe.skipIf(noChain)("resolve", () => {
 
   it("returns key, epoch and updatedAt from ONE keyOf read, as published", async () => {
     const account = await fundedAccount();
-    const keys = deriveKeyPair(prf(1), 1);
+    const keys = standIn(1, 1);
     const r = await client().publish({ account, keys });
     const key = await client().resolve(account.address);
     expect(key.recipient).toBe(account.address.toLowerCase());
@@ -53,7 +53,7 @@ describe.skipIf(noChain)("resolve", () => {
 
   it("accepts a checksummed or lower-case address and rejects anything else as INPUT_INVALID", async () => {
     const account = await fundedAccount();
-    await client().publish({ account, keys: deriveKeyPair(prf(2), 1) });
+    await client().publish({ account, keys: standIn(2, 1) });
     expect((await client().resolve(account.address.toLowerCase())).epoch).toBe(1);
     for (const bad of ["maya.eth", "0x1234", "agent:01", `agent:${2n ** 256n}`, ""]) await rejects(client().resolve(bad), "INPUT_INVALID");
   });
@@ -99,8 +99,8 @@ describe.skipIf(noChain)("a directory address that holds no Letterlock directory
     const ll = client({ directory });
     const account = await fundedAccount();
     const before = await state(account.address);
-    await notADirectory(ll.publish({ account, keys: deriveKeyPair(prf(41), 1) }));
-    const env = await seal({ chainId: 143, directory, to: { recipient: account.address, publicKey: deriveKeyPair(prf(41), 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
+    await notADirectory(ll.publish({ account, keys: standIn(41, 1) }));
+    const env = await seal({ chainId: 143, directory, to: { recipient: account.address, publicKey: standIn(41, 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
     await notADirectory(ll.drop({ account, envelope: env }));
     await notADirectory(ll.inbox(account.address, { fromBlock: 0n }));
     await notADirectory(ll.resolve(account.address));
@@ -116,19 +116,19 @@ describe.skipIf(noChain)("a directory address that holds no Letterlock directory
     try {
       const ll = client({ rpcUrl: proxy.url });
       const account = await fundedAccount();
-      await ll.publish({ account, keys: deriveKeyPair(prf(42), 1) });
+      await ll.publish({ account, keys: standIn(42, 1) });
       await ll.resolve(account.address);
       await ll.inbox(account.address, { fromBlock: 0n, toBlock: 1n });
       expect(proxy.stats.methods.eth_getCode).toBe(1);
     } finally { await proxy.close(); }
-    await rejects(client({ rpcUrl: "http://127.0.0.1:9" }).publish({ account: await fundedAccount(), keys: deriveKeyPair(prf(42), 1) }), "CHAIN_UNAVAILABLE");
+    await rejects(client({ rpcUrl: "http://127.0.0.1:9" }).publish({ account: await fundedAccount(), keys: standIn(42, 1) }), "CHAIN_UNAVAILABLE");
   });
 });
 
 describe.skipIf(noChain)("publish", () => {
   it("publishes from the account (msg.sender) and emits KeyPublished", async () => {
     const account = await fundedAccount();
-    const keys = deriveKeyPair(prf(3), 1);
+    const keys = standIn(3, 1);
     const r = await client().publish({ account, keys });
     expect(r).toMatchObject({ recipient: account.address.toLowerCase(), epoch: 1, publicKey: `0x${toHex(keys.publicKey)}`, kid: fingerprint(keys.publicKey) });
     const receipt = await publicClient().getTransactionReceipt({ hash: r.transactionHash });
@@ -140,37 +140,39 @@ describe.skipIf(noChain)("publish", () => {
 
   it("a wrong epoch → EPOCH_MISMATCH before any transaction (the simulation refuses it)", async () => {
     const account = await fundedAccount();
-    await rejects(client().publish({ account, keys: deriveKeyPair(prf(4), 2) }), "EPOCH_MISMATCH");
-    await client().publish({ account, keys: deriveKeyPair(prf(4), 1) });
+    await rejects(client().publish({ account, keys: standIn(4, 2) }), "EPOCH_MISMATCH");
+    await client().publish({ account, keys: standIn(4, 1) });
     const before = await nonce(account.address);
-    await rejects(client().publish({ account, keys: deriveKeyPair(prf(4), 1) }), "EPOCH_MISMATCH");
-    await rejects(client().publish({ account, keys: deriveKeyPair(prf(4), 3) }), "EPOCH_MISMATCH");
+    await rejects(client().publish({ account, keys: standIn(4, 1) }), "EPOCH_MISMATCH");
+    await rejects(client().publish({ account, keys: standIn(4, 3) }), "EPOCH_MISMATCH");
     expect(await nonce(account.address)).toBe(before);
-    await client().publish({ account, keys: deriveKeyPair(prf(5), 2) });
+    await client().publish({ account, keys: standIn(5, 2) });
     expect((await client().resolve(account.address)).epoch).toBe(2);
   });
 
   it.each([
-    ["zero key", new Uint8Array(32)],
-    ["small-order key u = 1", Uint8Array.from({ length: 32 }, (_, i) => (i === 0 ? 1 : 0))],
-    ["non-canonical key (bit 255 set)", (() => { const k = deriveKeyPair(prf(6), 1).publicKey.slice(); k[31]! |= 0x80; return k; })()],
-  ])("the directory refuses a %s → INPUT_INVALID, and no gas is spent", async (_, publicKey) => {
+    ["zero key", new Uint8Array(32), "ZeroKey"],
+    ["small-order key u = 1", Uint8Array.from({ length: 32 }, (_, i) => (i === 0 ? 1 : 0)), "LowOrderKey"],
+    ["non-canonical key (bit 255 set)", (() => { const k = standIn(6, 1).publicKey.slice(); k[31]! |= 0x80; return k; })(), "NonCanonicalKey"],
+  ])("the directory refuses a %s → INPUT_INVALID, and no gas is spent", async (_, publicKey, reason) => {
     const account = await fundedAccount();
     const before = await publicClient().getBalance({ address: account.address });
-    await rejects(client().publish({ account, keys: { publicKey, epoch: 1 } }), "INPUT_INVALID");
+    const e = await client().publish({ account, keys: { publicKey, epoch: 1, rpId: LETTERLOCK_RP_ID } }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+    expect((e as Error).message).toContain(`(${reason})`);
     expect(await publicClient().getBalance({ address: account.address })).toBe(before);
   });
 
   it("malformed keys and accounts → INPUT_INVALID without touching the chain", async () => {
     const account = await fundedAccount();
-    await rejects(client().publish({ account, keys: { publicKey: new Uint8Array(31), epoch: 1 } }), "INPUT_INVALID");
-    await rejects(client().publish({ account, keys: { publicKey: deriveKeyPair(prf(7), 1).publicKey, epoch: 0 } }), "INPUT_INVALID");
-    await rejects(client().publish({ account: "not an account" as never, keys: deriveKeyPair(prf(7), 1) }), "INPUT_INVALID");
+    await rejects(client().publish({ account, keys: { publicKey: new Uint8Array(31), epoch: 1, rpId: LETTERLOCK_RP_ID } }), "INPUT_INVALID");
+    await rejects(client().publish({ account, keys: { publicKey: standIn(7, 1).publicKey, epoch: 0, rpId: LETTERLOCK_RP_ID } }), "INPUT_INVALID");
+    await rejects(client().publish({ account: "not an account" as never, keys: standIn(7, 1) }), "INPUT_INVALID");
   });
 
   it("an account without MON → INSUFFICIENT_FUNDS", async () => {
     const broke = privateKeyToAccount(generatePrivateKey());
-    await rejects(client().publish({ account: broke, keys: deriveKeyPair(prf(8), 1) }), "INSUFFICIENT_FUNDS");
+    await rejects(client().publish({ account: broke, keys: standIn(8, 1) }), "INSUFFICIENT_FUNDS");
   });
 });
 
@@ -179,7 +181,7 @@ describe.skipIf(noChain)("rpId pinning", () => {
 
   it(`publish, rotate and publishForAgent refuse an rpId other than ${LETTERLOCK_RP_ID}, before any chain call`, async () => {
     const account = await fundedAccount();
-    const keys = deriveKeyPair(prf(9), 1);
+    const keys = standIn(9, 1);
     await rejects(client(other).publish({ account, keys }), "INPUT_INVALID");
     await rejects(client(other).rotate({ account }), "INPUT_INVALID");
     await rejects(client(other).publishForAgent({ account, agentId: 1n, keys }), "INPUT_INVALID");
@@ -190,28 +192,42 @@ describe.skipIf(noChain)("rpId pinning", () => {
 
   it("reads are not pinned: any rpId can resolve and seal", async () => {
     const account = await fundedAccount();
-    await client().publish({ account, keys: deriveKeyPair(prf(10), 1) });
+    await client().publish({ account, keys: standIn(10, 1) });
     expect((await client(other).resolve(account.address)).epoch).toBe(1);
     expect((await client(other).sealTo(account.address, utf8("hi"))).epoch).toBe(1);
   });
 
-  it("unsafeAllowAnyRpId lifts the pin (tests only)", async () => {
+  it("unsafeAllowAnyRpId lifts the pin (tests only), but never takes a key from an rpId other than the client's", async () => {
     const account = await fundedAccount();
-    const r = await client({ ...other, unsafeAllowAnyRpId: true }).publish({ account, keys: deriveKeyPair(prf(11), 1) });
+    const unsafe = client({ ...other, unsafeAllowAnyRpId: true });
+    await rejects(unsafe.publish({ account, keys: standIn(11, 1) }), "INPUT_INVALID"); // derived under LETTERLOCK_RP_ID
+    const r = await unsafe.publish({ account, keys: { ...standIn(11, 1), rpId: "localhost" } }); // as a localhost passkey labels it
     expect(r.epoch).toBe(1);
+  });
+
+  it("a key that carries no rpId (rebuilt as { publicKey, epoch }) is refused too, unless unsafeAllowAnyRpId", async () => {
+    const dev = softAuthenticator();
+    const { keys } = await createEncryptionAddress({ rp: { id: "localhost", name: "Letterlock" }, user: { name: "a", displayName: "A" }, webAuthnClient: dev });
+    const bare = { publicKey: keys.publicKey, epoch: keys.epoch }; // e.g. after holding the key in app state
+    const account = await fundedAccount();
+    await rejects(client().publish({ account, keys }), "INPUT_INVALID");
+    await rejects(client().publish({ account, keys: bare }), "INPUT_INVALID");
+    await rejects(client().publishForAgent({ account, agentId: 1n, keys: bare }), "INPUT_INVALID");
+    expect(await nonce(account.address)).toBe(0);
+    expect((await client({ unsafeAllowAnyRpId: true }).publish({ account, keys: bare })).epoch).toBe(1);
   });
 
   it("a key derived under another rpId is refused even by a production client", async () => {
     const account = await fundedAccount();
-    await rejects(client().publish({ account, keys: { ...deriveKeyPair(prf(12), 1), rpId: "localhost" } }), "INPUT_INVALID");
-    await client().publish({ account, keys: { ...deriveKeyPair(prf(12), 1), rpId: LETTERLOCK_RP_ID } });
+    await rejects(client().publish({ account, keys: { ...standIn(12, 1), rpId: "localhost" } }), "INPUT_INVALID");
+    await client().publish({ account, keys: { ...standIn(12, 1), rpId: LETTERLOCK_RP_ID } });
   });
 });
 
 describe.skipIf(noChain)("sealTo", () => {
   it("seals to the resolved key: the recipient's key opens it, bound to this chain and directory", async () => {
     const account = await fundedAccount();
-    const keys = deriveKeyPair(prf(13), 1);
+    const keys = standIn(13, 1);
     await client().publish({ account, keys });
     const env = await client().sealTo(account.address, utf8("the courier comes at noon"));
     expect(env).toMatchObject({ v: 1, chainId: 143, directory: ctx.ok && ctx.directory.toLowerCase(), recipient: account.address.toLowerCase(), epoch: 1, kid: fingerprint(keys.publicKey) });
@@ -224,13 +240,13 @@ describe.skipIf(noChain)("sealTo", () => {
 
   it("after a rotation it seals to the new epoch only", async () => {
     const account = await fundedAccount();
-    await client().publish({ account, keys: deriveKeyPair(prf(14), 1) });
+    await client().publish({ account, keys: standIn(14, 1) });
     const old = await client().sealTo(account.address, utf8("before"));
-    await client().publish({ account, keys: deriveKeyPair(prf(15), 2) });
+    await client().publish({ account, keys: standIn(15, 2) });
     const cur = await client().sealTo(account.address, utf8("after"));
     expect([old.epoch, cur.epoch]).toEqual([1, 2]);
-    expect(new TextDecoder().decode(await open(old, deriveKeyPair(prf(14), 1)))).toBe("before");
-    expect(new TextDecoder().decode(await open(cur, deriveKeyPair(prf(15), 2)))).toBe("after");
+    expect(new TextDecoder().decode(await open(old, standIn(14, 1)))).toBe("before");
+    expect(new TextDecoder().decode(await open(cur, standIn(15, 2)))).toBe("after");
   });
 });
 
@@ -245,7 +261,7 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
   });
 
   it("the owner publishes; agent:<id> resolves to that key", async () => {
-    const keys = deriveKeyPair(prf(16), 1);
+    const keys = standIn(16, 1);
     const r = await client().publishForAgent({ account: owner, agentId, keys });
     expect(r.recipient).toBe(`agent:${agentId}`);
     const key = await client().resolve(`agent:${agentId}`);
@@ -258,30 +274,30 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
     const other = newAgentId();
     const acct = await fundedAccount();
     await sendAs(ctx.ok ? ctx.registry : zeroAddress, registryAbi, "mint", [acct.address, other]);
-    await client().publishForAgent({ account: acct, agentId: `agent:${other}`, keys: deriveKeyPair(prf(17), 1) });
-    await client().publishForAgent({ account: acct, agentId: String(other), keys: deriveKeyPair(prf(18), 2) });
-    await client().publishForAgent({ account: acct, agentId: Number(other), keys: deriveKeyPair(prf(19), 3) });
+    await client().publishForAgent({ account: acct, agentId: `agent:${other}`, keys: standIn(17, 1) });
+    await client().publishForAgent({ account: acct, agentId: String(other), keys: standIn(18, 2) });
+    await client().publishForAgent({ account: acct, agentId: Number(other), keys: standIn(19, 3) });
     expect((await client().resolve(`agent:${other}`)).epoch).toBe(3);
-    await rejects(client().publishForAgent({ account: acct, agentId: -1, keys: deriveKeyPair(prf(19), 4) }), "INPUT_INVALID");
-    await rejects(client().publishForAgent({ account: acct, agentId: (1n << 256n) - 1n, keys: deriveKeyPair(prf(19), 4) }), "INPUT_INVALID");
+    await rejects(client().publishForAgent({ account: acct, agentId: -1, keys: standIn(19, 4) }), "INPUT_INVALID");
+    await rejects(client().publishForAgent({ account: acct, agentId: (1n << 256n) - 1n, keys: standIn(19, 4) }), "INPUT_INVALID");
   });
 
   it("a non-owner → NOT_AGENT_OWNER; an agent nobody owns → NOT_AGENT_OWNER", async () => {
     const stranger = await fundedAccount();
-    await rejects(client().publishForAgent({ account: stranger, agentId, keys: deriveKeyPair(prf(20), 2) }), "NOT_AGENT_OWNER");
-    await rejects(client().publishForAgent({ account: stranger, agentId: newAgentId(), keys: deriveKeyPair(prf(20), 1) }), "NOT_AGENT_OWNER");
+    await rejects(client().publishForAgent({ account: stranger, agentId, keys: standIn(20, 2) }), "NOT_AGENT_OWNER");
+    await rejects(client().publishForAgent({ account: stranger, agentId: newAgentId(), keys: standIn(20, 1) }), "NOT_AGENT_OWNER");
   });
 
   it("the key follows the NFT: after a transfer the old key no longer resolves, and the new owner continues the epochs", async () => {
     const id = newAgentId();
     const [seller, buyer] = [await fundedAccount(), await fundedAccount()];
     await sendAs(ctx.ok ? ctx.registry : zeroAddress, registryAbi, "mint", [seller.address, id]);
-    await client().publishForAgent({ account: seller, agentId: id, keys: deriveKeyPair(prf(21), 1) });
+    await client().publishForAgent({ account: seller, agentId: id, keys: standIn(21, 1) });
     await sendAs(ctx.ok ? ctx.registry : zeroAddress, registryAbi, "transfer", [id, buyer.address]);
     await rejects(client().resolve(`agent:${id}`), "NO_KEY_PUBLISHED");
     await rejects(client().sealTo(`agent:${id}`, utf8("to the old owner?")), "NO_KEY_PUBLISHED");
-    await rejects(client().publishForAgent({ account: buyer, agentId: id, keys: deriveKeyPair(prf(22), 1) }), "EPOCH_MISMATCH");
-    await client().publishForAgent({ account: buyer, agentId: id, keys: deriveKeyPair(prf(22), 2) });
+    await rejects(client().publishForAgent({ account: buyer, agentId: id, keys: standIn(22, 1) }), "EPOCH_MISMATCH");
+    await client().publishForAgent({ account: buyer, agentId: id, keys: standIn(22, 2) });
     expect((await client().resolve(`agent:${id}`)).epoch).toBe(2);
   });
 
@@ -290,8 +306,8 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
     const ll = client({ directory: ctx.directoryNoAgents });
     const acct = await fundedAccount();
     await rejects(ll.resolve("agent:1"), "INPUT_INVALID");
-    await rejects(ll.publishForAgent({ account: acct, agentId: 1n, keys: deriveKeyPair(prf(23), 1) }), "INPUT_INVALID");
-    const env = await seal({ chainId: 143, directory: ctx.directoryNoAgents, to: { recipient: "agent:1", publicKey: deriveKeyPair(prf(23), 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
+    await rejects(ll.publishForAgent({ account: acct, agentId: 1n, keys: standIn(23, 1) }), "INPUT_INVALID");
+    const env = await seal({ chainId: 143, directory: ctx.directoryNoAgents, to: { recipient: "agent:1", publicKey: standIn(23, 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
     await rejects(ll.drop({ account: acct, envelope: env }), "INPUT_INVALID");
   });
 
@@ -306,7 +322,7 @@ describe.skipIf(noChain)("an RPC that refuses JSON-RPC batches (rpc-mainnet.mona
     try {
       const ll = client({ rpcUrl: proxy.url });
       const account = await fundedAccount();
-      const keys = deriveKeyPair(prf(40), 1);
+      const keys = standIn(40, 1);
       const published = await ll.publish({ account, keys });
       expect((await ll.resolve(account.address)).epoch).toBe(1);
       const dropped = await ll.drop({ account, envelope: await ll.sealTo(account.address, utf8("through a strict RPC")) });
@@ -325,7 +341,7 @@ describe.skipIf(noChain)("a registry that cannot answer (RegistryCallFailed): un
       const acct = await fundedAccount();
       const id = newAgentId();
       await sendAs(ctx.faultyRegistry, faultyAbi, "mint", [acct.address, id]);
-      const keys = deriveKeyPair(prf(24), 1);
+      const keys = standIn(24, 1);
       await ll.publishForAgent({ account: acct, agentId: id, keys });
       const env = await ll.sealTo(`agent:${id}`, utf8("x"));
       await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [fault]);
@@ -333,7 +349,7 @@ describe.skipIf(noChain)("a registry that cannot answer (RegistryCallFailed): un
         await rejects(ll.resolve(`agent:${id}`), "CHAIN_UNAVAILABLE");
         await rejects(ll.sealTo(`agent:${id}`, utf8("x")), "CHAIN_UNAVAILABLE");
         await rejects(ll.drop({ account: acct, envelope: env }), "CHAIN_UNAVAILABLE");
-        await rejects(ll.publishForAgent({ account: acct, agentId: id, keys: deriveKeyPair(prf(25), 2) }), "CHAIN_UNAVAILABLE");
+        await rejects(ll.publishForAgent({ account: acct, agentId: id, keys: standIn(25, 2) }), "CHAIN_UNAVAILABLE");
       } finally {
         await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [Fault.None]);
       }

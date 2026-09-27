@@ -6,7 +6,7 @@ import { toHex, type Address } from "viem";
 import { beforeAll, describe, expect, it } from "vitest";
 import { NO_AGENT, deriveKeyPair, isLetterlockError, letterlockAbi, seal, type Envelope } from "../src/index.ts";
 import { narrowRange } from "../src/inbox.ts";
-import { anvil, client, ctx, fundedAccount, noChain, privateChain, publicClient, sendAs, testClient } from "./anvil/context.ts";
+import { anvil, client, ctx, fundedAccount, noChain, privateChain, publicClient, sendAs, standIn, testClient } from "./anvil/context.ts";
 import { rpcError, rpcProxy } from "./anvil/proxy.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
@@ -54,7 +54,7 @@ describe.skipIf(noChain)("inbox and blocks that are not final yet (a chain of th
     try {
       const ll = chain.client();
       const account = await chain.fundedAccount();
-      const published = await ll.publish({ account, keys: deriveKeyPair(new Uint8Array(32).fill(80), 1) });
+      const published = await ll.publish({ account, keys: standIn(80, 1) });
       const snapshot = await chain.testClient.snapshot();
       await chain.testClient.mine({ blocks: 1 }); // the head: Proposed, and about to be replaced
       const head = await chain.publicClient.getBlockNumber({ cacheTime: 0 });
@@ -76,7 +76,7 @@ describe.skipIf(noChain)("inbox and blocks that are not final yet (a chain of th
     try {
       const ll = chain.client();
       const account = await chain.fundedAccount();
-      const published = await ll.publish({ account, keys: deriveKeyPair(new Uint8Array(32).fill(81), 1) });
+      const published = await ll.publish({ account, keys: standIn(81, 1) });
       const dropped = await ll.drop({ account, envelope: await ll.sealTo(account.address, utf8("fresh")) });
       const head = await chain.publicClient.getBlockNumber({ cacheTime: 0 });
       expect((await ll.inbox(account.address, { fromBlock: published.blockNumber })).envelopes).toEqual([]); // not final yet
@@ -91,7 +91,7 @@ describe.skipIf(noChain)("inbox and blocks that are not final yet (a chain of th
 
 describe.skipIf(noChain)("inbox", () => {
   let recipient: Address;
-  let keys: ReturnType<typeof deriveKeyPair>;
+  let keys: ReturnType<typeof standIn>;
   let first: bigint;
   const sent: string[] = [];
   let lastDrop: bigint;
@@ -101,7 +101,7 @@ describe.skipIf(noChain)("inbox", () => {
     if (!ctx.ok) return;
     const account = await fundedAccount();
     recipient = account.address;
-    keys = deriveKeyPair(new Uint8Array(32).fill(77), 1);
+    keys = standIn(77, 1);
     first = (await client().publish({ account, keys })).blockNumber;
     const sender = await fundedAccount();
     for (const [i, note] of ["one", "two", "three"].entries()) {
@@ -157,8 +157,8 @@ describe.skipIf(noChain)("inbox", () => {
     if (!ctx.ok) return;
     const account = await fundedAccount();
     const other = await fundedAccount();
-    await client().publish({ account, keys: deriveKeyPair(new Uint8Array(32).fill(78), 1) });
-    await client().publish({ account: other, keys: deriveKeyPair(new Uint8Array(32).fill(79), 1) });
+    await client().publish({ account, keys: standIn(78, 1) });
+    await client().publish({ account: other, keys: standIn(79, 1) });
     const from = await publicClient().getBlockNumber();
     const raw = (bytes: Uint8Array) => sendAs(anvil().directory, letterlockAbi, "drop", [account.address, NO_AGENT, toHex(bytes)]);
     const forOther: Envelope = await client().sealTo(other.address, utf8("not for you"));
