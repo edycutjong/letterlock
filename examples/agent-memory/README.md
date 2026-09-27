@@ -147,7 +147,9 @@ the most a drop can cost at the current fee cap. Answers are reused for 5 second
 Anyone can ask the agent to send, and each drop is paid from its wallet, so what bounds the spend is checked on the
 transaction itself, when the wallet signs it (`src/spend.ts`), inside the instance's one-at-a-time send queue. The
 checks made when a request arrives only refuse early: concurrent requests all read the same balance and count, and
-each server instance counts only its own.
+each server instance counts only its own. The firewall counts POST requests per IP for every instance: on
+2026-09-27, 12 concurrent POSTs from one IP (each refused by the agent before it read anything) got 5 answers from
+the agent and 7 `429`s from the firewall.
 
 A drop's gas grows with its envelope, and Monad charges the whole gas limit at the base fee plus the priority fee.
 viem signs each drop with a higher fee cap, which the wallet must hold: on Monad mainnet the node's

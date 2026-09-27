@@ -98,7 +98,7 @@ describe.skipIf(noChain)("the wallet signs only what the reserve and the day all
   it("the reserve counts the drop's own cost: a wallet 1 wei above it sends nothing", async () => {
     const a = await agent(RESERVE + 1n, { AGENT_DAILY_SPEND_PERCENT: "100" });
     const r = await a.remember(a.apps[0]!, "one note", "203.0.113.40");
-    expect([r.status, r.body.error.code]).toEqual([503, "GAS_RESERVE"]);
+    expect([r.status, r.body.error?.code]).toEqual([503, "GAS_RESERVE"]);
     expect(await a.sent()).toBe(0);
   });
 
