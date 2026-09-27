@@ -8,7 +8,8 @@
 // under /seal's h1 keeps axe's heading order. On the production host also: with the register unreadable, the home page offers
 // "Post my key" and "Read the register again", none of a posted key's actions; /judge, when the agent's answer leaves
 // it open whether a letter went out, says so (the agent's POST is answered inside the browser, never sent); and the
-// host SDK 0.1.0 pinned (letterlock-app.vercel.app) answers every route, a query and a POST with a 308 to this host.
+// host SDK 0.1.0 pinned (letterlock-app.vercel.app) answers every route, a query, a POST and the build's /_next/ files
+// with a 308 to this host; the pages' scripts carry no retired host and no deployment record beyond what they show.
 // Sends no transaction and makes no passkey. It POSTs to the drip four times, and on the production host a fifth time
 // through the retired host: run it at most once in 10 minutes from one IP, or the firewall's per-IP limit (six)
 // answers first.
@@ -136,6 +137,18 @@ try {
     if (errors.length) fail(`${route}: ${errors.join(" | ").slice(0, 400)}`);
     else pass(`${route}: HTTP ${status}, headers and nonce CSP, no console errors`);
     await page.close();
+  }
+  {
+    // the pages' scripts carry only the fields of the deployment records that the pages show, each read by name
+    // (lib/deployment.ts), never a record whole: no retired host and none of the agent's record, so editing a record
+    // cannot leave the live scripts behind the repository
+    const leaks = [];
+    for (const [path, body] of scripts)
+      for (const needle of ["letterlock-app.vercel.app", "letterlock-agent.vercel.app", "agentCardUrl", "tokenURIMove", "indexStatus", "sentCodeCheck"])
+        if ((await body).includes(needle)) leaks.push(`${path.split("/").pop()}: ${needle}`);
+    if (!scripts.size) fail("the pages loaded no script of the build");
+    else if (leaks.length) fail(`the pages' scripts carry what no page shows: ${leaks.join(", ")}`);
+    else pass(`${scripts.size} scripts of the build: no retired host, and of the deployment records only the fields the pages show`);
   }
   {
     // on a phone the register has no Posted column: each line still links the transaction that posted its key

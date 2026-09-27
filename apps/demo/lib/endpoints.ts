@@ -23,5 +23,8 @@ export const SCAN_RPC_URL = CHAIN_NAME === "monad" ? "https://rpc1.monad.xyz" : 
 export const AGENT_URL: string | undefined =
   process.env.NEXT_PUBLIC_LETTERLOCK_AGENT_URL?.replace(/\/+$/, "") || (CHAIN_NAME === "monad" ? "https://agent.letterlock.edycu.dev" : undefined);
 
-/** The Sourcify record the register checks the directory's source against. */
-export const SOURCE_CHECK_URL: string = (CHAIN_NAME === "monad" ? mainnet : testnet).verification.check;
+/**
+ * The Sourcify record the register checks the directory's source against. Read by name off each record, never the
+ * record whole, so the pages' scripts carry this field and not the records (lib/deployment.ts).
+ */
+export const SOURCE_CHECK_URL: string = CHAIN_NAME === "monad" ? mainnet.verification.check : testnet.verification.check;
