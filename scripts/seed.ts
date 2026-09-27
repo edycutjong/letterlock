@@ -15,10 +15,11 @@
 // Sealing is randomized (a fresh HPKE ephemeral key per envelope), so the envelopes differ between runs; the notes,
 // the tampered byte, the recipients and the order do not.
 //
-// Everything is resolved, sealed and simulated before the first transaction, and the sender's balance is checked
-// against the estimate, so a refusal sends nothing. After the last drop the recipients' inboxes are read back and
-// every envelope sent must be there, byte for byte. The run is recorded in fixtures/seeded/<chainId>.json; a second run
-// to the same persona and directory is refused unless --again.
+// Everything is resolved, sealed, simulated and estimated before the first transaction, and the sender must hold twice
+// the estimated cost, so a refusal sends nothing. After the last drop the recipients' inboxes are read back and every
+// envelope sent must be there, byte for byte. The run is recorded in fixtures/seeded/<chainId>.json after every drop
+// (so a run that stops halfway says what landed); a second run to the same persona and directory is refused unless
+// --again.
 //
 // The sending key is read from an environment variable named by --private-key-env (never from the command line):
 // by default MONAD_TESTNET_PRIVATE_KEY on testnet and LETTERLOCK_AGENT_PRIVATE_KEY on mainnet. Its value is never
@@ -130,7 +131,7 @@ const main = async (): Promise<number> => {
   console.log(`seed: ${deployment.network} (${deployment.chainId}), directory ${directory}, from ${account.address} (key from $${keyEnv})${o["dry-run"] ? ", DRY RUN" : ""}`);
 
   type Drop = { id: string; recipient: string; epoch: number; kid: string; bytes: number; tx: Hex; block: number; gasUsed: number; explorer?: string; expect: string; envelope: Envelope };
-  type Run = { at: string; chainId: number; network: string; directory: string; sender: string; drops: Drop[] };
+  type Run = { at: string; chainId: number; network: string; directory: string; sender: string; status: string; drops: Drop[] };
   const record: { about: string; runs: Run[] } = existsSync(recordFile)
     ? JSON.parse(readFileSync(recordFile, "utf8"))
     : { about: `Envelopes scripts/seed.ts dropped on ${deployment.network}. Each is sealed to a persona's key from a real passkey, so only that passkey opens it; "expect" is what it shows then.`, runs: [] };
@@ -187,15 +188,45 @@ const main = async (): Promise<number> => {
   const balance = await rpc.getBalance({ address: account.address });
   const cost = totalGas * gasPrice;
   console.log(`  ${planned.length} drops, about ${totalGas.toLocaleString("en-US")} gas, about ${formatEther(cost)} MON at ${formatGwei(gasPrice)} gwei; sender balance ${formatEther(balance)} MON`);
-  if (balance < cost) refuse(`the sender holds ${formatEther(balance)} MON, and the drops need about ${formatEther(cost)} MON`);
+  // twice the estimate: a wallet may offer up to about twice the current price, and a drop that runs out of funds halfway
+  // leaves a half-seeded inbox
+  if (balance < 2n * cost) refuse(`the sender holds ${formatEther(balance)} MON; the drops need about ${formatEther(cost)} MON, and the script asks for twice that`);
   for (const p of planned) console.log(`    ${p.id.padEnd(18)} → ${p.recipient}  epoch ${p.envelope.epoch}  kid ${p.envelope.kid}  ${p.wire.length} B  expect ${p.expect.split(":")[0]}`);
   if (o["dry-run"]) { console.log("dry run: nothing sent, nothing recorded"); return 0; }
 
-  // 3. Send, in the plan's order.
+  // 3. Send, in the plan's order. The record is written after every drop, so a run that stops halfway says what landed
+  // (and a second run to the same persona is refused without --again).
+  const run: Run = { at: new Date().toISOString(), chainId: deployment.chainId, network: deployment.network, directory, sender: account.address, status: "sending", drops: [] };
+  record.runs.push(run);
+  const save = () => {
+    mkdirSync(dirname(recordFile), { recursive: true });
+    writeFileSync(recordFile, `${JSON.stringify(record, null, 2)}\n`);
+  };
   const sent: Sent[] = [];
   for (const p of planned) {
-    const r = await ll.drop({ account, envelope: p.envelope });
+    let r;
+    try {
+      r = await ll.drop({ account, envelope: p.envelope });
+    } catch (e) {
+      run.status = `stopped at "${p.id}": ${isLetterlockError(e) ? e.message : (e as Error).message.split("\n")[0]}`;
+      if (sent.length) save();
+      throw e;
+    }
     sent.push({ ...p, tx: r.transactionHash, block: r.blockNumber, gasUsed: r.gasUsed });
+    run.drops.push({
+      id: p.id,
+      recipient: p.recipient,
+      epoch: p.envelope.epoch,
+      kid: p.envelope.kid,
+      bytes: p.wire.length,
+      tx: r.transactionHash,
+      block: Number(r.blockNumber),
+      gasUsed: Number(r.gasUsed),
+      ...(explorer ? { explorer: `${explorer}/tx/${r.transactionHash}` } : {}),
+      expect: p.expect,
+      envelope: p.envelope,
+    });
+    save();
     console.log(`    sent ${p.id.padEnd(18)} tx ${r.transactionHash}  block ${r.blockNumber}  gas ${r.gasUsed}${explorer ? `  ${explorer}/tx/${r.transactionHash}` : ""}`);
   }
 
@@ -209,32 +240,15 @@ const main = async (): Promise<number> => {
       const box = await ll.inbox(recipient, { fromBlock: first, toBlock: "latest" });
       missing = mine.filter((s) => !box.envelopes.some((e) => e.transactionHash === s.tx && bytesToHex(encodeEnvelope(e.envelope)) === bytesToHex(s.wire)));
     }
-    if (missing.length) throw new Error(`read back ${recipient}: ${missing.map((m) => m.id).join(", ")} not found in its inbox`);
+    if (missing.length) {
+      run.status = `sent; read back ${recipient}: ${missing.map((m) => m.id).join(", ")} not found in its inbox`;
+      save();
+      throw new Error(run.status);
+    }
     console.log(`  read back ${recipient}: ${mine.length} of ${mine.length} envelopes in its inbox, byte for byte`);
   }
-
-  record.runs.push({
-    at: new Date().toISOString(),
-    chainId: deployment.chainId,
-    network: deployment.network,
-    directory,
-    sender: account.address,
-    drops: sent.map((s) => ({
-      id: s.id,
-      recipient: s.recipient,
-      epoch: s.envelope.epoch,
-      kid: s.envelope.kid,
-      bytes: s.wire.length,
-      tx: s.tx,
-      block: Number(s.block),
-      gasUsed: Number(s.gasUsed),
-      ...(explorer ? { explorer: `${explorer}/tx/${s.tx}` } : {}),
-      expect: s.expect,
-      envelope: s.envelope,
-    })),
-  });
-  mkdirSync(dirname(recordFile), { recursive: true });
-  writeFileSync(recordFile, `${JSON.stringify(record, null, 2)}\n`);
+  run.status = `sent and read back: all ${sent.length} envelopes in their recipients' inboxes, byte for byte`;
+  save();
   console.log(`recorded in ${shown(recordFile)}: ${sent.length} drops, ${sent.reduce((g, s) => g + s.gasUsed, 0n).toLocaleString("en-US")} gas`);
   return 0;
 };

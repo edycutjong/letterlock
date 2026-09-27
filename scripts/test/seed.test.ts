@@ -49,16 +49,17 @@ const client = () => letterlock({ chain: "monad-testnet", rpcUrl: url, directory
 const nonce = () => createPublicClient({ chain: chain(), transport: http(url) }).getTransactionCount({ address: privateKeyToAccount(sender).address });
 
 /** Runs scripts/seed.ts as `pnpm seed` does, against the local chain, with the sender's key in SEED_TEST_KEY only. */
-const seed = (...args: string[]): Promise<{ code: number; out: string; err: string }> =>
+const seedAs = (key: Hex, ...args: string[]): Promise<{ code: number; out: string; err: string }> =>
   new Promise((resolve) => {
     const p = spawn(process.execPath, [SEED, "--rpc", url, "--directory", directory, "--from-block", "0", "--record", join(scratch, "seeded.json"),
-      "--private-key-env", "SEED_TEST_KEY", ...args], { env: { ...process.env, SEED_TEST_KEY: sender }, stdio: ["ignore", "pipe", "pipe"] });
+      "--private-key-env", "SEED_TEST_KEY", ...args], { env: { ...process.env, SEED_TEST_KEY: key }, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
     p.stdout.on("data", (d: Buffer) => { out += d.toString(); });
     p.stderr.on("data", (d: Buffer) => { err += d.toString(); });
     p.on("close", (code) => resolve({ code: code ?? -1, out, err }));
   });
+const seed = (...args: string[]) => seedAs(sender, ...args);
 
 before(async () => {
   if (skip) return;
@@ -112,7 +113,9 @@ test("the plan reaches the personas: the notes open, the copy is TAMPERED, the o
   assert.equal(r.code, 0, `${r.out}\n${r.err}`);
   assert.equal(await nonce(), before + SEED_NOTES.length + 2, "one transaction per planned drop");
 
-  const record = JSON.parse(await readFile(join(scratch, "seeded.json"), "utf8")) as { runs: { drops: { id: string; recipient: string; tx: Hex; epoch: number }[] }[] };
+  const record = JSON.parse(await readFile(join(scratch, "seeded.json"), "utf8")) as { runs: { status: string; drops: { id: string; recipient: string; tx: Hex; epoch: number }[] }[] };
+  assert.equal(record.runs.length, 1);
+  assert.match(record.runs[0]!.status, /^sent and read back: all 6 envelopes/);
   assert.deepEqual(record.runs.at(-1)!.drops.map((d) => d.id), [...SEED_NOTES.map((n) => n.id), `${SEED_TAMPER.from}-tampered`, SEED_OLD_EPOCH.id]);
 
   const ll = client();
@@ -164,4 +167,13 @@ test("a persona with no published key is NO_KEY_PUBLISHED, and nothing is sent",
   assert.equal(r.code, 1, r.err);
   assert.match(r.err, /NO_KEY_PUBLISHED/);
   assert.equal(await nonce(), before);
+});
+
+test("a sender without twice the estimated gas is refused before the first drop", { skip }, async () => {
+  const poor = generatePrivateKey();
+  await createTestClient({ mode: "anvil", chain: chain(), transport: http(url) }).setBalance({ address: privateKeyToAccount(poor).address, value: 1_000_000n });
+  const r = await seedAs(poor, "--to", maya.address, "--again");
+  assert.equal(r.code, 2, r.err);
+  assert.match(r.err, /asks for twice that\nnothing was sent/);
+  assert.equal(await createPublicClient({ chain: chain(), transport: http(url) }).getTransactionCount({ address: privateKeyToAccount(poor).address }), 0);
 });
