@@ -10,6 +10,8 @@
 
   <br/>
 
+  [![Landing page](https://img.shields.io/badge/%E2%9C%89%EF%B8%8F_Landing-Page-1E1B16?style=for-the-badge)](https://letterlock-site.vercel.app)
+  [![Pitch deck](https://img.shields.io/badge/%F0%9F%97%82%EF%B8%8F_Pitch-Deck-6E6556?style=for-the-badge)](https://letterlock-site.vercel.app/pitch/)
   [![Live App](https://img.shields.io/badge/%F0%9F%9A%80_Live-App-2F5D9E?style=for-the-badge)](https://letterlock-app.vercel.app)
   [![Judge Path](https://img.shields.io/badge/%E2%9A%96%EF%B8%8F_Judge-Path,_2_min-A3261E?style=for-the-badge)](DEMO.md)
   [![npm](https://img.shields.io/badge/%F0%9F%93%A6_npm-letterlock-CB3837?style=for-the-badge)](https://www.npmjs.com/package/letterlock)
@@ -263,6 +265,7 @@ scripts/              verify, bench, the offline proof, seed, readiness
 deployments/          the mainnet and testnet records
 bench/                results.json (every sample) and RESULTS.md
 docs/                 SPEC.md, ARCHITECTURE.md, DX.md
+site/                 the landing page and the pitch deck, at letterlock-site.vercel.app
 ```
 
 ## 🗺️ Roadmap
@@ -280,6 +283,7 @@ docs/                 SPEC.md, ARCHITECTURE.md, DX.md
 
 ## 📽️ Demo Materials
 
+- **Landing page:** <https://letterlock-site.vercel.app>, and the pitch deck at <https://letterlock-site.vercel.app/pitch/> (both in [site/](site))
 - **Live app:** <https://letterlock-app.vercel.app>, and the judges' route at <https://letterlock-app.vercel.app/judge>
 - **The judge's script:** [DEMO.md](DEMO.md): two paths, every mainnet transaction, and how to reproduce the numbers
 - **Reference agent:** <https://letterlock-agent.vercel.app>
