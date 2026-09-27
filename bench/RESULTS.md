@@ -1,36 +1,56 @@
 # Benchmark: resolve + seal on Monad mainnet
 
-Measured 2026-09-27 03:22 UTC with `pnpm bench` (scripts/bench.ts). Every number below is
-copied from [results.json](results.json), which also holds all 800 raw samples.
+Measured 2026-09-27 04:42 UTC with `pnpm bench` (scripts/bench.ts). Every number below is
+copied from [results.json](results.json), which also holds all 4,005 raw samples.
 
-**resolve + seal: p50 23.117 ms · p95 26.303 ms · p99 31.221 ms** over N = 200, against the
-public RPC https://rpc.monad.xyz. Sealing alone takes p50 3.592 ms on this machine; the rest is one `keyOf` read over the network.
+**resolve + seal: p50 27.067 ms · p95 33.982 ms · p99 38.201 ms** over N = 1,000
+(5 runs of 200), against the public RPC https://rpc.monad.xyz. Sealing alone takes p50 4.918 ms on this machine; the rest is one
+`keyOf` read over the network. From run to run, the resolve + seal p50 ranged 24.144–28.363 ms,
+and the p99 32.002–38.201 ms.
 
-## Latency (milliseconds)
+## Latency (milliseconds, every run pooled)
 
 | Operation | What is timed | n | p50 | p95 | p99 | min | max | mean |
 |---|---|---|---|---|---|---|---|---|
-| resolve | `ll.resolve(address)`: one `keyOf` eth_call | 200 | **19.355** | 20.478 | 21.357 | 17.729 | 156.13 | 20.758 |
-| seal | `seal()`: HPKE to the resolved key, no network | 200 | **3.592** | 5.915 | 8.389 | 2.002 | 18.388 | 3.858 |
-| resolve + seal | `ll.sealTo(address, note)`, as one call | 200 | **23.117** | 26.303 | 31.221 | 20.106 | 72.981 | 23.627 |
-| rpc round trip | `eth_blockNumber` on the same RPC (context) | 200 | **19.614** | 21.181 | 23.161 | 17.213 | 28.929 | 19.183 |
+| resolve | `ll.resolve(address)`: one `keyOf` eth_call | 1000 | **21.929** | 24.176 | 26.256 | 20.08 | 213.384 | 22.752 |
+| seal | `seal()`: HPKE to the resolved key, no network | 1000 | **4.918** | 8.885 | 11.36 | 1.782 | 17.337 | 4.993 |
+| resolve + seal | `ll.sealTo(address, note)`, as one call | 1000 | **27.067** | 33.982 | 38.201 | 21.915 | 298.353 | 28.424 |
+| rpc round trip | `eth_blockNumber` on the same RPC (context) | 1000 | **19.586** | 21.448 | 23.935 | 16.31 | 26.87 | 19.291 |
 
 The first resolve of a new client also runs its one-time checks (`eth_chainId`, `eth_getCode` and `NO_AGENT()`, in
-parallel with the `keyOf` read): it took 104.998 ms here, once, and is not in the table.
+parallel with the `keyOf` read). Each run starts a new client, so the cold first resolve was timed once per run (the
+column below): p50 77.545 ms over 5 runs, min 70.497 ms, max 98.911 ms. It is not in the table.
+
+## Run to run
+
+| Run | Mainnet blocks | resolve + seal p50 | p95 | p99 | resolve p50 | seal p50 | rpc round trip p50 | cold first resolve | failed calls |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 108372664 to 108372715 | 28.246 | 33.946 | 38.003 | 22.287 | 5.676 | 19.748 | 98.911 | 0 |
+| 2 | 108372717 to 108372769 | 28.121 | 35.733 | 38.201 | 22.403 | 5.57 | 19.875 | 77.545 | 0 |
+| 3 | 108372770 to 108372822 | 28.363 | 34.819 | 38.006 | 22.168 | 5.687 | 19.83 | 83.408 | 0 |
+| 4 | 108372824 to 108372873 | 26.135 | 33.272 | 35.452 | 21.723 | 4.277 | 19.545 | 72.354 | 0 |
+| 5 | 108372874 to 108372921 | 24.144 | 26.961 | 32.002 | 21.293 | 2.862 | 19.298 | 70.497 | 0 |
+
+The runs follow one another on one machine and one endpoint, so this spread is what the network and the machine did
+in those minutes; another hour, place or endpoint moves it further.
 
 ## What was checked while timing
 
 - Recipient: `0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3`, the mainnet directory's deployer. Its key is the deploy smoke test's **DEMO KEY**
   (kid `db9784b7c246deb1`, epoch 1; deployments/143.json), not a passkey's.
-- Every resolve (201, the cold one included) was checked against the recorded key and epoch, and every
-  envelope (400) for chain 143, the directory `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`, the recipient and kid `db9784b7c246deb1`:
+- Every resolve (1,005, the cold ones included) was checked against the recorded key and epoch, and every
+  envelope (2,000) for chain 143, the directory `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`, the recipient and kid `db9784b7c246deb1`:
   no mismatch.
-- Failed calls: 0 in the measured rounds, 0 in the warm-up.
+- Every timed call had to make exactly the HTTP requests it needs (one `keyOf` read for a resolve or a resolve + seal,
+  one `eth_blockNumber`, none for a seal): viem retries a failed request inside a call, and a retried call is counted as
+  failed, not timed. Failed calls: 0 in the measured rounds, 0 in the warm-up, 0 cold.
 - The note is 85 bytes; its envelope's wire form (what `drop` sends) is 365 bytes.
 
 ## Gas, from mainnet receipts
 
-eth_getTransactionReceipt and eth_getTransactionByHash on https://rpc.monad.xyz for the hashes in deployments/143.json. Cost is the receipt's gas used times its effective gas price. In every receipt the gas used equals the transaction's gas limit.
+eth_getTransactionReceipt and eth_getTransactionByHash on https://rpc.monad.xyz for the hashes in deployments/143.json. Cost is the receipt's gas used times its effective gas price. Monad charges a transaction for its
+gas limit, not for the gas its execution uses ([Monad docs: differences from Ethereum](https://docs.monad.xyz/developer-essentials/differences)),
+and in every receipt below the gas used equals the transaction's gas limit: these are the gas charged, not the gas executed.
 
 | Transaction | Gas used | Gas limit | Price (gwei) | Cost (MON) | Recorded | Tx |
 |---|---|---|---|---|---|---|
@@ -42,21 +62,23 @@ eth_getTransactionReceipt and eth_getTransactionByHash on https://rpc.monad.xyz 
 | publishForAgent(10260, pub, 2): the agent's key rotated to epoch 2 | 74,652 | 74,652 | 102 | 0.007614504 | matches | [0x072dc08d…](https://monadvision.com/tx/0x072dc08d72aefacbe3fe05fedd2296c857c1181fbfa9f548c7ed9322594c294b) |
 
 An agent key has been rotated on mainnet (above); no address key has been yet, so there is no receipt for an address's rotation. For scale only, forge's gas snapshot
-(contracts/snapshots/Letterlock.json, a local EVM run of each call as its own transaction; not a receipt): first publish
-70,002, rotation 36,002, drop of a 1 KiB envelope 65,020, of a 16 KiB one 679,420.
+(contracts/snapshots/Letterlock.json, a local EVM run of each call as its own transaction: gas executed, not a Monad
+charge, and not a receipt): first publish 70,002, rotation 36,002, drop of a 1 KiB envelope
+65,020, of a 16 KiB one 679,420.
 
 ## Context
 
 | | |
 |---|---|
-| Date | 2026-09-27T03:22:54.285Z to 2026-09-27T03:23:08.456Z |
+| Date | 2026-09-27T04:42:22.069Z to 2026-09-27T04:43:39.978Z |
 | Machine | MacBookPro18,2, Apple M1 Max, 10 cores, 32 GiB, macOS 26.5.2 (arm64) |
-| Load average (1, 5, 15 min) | 4.17 / 5.81 / 6.39 at the start, 4.13 / 5.72 / 6.35 at the end (10 cores) |
+| Load average (1, 5, 15 min) | 4.38 / 4.87 / 5.3 at the start, 10.5 / 6.36 / 5.8 at the end (10 cores) |
 | Node.js | v22.22.0 |
 | Time zone of the machine | Asia/Jakarta |
-| SDK | letterlock 0.1.0, runtime code at `7a33337` (2026-09-27T09:35:08+07:00); checkout `e01e598` |
-| RPC | https://rpc.monad.xyz (Monad's public endpoint), mainnet blocks 108356872 to 108356917 |
-| N | 200 rounds after 5 warm-up rounds; each round times resolve, seal, resolve + seal and an rpc round trip, in that order in even rounds and reversed in odd ones |
+| SDK | letterlock 0.1.0, runtime code at `7a33337` (2026-09-27T09:35:08+07:00) |
+| Benchmark code | scripts/bench.ts and scripts/lib as of `c0cb4da`, no uncommitted changes; checkout `7e12dbf` |
+| RPC | https://rpc.monad.xyz (Monad's public endpoint), mainnet blocks 108372664 to 108372921 |
+| N | 5 runs of 200 rounds, each after 5 warm-up rounds; each round times resolve, seal, resolve + seal and an rpc round trip, in that order in even rounds and reversed in odd ones |
 | Percentiles | nearest-rank (every value is a measured sample) |
 
 The network dominates `resolve`: it tracks the plain `eth_blockNumber` round trip from this machine to the RPC, so
@@ -69,5 +91,5 @@ protocol requires to be fresh for every seal: the note, the recipient and the or
 
 ```sh
 pnpm install
-pnpm bench            # N = 200; rewrites bench/results.json and bench/RESULTS.md
+pnpm bench            # 5 runs of N = 200; rewrites bench/results.json and bench/RESULTS.md
 ```
