@@ -381,6 +381,10 @@ pre.tty .ln{display:block}
   .hero-copy .sub{animation-delay:.26s}
   .hero-copy .proof{margin-top:18px}
 }
+@media (min-width:1081px) and (max-width:1231px){
+  /* the status line stays one line: the agent's part is shown here, so the explanation gives way */
+  .status .w2{display:none}
+}
 @media (max-width:1080px){
   .nav a.lk.opt{display:none}
   .status .w1{display:none}
@@ -995,7 +999,7 @@ pre.tty .ln{display:block}
       try {
         const h = await (await fetch(AGENT + '/health', { signal: AbortSignal.timeout(8000) })).json();
         const d = h.limits && h.limits.dailyDrops;
-        agent = h.ok && h.key ? `<span class="w1"> · agent 10260 ${h.key.matches ? 'holds the posted key' : 'holds a key that does not match the posted one'}${d ? `, ${esc(d.used)} of ${esc(d.allowedToday)} daily drops used` : ''}</span>` : '';
+        agent = h.ok && h.key ? `<span class="w1"> · agent 10260 ${h.key.matches ? 'holds the posted key' : 'holds a key that does not match the posted one'}${d ? `, daily drops ${esc(d.used)} of ${esc(d.allowedToday)}` : ''}</span>` : '';
       } catch { agent = '<span class="w1"> · agent 10260 did not answer this page just now</span>'; }
       text.innerHTML = epoch > 0
         ? `<b>Live</b><span class="w2">, read by this page from Monad mainnet</span>: <code class="data">keyOfAgent(10260)</code> → epoch ${esc(epoch)}${kid ? ` · <span class="data">${esc(kid)}</span>` : ''}<span class="w3"> · block ${esc(block.toLocaleString('en-US'))} in ${esc(ms)} ms</span>${agent}`

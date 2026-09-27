@@ -6,7 +6,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'none'; script-src 'sha256-O7alvLETeApc1j7O+6hhQVktFYXimgpzq6P6nIiGUzg=' 'sha256-ZlPEdEixMsW8BFcIi/sww10b8kLJ79IRRcilpRe1Vj0='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://rpc.monad.xyz https://letterlock-agent.vercel.app; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'none'; script-src 'sha256-K7LclZhwsYFNNhwwxSX5FgVrKSOgPZYxNT2xuYhJnLE=' 'sha256-ZlPEdEixMsW8BFcIi/sww10b8kLJ79IRRcilpRe1Vj0='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://rpc.monad.xyz https://letterlock-agent.vercel.app; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests"
         },
         {
           "key": "X-Content-Type-Options",
