@@ -25,7 +25,11 @@ export type MeraAccountOptions = {
 
 /** A viem account whose key lives in a mera signing session: signing shows no prompt until end() is called. */
 export type MeraAccount = LocalAccount<"mera"> & {
-  /** The passkey that answered, as base64url: pass it back as `credential` to pin later prompts. */
+  /**
+   * The passkey that answered, as base64url: pass it back as `credential` to pin later prompts. The chain client holds
+   * the account to it: rotate() pins its prompt to this passkey, and publish(), rotate() and publishForAgent() refuse a
+   * key that does not name it (docs/SPEC.md §7).
+   */
   readonly credentialId: string;
   /** Zeroes the session's key copy; every later signature rejects (mera SESSION_ENDED). */
   end(): void;

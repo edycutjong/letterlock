@@ -78,6 +78,15 @@ describe("passkey → encryption address (via mera)", () => {
     expect(isLetterlockError(e, "INPUT_INVALID")).toBe(true);
   });
 
+  it("every key names the passkey it was derived from: createEncryptionAddress's, deriveFromPasskey's and deriveForAgent's", async () => {
+    for (const dev of [softAuthenticator(), softAuthenticator({ prfAtCreate: false })]) {
+      const { keys, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+      const next = await deriveFromPasskey({ rpId: rp.id, epoch: 2, credential, webAuthnClient: dev });
+      const agent = await deriveForAgent({ rpId: rp.id, agentId: 1, epoch: 1, credential, webAuthnClient: dev });
+      expect([keys.credentialId, next.credentialId, agent.credentialId]).toEqual(Array(3).fill(credential.credentialId));
+    }
+  });
+
   it("create-time fallback stays pinned to the NEW passkey even when an older one exists for the site", async () => {
     const dev = softAuthenticator({ prfAtCreate: false });
     await createEncryptionAddress({ rp, user, webAuthnClient: dev });              // older passkey, listed first

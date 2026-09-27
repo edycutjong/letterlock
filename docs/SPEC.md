@@ -91,8 +91,8 @@ either. It sends one JSON-RPC request per HTTP request, never a batch: some Mona
 |---|---|---|
 | `resolve(to)` | none | ONE `keyOf` / `keyOfAgent` read → `{ recipient, publicKey, epoch, kid, updatedAt }`; zeros → `NO_KEY_PUBLISHED` |
 | `sealTo(to, plaintext)` | none | `resolve` + `seal` |
-| `publish({ account, keys })` | none | `publish(pub, epoch)` from `account`; simulated first, so a refused call costs no gas |
-| `rotate({ account, credential })` | 1 | reads the account's epoch e, derives e + 1 (§2), publishes it, wipes `sk` |
+| `publish({ account, keys })` | none | `publish(pub, epoch)` from `account`; simulated first, so a refused call costs no gas. A `meraAccount` publishes only keys that name its own passkey (§7) |
+| `rotate({ account, credential })` | 1 | reads the account's epoch e, derives e + 1 (§2) from the account's own passkey, publishes it, wipes `sk`. The prompt is always pinned to one passkey: `credential`, which only a `meraAccount` may leave out (it names its own). If another passkey answers, nothing is signed (§7) |
 | `publishForAgent({ account, agentId, keys })` | none | `publishForAgent`; the epoch follows the agent's record across owners (§8). Takes only a key derived for that agent (`deriveForAgent`), never one derived for an address, and never the account's own key in the directory; `publish` never takes an agent's key |
 | `drop({ account, envelope })` | none | sends the §3 wire form to the envelope's own recipient; chain and directory must be the client's |
 | `inbox(to, { fromBlock?, toBlock? })` | none | `Dropped` logs for `(to, NO_AGENT)` or `(address(0), agentId)`, from the deploy block by default, in pages the RPC accepts; bytes that are not an envelope for `to` on this chain and directory are returned as `rejected`, never as envelopes. `toBlock` defaults to the `finalized` block: a Finalized block is never replaced, so a poll resumed from `toBlock + 1` misses nothing. `"latest"` (Monad's Proposed block) and `"safe"` (Voted) reach closer to the head, where a drop can still vanish or move; the result's `finalizedBlock` says how far a scan is final |
@@ -121,9 +121,9 @@ Chain client (§4), in the separate union `ChainErrorCode`; the directory's cust
 
 `ZeroKey`, `LowOrderKey`, `NonCanonicalKey`, `AgentPathDisabled`, `AgentIdReserved`, `InvalidRecipient`,
 `EmptyEnvelope` and `EnvelopeTooLarge` are `INPUT_INVALID`; `EpochNotNext` is `EPOCH_MISMATCH`; `NoKeyPublished` is
-`NO_KEY_PUBLISHED`. An RPC that serves another chain than the client's, a directory address with a bad checksum, and
-an address that holds no Letterlock directory (no code, or no `NO_AGENT()` answering 2^256 − 1) are `INPUT_INVALID`
-too.
+`NO_KEY_PUBLISHED`. An RPC that serves another chain than the client's, a directory address with a bad checksum, an
+address that holds no Letterlock directory (no code, or no `NO_AGENT()` answering 2^256 − 1), and a key that does not
+name the signing `meraAccount`'s passkey (§7) are `INPUT_INVALID` too.
 
 ## 6. Threat model
 **Protects:** the content of an envelope against everyone except holders of the recipient's passkey. This
@@ -171,6 +171,17 @@ mera's own salt `SHA-256("mera.prf.salt.v1")`, uses the output as BIP-39 entropy
 `m/44'/60'/0'/0/0` of its seed, as mera's passkey-account recipe does. The key lives in a mera
 `Secp256k1SigningSession` and signs through `toViemAccount`; the PRF output, the seed and the HD keys are zeroed once
 the session holds its copy (best effort, as in §2).
+
+The SDK keeps the published key on the same passkey as the account. A device can hold several passkeys for the rpId
+(mera adds one on every creation, and a creation that fails after the ceremony leaves its passkey behind), and a
+prompt that pins none lets any of them answer. Notes sealed to a key from another passkey, published under the
+account, would not open with the account's passkey, and would be lost with that other passkey. So a `meraAccount`
+carries its passkey's credential id, and so does every key from `createEncryptionAddress`, `deriveFromPasskey` and
+`deriveForAgent`. `publish` and `publishForAgent` refuse, for a `meraAccount`, a key that does not name its passkey:
+one from another passkey, or one rebuilt from its fields, which could come from any passkey (as with the rpId, §6).
+`rotate` pins its prompt to that passkey and refuses the key of any other passkey that answers, before anything is
+signed. For any other signer the SDK sees no passkey, so `rotate` takes the passkey from `credential`, never from an
+unpinned prompt.
 
 ## 8. Contract
 `contracts/src/Letterlock.sol`. ABI: `contracts/abi/Letterlock.json`, and `letterlockAbi`, exported by the

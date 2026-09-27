@@ -44,7 +44,10 @@ const { envelopes } = await ll.inbox(account.address);
 const bytes = await ll.open(envelopes[0].envelope, { credential }); // one prompt, on any synced device
 ```
 
-`rotate({ account, credential })` publishes the next epoch's key; envelopes sealed to earlier epochs still open.
+`rotate({ account })` publishes the next epoch's key, derived from the account's own passkey (a `meraAccount()` names
+it; any other account needs `credential`); envelopes sealed to earlier epochs still open. A device can hold several
+passkeys for the site, so the SDK keeps the key on the account's passkey: for a `meraAccount()`, `publish`, `rotate`
+and `publishForAgent` refuse a key from any other passkey (or one rebuilt from its fields) before anything is signed.
 
 ## API
 
@@ -55,10 +58,10 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
 | `sealTo(to, bytes)` | 0 | `resolve` + `seal`: an envelope bound to this chain, directory, recipient and epoch |
 | `inbox(to, { fromBlock?, toBlock? })` | 0 | the envelopes dropped for a recipient (`Dropped` logs), in pages the RPC accepts, up to the finalized block by default (two blocks behind the head on Monad): a poll resumed from `toBlock + 1` misses nothing. `toBlock: "latest"` reads to the head, where a block can still be replaced |
 | `drop({ account, envelope })` | 0 | a transaction that emits the envelope for its recipient (the demo transport; ≤ 16 KiB) |
-| `publish({ account, keys })` | 0 | a transaction that publishes the account's key; `keys.epoch` must be the current epoch + 1 |
+| `publish({ account, keys })` | 0 | a transaction that publishes the account's key; `keys.epoch` must be the current epoch + 1, and a `meraAccount()` takes only keys that name its own passkey |
 | `publishForAgent({ account, agentId, keys })` | 0 | the same for an ERC-8004 agent the account owns (mainnet only), with a key from `deriveForAgent` for that agent |
 | `deriveForAgent({ rpId, agentId, epoch, credential? })` | 1 | an agent's key from its owner's passkey, with the agent id in the derivation: the key its server holds, never the owner's own |
-| `rotate({ account, credential? })` | 1 | derives the next epoch's key and publishes it |
+| `rotate({ account, credential? })` | 1 | derives the next epoch's key from the account's passkey and publishes it; `credential` can be left out only for a `meraAccount()`, whose passkey pins the prompt |
 | `open(envelope, { credential? })` | 1 | re-derives the key for the envelope's recipient (the passkey's own, or its agent's for `agent:<id>`) and epoch, and opens it |
 | `meraAccount({ rpId, credential? })` | 1 | the passkey's EVM account as a viem account, signing through a mera session |
 | `createEncryptionAddress`, `deriveFromPasskey`, `seal`, `open(envelope, keys)`, `encodeEnvelope`, `decodeEnvelope` | | the protocol functions the client is built on |
@@ -75,7 +78,7 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
 | `NOT_AGENT_OWNER` | the account does not own that ERC-8004 agent |
 | `INSUFFICIENT_FUNDS` | the account cannot pay for gas |
 | `CHAIN_UNAVAILABLE` | the RPC or the ERC-8004 registry gave no answer: unknown, never "no key" |
-| `INPUT_INVALID` | a malformed recipient, key, envelope or option, the wrong chain behind `rpcUrl`, a `directory` with a bad checksum or no Letterlock directory at it, or a publish under another rpId |
+| `INPUT_INVALID` | a malformed recipient, key, envelope or option, the wrong chain behind `rpcUrl`, a `directory` with a bad checksum or no Letterlock directory at it, a publish under another rpId, or a key that does not name the `meraAccount()`'s passkey |
 
 ## Honest limits
 

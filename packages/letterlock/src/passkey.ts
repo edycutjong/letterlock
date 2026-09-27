@@ -20,8 +20,15 @@ export const toPasskeyError = (cause: unknown): never => {
   throw new LetterlockError("PASSKEY_FAILED", "the passkey ceremony was cancelled, timed out, or found no passkey for this site", { cause });
 };
 
-/** A key pair derived from a passkey, with the rpId it was derived under: publish() refuses a key from another rpId. */
-export type PasskeyKeyPair = EncryptionKeyPair & { readonly rpId: string };
+/**
+ * A key pair derived from a passkey, with where it came from: publish() refuses a key derived under another rpId, or
+ * from another passkey than the meraAccount() that signs (docs/SPEC.md §6, §7).
+ */
+export type PasskeyKeyPair = EncryptionKeyPair & {
+  readonly rpId: string;
+  /** The passkey that answered, as base64url (mera's credential id). */
+  readonly credentialId: string;
+};
 
 export type CreateAddressOptions = {
   readonly rp: { id: string; name: string };
@@ -35,7 +42,8 @@ export const createEncryptionAddress = async (
 ): Promise<{ credential: PasskeyCredentialMetadata; keys: PasskeyKeyPair }> => {
   try {
     const r = await createPasskeyWithPrfOutput({ ...o, prfSalt: prfSaltFor(1) });
-    return { credential: { credentialId: r.credentialId, transports: r.transports }, keys: { ...deriveKeyPair(r.prfOutput, 1), rpId: o.rp.id } };
+    const keys = { ...deriveKeyPair(r.prfOutput, 1), rpId: o.rp.id, credentialId: r.credentialId };
+    return { credential: { credentialId: r.credentialId, transports: r.transports }, keys };
   } catch (e) { return toPasskeyError(e); }
 };
 
@@ -58,15 +66,15 @@ const prfOutputFor = (o: Omit<DeriveOptions, "epoch">, prfSalt: Uint8Array<Array
  * One assertion ceremony → the key pair of the passkey's own encryption address for `epoch`. Same passkey on any
  * synced device → same keys. Never an ERC-8004 agent's key: that is deriveForAgent().
  */
-export const deriveFromPasskey = async (o: DeriveOptions): Promise<PasskeyKeyPair & { credentialId: string }> => {
+export const deriveFromPasskey = async (o: DeriveOptions): Promise<PasskeyKeyPair> => {
   try {
     const r = await prfOutputFor(o, prfSaltFor(o.epoch));
     return { ...deriveKeyPair(r.prfOutput, o.epoch), credentialId: r.credentialId, rpId: o.rpId };
   } catch (e) { return toPasskeyError(e); }
 };
 
-/** An agent's key pair derived from its owner's passkey, with the rpId it was derived under. */
-export type AgentPasskeyKeyPair = AgentKeyPair & { readonly rpId: string };
+/** An agent's key pair derived from its owner's passkey, with the rpId and the passkey it was derived under. */
+export type AgentPasskeyKeyPair = AgentKeyPair & { readonly rpId: string; readonly credentialId: string };
 
 export type DeriveForAgentOptions = DeriveOptions & {
   /** The ERC-8004 agent: `agent:<id>`, `<id>`, a number or a bigint. */
@@ -79,7 +87,7 @@ export type DeriveForAgentOptions = DeriveOptions & {
  * keys, so the agent's server can hold its secret without being able to open the owner's notes, and the owner's
  * passkey can always derive it again. publishForAgent() publishes only such a key, and only for this agent.
  */
-export const deriveForAgent = async (o: DeriveForAgentOptions): Promise<AgentPasskeyKeyPair & { credentialId: string }> => {
+export const deriveForAgent = async (o: DeriveForAgentOptions): Promise<AgentPasskeyKeyPair> => {
   try {
     const agentId = toAgentId(o.agentId);
     const r = await prfOutputFor(o, agentPrfSaltFor(agentId, o.epoch));

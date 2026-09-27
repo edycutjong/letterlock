@@ -57,9 +57,16 @@ export type ResolvedKey = RecipientKey & {
  * What publish needs: the public half, its epoch, and the rpId it was derived under, which must be the client's (the
  * keys createEncryptionAddress(), deriveFromPasskey() and deriveForAgent() return carry it). Only `unsafeAllowAnyRpId`
  * accepts no rpId. `agentId` marks an agent's key (deriveForAgent, deriveAgentKeyPair): publishForAgent() takes only a
- * key marked for that agent, and publish() never takes one.
+ * key marked for that agent, and publish() never takes one. `credentialId` names the passkey the key was derived from
+ * (those three functions record it): a meraAccount() account publishes only keys that name its own passkey.
  */
-export type PublishableKey = { readonly publicKey: Uint8Array; readonly epoch: number; readonly rpId?: string; readonly agentId?: bigint };
+export type PublishableKey = {
+  readonly publicKey: Uint8Array;
+  readonly epoch: number;
+  readonly rpId?: string;
+  readonly agentId?: bigint;
+  readonly credentialId?: string;
+};
 
 export type WriteResult = {
   readonly transactionHash: Hex;
@@ -93,7 +100,11 @@ export type LetterlockClient = {
   open(envelope: Envelope, o?: { credential?: PasskeyCredentialMetadata; webAuthnClient?: WebAuthnClient }): Promise<Uint8Array>;
   /** Publish the account's key; `keys.epoch` must be the directory's epoch for the account + 1 (1 for the first). */
   publish(o: { account: Signer; keys: PublishableKey }): Promise<PublishResult>;
-  /** One passkey prompt: derive the next epoch's key (1 when none) and publish it. Old envelopes keep opening. */
+  /**
+   * One passkey prompt: derive the next epoch's key (1 when none) from the account's own passkey and publish it. Old
+   * envelopes keep opening. `credential` pins the passkey; it may be left out only for a meraAccount() account, whose
+   * own passkey pins the prompt. If another passkey answers, nothing is signed (INPUT_INVALID).
+   */
   rotate(o: { account: Signer; credential?: PasskeyCredentialMetadata; webAuthnClient?: WebAuthnClient }): Promise<PublishResult>;
   /**
    * Publish an ERC-8004 agent's key; the account must own the agent. The key must come from deriveForAgent() for this
@@ -228,6 +239,24 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
     if (keys.rpId !== undefined && keys.rpId !== rpId)
       throw new LetterlockError("INPUT_INVALID", `${action}: the key was derived under rpId "${keys.rpId}", and this client publishes for "${rpId}"`);
   };
+  /**
+   * The passkey a meraAccount() account comes from (its credential id), or undefined for any other signer. Its keys
+   * must come from that passkey too, so that msg.sender and the published key are bound to one passkey (docs/SPEC.md
+   * §7): notes sealed to a key from another passkey would not open with the account's own.
+   */
+  const passkeyOf = (account: Signer): string | undefined => {
+    const id = typeof account === "object" && account !== null ? (account as { credentialId?: unknown }).credentialId : undefined;
+    return typeof id === "string" ? id : undefined;
+  };
+  const checkPasskey = (account: Signer, keys: PublishableKey, action: string) => {
+    const own = passkeyOf(account);
+    // any other signer: the SDK sees no passkey to hold the key to. As with the rpId, a key rebuilt from its fields has
+    // lost its passkey, and could come from any passkey.
+    if (own !== undefined && keys.credentialId !== own)
+      throw new LetterlockError("INPUT_INVALID", keys.credentialId === undefined
+        ? `${action}: the key does not name the passkey it was derived from, and a meraAccount() account publishes only keys from its own passkey (${own}). Pass the key createEncryptionAddress(), deriveFromPasskey() or deriveForAgent() returned, not one rebuilt from its fields`
+        : `${action}: the key was derived from passkey ${String(keys.credentialId)}, and the account comes from passkey ${own}; notes sealed to this key would open only with that other passkey. Derive the key with credential: { credentialId: account.credentialId }`);
+  };
   const addressOf = (account: Signer, action: string): Address => {
     const a = typeof account === "string" ? account : account?.address;
     if (typeof a !== "string" || !isAddress(a, { strict: false }))
@@ -297,6 +326,7 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       pinned("publish");
       checkKey(keys, "publish");
       const address = addressOf(account, "publish");
+      checkPasskey(account, keys, "publish");
       const r = await send(account, "publish", [bytesToHex(keys.publicKey), keys.epoch], `publish epoch ${keys.epoch} for ${address}`);
       return publishResult(r, address.toLowerCase() as Recipient, keys);
     },
@@ -304,12 +334,25 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
     async rotate({ account, credential, webAuthnClient }) {
       pinned("rotate");
       const address = addressOf(account, "rotate");
+      // The prompt is always pinned to one passkey, the account's own: a prompt that pins none lets any passkey for the
+      // site answer, and its key would be published under this account (docs/SPEC.md §7).
+      const own = passkeyOf(account);
+      const given = credential ?? undefined;
+      if (given !== undefined && (typeof given !== "object" || typeof given.credentialId !== "string"))
+        throw new LetterlockError("INPUT_INVALID", "rotate: credential must be { credentialId }, as createEncryptionAddress() returned it");
+      if (given !== undefined && own !== undefined && given.credentialId !== own)
+        throw new LetterlockError("INPUT_INVALID", `rotate: credential ${given.credentialId} is not the passkey the account comes from (${own})`);
+      const passkey = given ?? (own !== undefined ? { credentialId: own } : undefined);
+      if (passkey === undefined)
+        throw new LetterlockError("INPUT_INVALID",
+          "rotate: pass credential, the passkey whose keys this account publishes (only a meraAccount() account names its own)");
       const [, current] = await read(`keyOf(${address})`, () =>
         publicClient.readContract({ address: directory, abi: letterlockAbi, functionName: "keyOf", args: [address] }));
-      const keys = await deriveFromPasskey({
-        rpId, epoch: current + 1, ...(credential ? { credential } : {}), ...(webAuthnClient ? { webAuthnClient } : {}),
-      });
+      const keys = await deriveFromPasskey({ rpId, epoch: current + 1, credential: passkey, ...(webAuthnClient ? { webAuthnClient } : {}) });
       keys.secretKey.fill(0); // publishing needs only the public half
+      // a WebAuthn client that ignores the pin lets another passkey answer: refuse its key before anything is signed
+      if (keys.credentialId !== passkey.credentialId)
+        throw new LetterlockError("INPUT_INVALID", `rotate: passkey ${keys.credentialId} answered, not ${passkey.credentialId}; nothing was published`);
       const r = await send(account, "publish", [bytesToHex(keys.publicKey), keys.epoch], `rotate ${address} to epoch ${keys.epoch}`);
       return publishResult(r, address.toLowerCase() as Recipient, keys);
     },
@@ -319,6 +362,7 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       const id = toAgentId(agentId);
       checkKey(keys, `publishForAgent ${id}`, id);
       const owner = addressOf(account, "publishForAgent");
+      checkPasskey(account, keys, `publishForAgent ${id}`);
       await requireAgentPath(`publishForAgent ${id}`);
       // however the key was labelled, never the account's own published key
       const [ownKey] = await read(`keyOf(${owner})`, () =>

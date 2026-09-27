@@ -1,4 +1,5 @@
 // The chain layer against the real directory bytecode on a local anvil chain (test/anvil/global-setup.ts).
+import type { WebAuthnClient } from "@category-labs/mera";
 import { parseEventLogs, zeroAddress, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ import {
 } from "../src/index.ts";
 import { Fault, agentStandIn, anvil, client, ctx, faultyAbi, fund, fundedAccount, newAgentId, noChain, privateChain, publicClient, registryAbi, sendAs, standIn, testClient } from "./anvil/context.ts";
 import { pendingIsLatest, rpcError, rpcProxy } from "./anvil/proxy.ts";
-import { softAuthenticator, zeroedDuring } from "./soft-authenticator.ts";
+import { softAuthenticator, zeroedDuring, type SoftAuthenticator } from "./soft-authenticator.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 // looked up at call time, so this file still loads (and the test fails, not the file) against a build without it
@@ -284,6 +285,110 @@ describe.skipIf(noChain)("rotate", () => {
   });
 });
 
+// mera adds a passkey on every creation (a fresh user handle), and a creation that fails after the ceremony leaves its
+// passkey behind: a device can hold several passkeys for the site. A prompt that is not pinned lets any of them answer.
+describe.skipIf(noChain)("the key and the account come from one passkey (docs/SPEC.md §7)", () => {
+  /** Two passkeys for the site on one device: an older one, which answers a prompt that pins none, and the account's own. */
+  const twoPasskeys = async () => {
+    const dev = softAuthenticator();
+    const rp = { id: LETTERLOCK_RP_ID, name: "Letterlock" };
+    const older = await createEncryptionAddress({ rp, user: { name: "old", displayName: "Old" }, webAuthnClient: dev });
+    const mine = await createEncryptionAddress({ rp, user: { name: "me", displayName: "Me" }, webAuthnClient: dev });
+    const account = await meraAccount({ rpId: LETTERLOCK_RP_ID, credential: mine.credential, webAuthnClient: dev });
+    await fund(account.address, "1");
+    return { dev, older, mine, account };
+  };
+  /** A WebAuthn client that drops the credential a request pins (a buggy or hostile one): the first passkey answers. */
+  const ignoresPin = (dev: SoftAuthenticator): WebAuthnClient => ({
+    createCredential: (req) => dev.createCredential(req),
+    getCredential: ({ allowCredential: _, ...req }) => dev.getCredential(req),
+  });
+  const epoch2 = (credential: { credentialId: string }, dev: SoftAuthenticator) =>
+    deriveFromPasskey({ rpId: LETTERLOCK_RP_ID, epoch: 2, credential, webAuthnClient: dev });
+
+  it("rotate({ account }) derives from the account's own passkey, not from whichever passkey for the site answers first", async () => {
+    const { dev, older, mine, account } = await twoPasskeys();
+    await client().publish({ account, keys: mine.keys });
+    // no credential: on a synced device the app may hold only the account
+    const r = await client().rotate({ account, webAuthnClient: dev });
+    const [own, other] = [await epoch2(mine.credential, dev), await epoch2(older.credential, dev)];
+    expect(r.publicKey).toBe(`0x${toHex(own.publicKey)}`);
+    expect(r.publicKey).not.toBe(`0x${toHex(other.publicKey)}`);
+    // so a note sealed to the account now opens with the account's own passkey
+    const env = await client().sealTo(account.address, utf8("after the rotation"));
+    expect(new TextDecoder().decode(await client().open(env, { credential: mine.credential, webAuthnClient: dev }))).toBe("after the rotation");
+    account.end();
+  });
+
+  it("a credential that is not the account's passkey → INPUT_INVALID before the prompt, and nothing is sent", async () => {
+    const { dev, older, mine, account } = await twoPasskeys();
+    await client().publish({ account, keys: mine.keys });
+    const before = [await nonce(account.address), dev.calls.get];
+    await rejects(client().rotate({ account, credential: older.credential, webAuthnClient: dev }), "INPUT_INVALID");
+    expect([await nonce(account.address), dev.calls.get]).toEqual(before);
+    expect((await client().resolve(account.address)).epoch).toBe(1);
+    account.end();
+  });
+
+  it("a WebAuthn client that ignores the pin: the passkey that answered is checked, and its key is never published", async () => {
+    const { dev, older, mine, account } = await twoPasskeys();
+    await client().publish({ account, keys: mine.keys });
+    const stray = await epoch2(older.credential, dev); // what the older passkey answers for epoch 2
+    const before = await nonce(account.address);
+    let code = "";
+    const zeroed = await zeroedDuring(async () => { code = await codeOf(client().rotate({ account, webAuthnClient: ignoresPin(dev) })); });
+    expect(code).toBe("INPUT_INVALID");
+    expect(zeroed).toContain(toHex(stray.secretKey)); // its secret key is wiped all the same
+    expect(await nonce(account.address)).toBe(before);
+    expect((await client().resolve(account.address)).epoch).toBe(1);
+    // any other account is held to the credential it is given in the same way
+    const server = await fundedAccount();
+    await rejects(client().rotate({ account: server, credential: mine.credential, webAuthnClient: ignoresPin(dev) }), "INPUT_INVALID");
+    expect(await nonce(server.address)).toBe(0);
+    account.end();
+  });
+
+  it("any account not from meraAccount() needs the credential: refused before the prompt, never an unpinned one", async () => {
+    const dev = softAuthenticator();
+    const { credential } = await createEncryptionAddress({ rp: { id: LETTERLOCK_RP_ID, name: "Letterlock" }, user: { name: "s", displayName: "S" }, webAuthnClient: dev });
+    const account = await fundedAccount();
+    await rejects(client().rotate({ account, webAuthnClient: dev }), "INPUT_INVALID");
+    expect([dev.calls.get, await nonce(account.address)]).toEqual([0, 0]);
+    const r = await client().rotate({ account, credential, webAuthnClient: dev });
+    const own = await deriveFromPasskey({ rpId: LETTERLOCK_RP_ID, epoch: 1, credential, webAuthnClient: dev });
+    expect([r.epoch, r.publicKey]).toEqual([1, `0x${toHex(own.publicKey)}`]);
+  });
+
+  it("publish and publishForAgent take from a meraAccount() only a key that names its own passkey; nothing else is sent", async () => {
+    if (!ctx.ok) return;
+    const { dev, older, mine, account } = await twoPasskeys();
+    const refused = async (p: Promise<unknown>, why: string) => {
+      const e = await p.then(() => null, (x: unknown) => x);
+      expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+      expect((e as Error).message).toContain(why);
+    };
+    const another = `the key was derived from passkey ${older.credential.credentialId}, and the account comes from passkey ${mine.credential.credentialId}`;
+    const unnamed = "the key does not name the passkey it was derived from";
+    // createEncryptionAddress's key names its passkey, as deriveFromPasskey's and deriveForAgent's do
+    expect([mine.keys.credentialId, older.keys.credentialId]).toEqual([mine.credential.credentialId, older.credential.credentialId]);
+    await refused(client().publish({ account, keys: older.keys }), another);
+    // nor a key rebuilt from its fields, which could come from any passkey (a plain account still takes one)
+    const { publicKey, epoch, rpId } = mine.keys;
+    await refused(client().publish({ account, keys: { publicKey, epoch, rpId } }), unnamed);
+    const agentId = newAgentId();
+    await sendAs(ctx.registry, registryAbi, "mint", [account.address, agentId]);
+    const forAgent = (credential: { credentialId: string }) => deriveForAgent({ rpId: LETTERLOCK_RP_ID, agentId, epoch: 1, credential, webAuthnClient: dev });
+    await refused(client().publishForAgent({ account, agentId, keys: await forAgent(older.credential) }), another);
+    const { credentialId: _, ...rebuilt } = await forAgent(mine.credential);
+    await refused(client().publishForAgent({ account, agentId, keys: rebuilt }), unnamed);
+    expect(await nonce(account.address)).toBe(0);
+    await client().publish({ account, keys: mine.keys });
+    await client().publishForAgent({ account, agentId, keys: await forAgent(mine.credential) });
+    expect([(await client().resolve(account.address)).epoch, (await client().resolve(`agent:${agentId}`)).epoch]).toEqual([1, 1]);
+    account.end();
+  });
+});
+
 describe.skipIf(noChain)("a transaction that reverts when it is mined (a chain of the test's own, with mining paused)", () => {
   it("a publish whose simulation passed but whose transaction reverted in its block is an error, never a result", async () => {
     const chain = await privateChain();
@@ -316,12 +421,16 @@ describe.skipIf(noChain)("rpId pinning", () => {
   it(`publish, rotate and publishForAgent refuse an rpId other than ${LETTERLOCK_RP_ID}, before any chain call`, async () => {
     const account = await fundedAccount();
     const keys = standIn(9, 1);
+    // a passkey of that rpId, so that the pin is the only reason rotate has to refuse
+    const dev = softAuthenticator();
+    const { credential } = await createEncryptionAddress({ rp: { id: other.rpId, name: "Letterlock" }, user: { name: "p", displayName: "P" }, webAuthnClient: dev });
     await rejects(client(other).publish({ account, keys }), "INPUT_INVALID");
-    await rejects(client(other).rotate({ account }), "INPUT_INVALID");
+    await rejects(client(other).rotate({ account, credential, webAuthnClient: dev }), "INPUT_INVALID");
     await rejects(client(other).publishForAgent({ account, agentId: 1n, keys }), "INPUT_INVALID");
     const offline = { ...other, rpcUrl: "http://127.0.0.1:9" };
     await rejects(client(offline).publish({ account, keys }), "INPUT_INVALID"); // refused before the dead RPC is reached
-    expect(await nonce(account.address)).toBe(0);
+    await rejects(client(offline).rotate({ account, credential, webAuthnClient: dev }), "INPUT_INVALID");
+    expect([dev.calls.get, await nonce(account.address)]).toEqual([0, 0]); // no prompt, and nothing sent
   });
 
   it("reads are not pinned: any rpId can resolve and seal", async () => {
