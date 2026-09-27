@@ -1,0 +1,357 @@
+{
+  "about": [
+    "Envelope fixtures, each with the outcome the SDK gives it. Written by scripts/fixtures.ts (pnpm fixtures --write).",
+    "offline: sealed to SOFTWARE keys (a SHA-256 of a public label stands in for a passkey's PRF output). Anyone can open them, and they are never published to a directory. pnpm verify replays every case with the network switched off (scripts/verify_offline.ts).",
+    "seed: what scripts/seed.ts sends to real persona addresses. Those are sealed to keys derived from real passkeys, so only those passkeys open them: they are described here, not replayed. A run records its transactions in fixtures/seeded/<chainId>.json."
+  ],
+  "chain": {
+    "chainId": 143,
+    "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+    "network": "Monad mainnet"
+  },
+  "keys": [
+    {
+      "ref": "maya@1",
+      "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "epoch": 1,
+      "publicKey": "0xebcbbb91c528febeaff3c86626d00c7d856c2e2b6bbd03ebaa6d0bf96152fd07",
+      "kid": "89c76c487128bd98",
+      "prf": "deriveKeyPair(SHA-256(\"letterlock fixture prf: maya\"), 1)"
+    },
+    {
+      "ref": "nadia@1",
+      "recipient": "0xcb6ddb11758122f68e7cc893a9f51931680dffe3",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "epoch": 1,
+      "publicKey": "0x4cc08405a7edc277df60d81d52fa09a68dd2c56e9d7fec5e11af2d2f1808504e",
+      "kid": "b9ec084b4c71ad84",
+      "prf": "deriveKeyPair(SHA-256(\"letterlock fixture prf: nadia\"), 1)"
+    },
+    {
+      "ref": "kai@1",
+      "recipient": "0x5dc29c031e0eea2d3ccf7761d13cde2add10ea2f",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "epoch": 1,
+      "publicKey": "0x4189064a9bdcdc4a726c6b6b2292595ccf1a9fab7904fbfe8a6b9feed333c516",
+      "kid": "857cc2e5337fa37c",
+      "prf": "deriveKeyPair(SHA-256(\"letterlock fixture prf: kai\"), 1)"
+    },
+    {
+      "ref": "kai@2",
+      "recipient": "0x5dc29c031e0eea2d3ccf7761d13cde2add10ea2f",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "epoch": 2,
+      "publicKey": "0xdce14957c79a55f7b903d1ea8084344d384151735b5b0974f4354b0ac02ee468",
+      "kid": "c3f6faed043f0fb1",
+      "prf": "deriveKeyPair(SHA-256(\"letterlock fixture prf: kai\"), 2)"
+    },
+    {
+      "ref": "agent:7@1",
+      "recipient": "agent:7",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "epoch": 1,
+      "publicKey": "0xd9cc42ab6f960cec325094a5098bad5c214867d046f4e74092d1d1eaee781a4e",
+      "kid": "b04138585994f2be",
+      "prf": "deriveAgentKeyPair(SHA-256(\"letterlock fixture prf: nadia\"), 7n, 1)"
+    }
+  ],
+  "offline": [
+    {
+      "id": "opens",
+      "about": "A note sealed to maya's epoch-1 key opens with that key.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "OPENS",
+        "plaintext": "Maya, the dentist moved to Thursday at 10:40. I will remind you on Wednesday evening."
+      }
+    },
+    {
+      "id": "tampered-ct",
+      "about": "One ciphertext byte changed in transit (byte 12, xor 0x01): authentication fails and the kid still names the key, so TAMPERED.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ89DhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "TAMPERED"
+      }
+    },
+    {
+      "id": "tampered-enc",
+      "about": "One byte of the encapsulated key changed: the shared secret changes, TAMPERED.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "x3QCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "TAMPERED"
+      }
+    },
+    {
+      "id": "readdressed",
+      "about": "The header's recipient changed to nadia's address: the HPKE info binds the recipient, TAMPERED with maya's key.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xcb6ddb11758122f68e7cc893a9f51931680dffe3",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "TAMPERED"
+      }
+    },
+    {
+      "id": "other-chain",
+      "about": "The header's chainId changed from 143 to 10143: the info binds the chain, TAMPERED.",
+      "envelope": {
+        "v": 1,
+        "chainId": 10143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "TAMPERED"
+      }
+    },
+    {
+      "id": "other-directory",
+      "about": "The header's directory changed to the testnet directory: the info binds the directory, TAMPERED.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0x3da5f339e20ab7325ffbb9df57fb5656ca1f8b3a",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "TAMPERED"
+      }
+    },
+    {
+      "id": "wrong-key",
+      "about": "Maya's note tried with nadia's key: decryption fails and the kid names another key, so WRONG_KEY (the wrong passkey was chosen).",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "nadia@1",
+      "expect": {
+        "outcome": "WRONG_KEY"
+      }
+    },
+    {
+      "id": "kid-edited",
+      "about": "The kid (a routing hint, not authenticated) changed to nadia's: maya's key still opens it. Editing the kid can never make the right key fail.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "b9ec084b4c71ad84",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "OPENS",
+        "plaintext": "Maya, the dentist moved to Thursday at 10:40. I will remind you on Wednesday evening."
+      }
+    },
+    {
+      "id": "old-epoch-current-key",
+      "about": "A note sealed to kai's epoch-1 key, tried after kai rotated with his epoch-2 key: EPOCH_MISMATCH, before any decryption.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0x5dc29c031e0eea2d3ccf7761d13cde2add10ea2f",
+        "epoch": 1,
+        "kid": "857cc2e5337fa37c",
+        "enc": "mwsJ8htV3yAKMohXgZNfKXRnnXv2r7ZIG3Pnu6bKM2s",
+        "ct": "ofXhV593DoTfscVMJgucaORgFR0oUCvjtIm8va9GhtpfxqoAR1Jii4DnL5wE803GwADGspPq3Kz-RnOpRnUU8Ob-4rC_v7OQEmoSlUhoVCb0YAyMQg"
+      },
+      "open": "kai@2",
+      "expect": {
+        "outcome": "EPOCH_MISMATCH"
+      }
+    },
+    {
+      "id": "old-epoch-rederived",
+      "about": "The same note with kai's epoch-1 key, re-derived from the same PRF stand-in: rotation leaves old notes openable.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0x5dc29c031e0eea2d3ccf7761d13cde2add10ea2f",
+        "epoch": 1,
+        "kid": "857cc2e5337fa37c",
+        "enc": "mwsJ8htV3yAKMohXgZNfKXRnnXv2r7ZIG3Pnu6bKM2s",
+        "ct": "ofXhV593DoTfscVMJgucaORgFR0oUCvjtIm8va9GhtpfxqoAR1Jii4DnL5wE803GwADGspPq3Kz-RnOpRnUU8Ob-4rC_v7OQEmoSlUhoVCb0YAyMQg"
+      },
+      "open": "kai@1",
+      "expect": {
+        "outcome": "OPENS",
+        "plaintext": "Kai, the landlord accepted the new lease terms. Sign before the 30th."
+      }
+    },
+    {
+      "id": "agent-opens",
+      "about": "A note sealed to agent:7 opens with the agent's key, derived from its owner's PRF stand-in with the agent id.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "agent:7",
+        "epoch": 1,
+        "kid": "b04138585994f2be",
+        "enc": "fKKUWRpJ9HcGSWMEZ9ts_mx8cLu-sKXTsF2YowgzV10",
+        "ct": "nZ2SD8GW-8rQhJIJziTqVvuOZqjdH0O6LwdXw4EY8NMHo7SWP25Rvfz3l1VWum7hDE95IES_rdShDQ6Qr9mBeQ5CKCsBYcnCl296l-xEKMg3SsB213br4SdqljJvxe8MqxsiU4WlGOMtVAdJ"
+      },
+      "open": "agent:7@1",
+      "expect": {
+        "outcome": "OPENS",
+        "plaintext": "Task for agent 7: summarize this week's calendar changes and seal the summary to your owner."
+      }
+    },
+    {
+      "id": "agent-owner-key",
+      "about": "The agent's note tried with its owner's own key (nadia@1): an agent's key is a different key, WRONG_KEY.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "agent:7",
+        "epoch": 1,
+        "kid": "b04138585994f2be",
+        "enc": "fKKUWRpJ9HcGSWMEZ9ts_mx8cLu-sKXTsF2YowgzV10",
+        "ct": "nZ2SD8GW-8rQhJIJziTqVvuOZqjdH0O6LwdXw4EY8NMHo7SWP25Rvfz3l1VWum7hDE95IES_rdShDQ6Qr9mBeQ5CKCsBYcnCl296l-xEKMg3SsB213br4SdqljJvxe8MqxsiU4WlGOMtVAdJ"
+      },
+      "open": "nadia@1",
+      "expect": {
+        "outcome": "WRONG_KEY"
+      }
+    },
+    {
+      "id": "non-canonical-base64url",
+      "about": "enc spelled with the last character's unused bits set (the same bytes): refused on decode as TAMPERED, before any key is used.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89c76c487128bd98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwZ",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "TAMPERED"
+      }
+    },
+    {
+      "id": "kid-not-wire-form",
+      "about": "The kid in upper case: the wire form takes only 16 lower-case hex digits, INPUT_INVALID on decode.",
+      "envelope": {
+        "v": 1,
+        "chainId": 143,
+        "directory": "0xa25bbacab3fd2e71da1aa002e54965b488d64b7e",
+        "recipient": "0xdfdebe6687b8bb633844cb112449429cd5e27784",
+        "epoch": 1,
+        "kid": "89C76C487128BD98",
+        "enc": "xnQCuYpRRf_W_MQtVI-grZeebhXG_DdWefI-K0ZIRwY",
+        "ct": "vgStLQp3rJZu9uoZ8tDhOkRRDJHOV914kt_ischgjLn6upcSE9ockbFNKF2slnSOtzUgk6DH5ZwyasWLznRtQSwbYdE-suV-9kynB-t6N-sAWXxUCifhevppTl-1wHtgAb2LMoo"
+      },
+      "open": "maya@1",
+      "expect": {
+        "outcome": "INPUT_INVALID"
+      }
+    }
+  ],
+  "seed": {
+    "notes": [
+      {
+        "id": "dentist",
+        "text": "Maya, the dentist moved to Thursday at 10:40. I will remind you on Wednesday evening.",
+        "expect": "OPENS with the persona's passkey"
+      },
+      {
+        "id": "flight",
+        "text": "Your flight changed to the evening departure, so I moved the car pickup to match.",
+        "expect": "OPENS with the persona's passkey"
+      },
+      {
+        "id": "courier",
+        "text": "The courier comes at noon.",
+        "expect": "OPENS with the persona's passkey"
+      },
+      {
+        "id": "dinner",
+        "text": "Nadia's birthday dinner is on Saturday at 19:30. I booked a table for four and will remind you on Friday.",
+        "expect": "OPENS with the persona's passkey"
+      }
+    ],
+    "tampered": {
+      "from": "dentist",
+      "ctByte": 12,
+      "xor": 1,
+      "expect": "TAMPERED: a copy of the first note with one ciphertext byte changed"
+    },
+    "oldEpoch": {
+      "id": "lease",
+      "text": "Kai, the landlord accepted the new lease terms. Sign before the 30th.",
+      "expect": "OPENS with the persona's passkey (the envelope's own, previous epoch is re-derived); EPOCH_MISMATCH with the current epoch's key"
+    }
+  }
+}
