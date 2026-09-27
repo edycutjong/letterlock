@@ -260,9 +260,9 @@ try {
       return { status: r.status, body: await r.json().catch(() => ({})) };
     };
     const judgePass = process.env.LETTERLOCK_DRIP_JUDGE_PASS?.trim();
-    for (const [lane, pass] of [["public", undefined], ...(judgePass ? [["judge", judgePass]] : [])]) {
+    for (const [lane, given] of [["public", undefined], ...(judgePass ? [["judge", judgePass]] : [])]) {
       const what = lane === "judge" ? "a request with the judges' pass" : "a request without a pass";
-      const { status, body } = await wrongChain(pass);
+      const { status, body } = await wrongChain(given);
       if (status === 429 && typeof body.error === "object") fail(`/api/drip: ${what} met the firewall's 429 for this IP; run the smoke again in 10 minutes`);
       else if (status === 503 && body.error === "DRIP_DISABLED" && !onHost && body.lane === lane) pass(`/api/drip: ${what} is in the ${lane} lane (this build's drip is switched off)`);
       else if (status === 400 && body.error === "WRONG_CHAIN" && body.lane === lane) pass(`/api/drip: ${what} is admitted to the ${lane} lane (400 WRONG_CHAIN, nothing read or sent)`);

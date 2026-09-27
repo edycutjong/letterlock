@@ -165,7 +165,9 @@ pnpm smoke https://letterlock-app.vercel.app                            # read-o
   the `NO_KEY_PUBLISHED` and `CHAIN_UNAVAILABLE` slips on `/seal`. On the production host also: the home page with the
   register unreadable offers "Post my key" and "Read the register again" and none of a posted key's actions, with
   its slip's heading in order, and `/judge` says it is not known whether a letter went out when the agent answers 500 (its
-  POST answered inside the browser, never sent). 21 of 21 passed on deployment `dpl_BQrbMVrs6CYmQFP34kjzMXxGAo8E`.
+  POST answered inside the browser, never sent). 26 of 26 passed on deployment `dpl_99mjvsFKfLtHtyGwwVntE8f5rVqo`
+  (2026-09-27, 07:32 UTC), with `LETTERLOCK_DRIP_JUDGE_PASS` set: the deployment's judges' pass is the one kept with
+  the owner.
 - **Live** (`scripts/live-mainnet.mjs`): create and publish on the production site with a virtual passkey; it
   spends a real drip, so it records every run in `e2e-results/mainnet-live.json` and needs `--again` after the first.
   The first run (2026-09-27, 03:37 UTC): the drip landed and the publish that followed was refused by the RPC for the
