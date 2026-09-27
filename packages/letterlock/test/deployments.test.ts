@@ -49,6 +49,14 @@ describe("built-in deployments", () => {
     expect(letterlock({ chain: "monad" }).rpId).toBe(LETTERLOCK_RP_ID);
   });
 
+  it("LETTERLOCK_RP_ID is the app's host on the owner's own domain, not a name on a hosting platform's shared domain", () => {
+    // Moving the rpId orphans every key derived under the old one (CHANGELOG.md, 0.1.1): this changes only on purpose.
+    expect(LETTERLOCK_RP_ID).toBe("app.letterlock.edycu.dev");
+    // A project name on a platform's public suffix is released with the project, and anyone can then claim it and
+    // derive every key (docs/SPEC.md §6): 0.1.0 pinned letterlock-app.vercel.app
+    expect(LETTERLOCK_RP_ID).not.toMatch(/\.(vercel\.app|netlify\.app|github\.io|pages\.dev|web\.app|herokuapp\.com)$/);
+  });
+
   it("VERSION is package.json's version", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(VERSION).toBe(pkg.version);

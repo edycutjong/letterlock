@@ -1,7 +1,8 @@
 // Turns dist/ (tsup's output) into the npm package: writes dist/package.json from ../package.json, and copies
-// README.md and LICENSE. Publish with `npm publish ./dist` from packages/letterlock. The workspace manifest itself is
-// private (its exports point at the TypeScript sources the other workspace packages compile), so publishing it by
-// mistake is refused.
+// README.md, CHANGELOG.md and LICENSE. Publish with `npm publish ./dist` from packages/letterlock: a folder, never a
+// .tgz, since npm records a tarball's local path in the published manifest (_resolved, _from). The workspace manifest
+// itself is private (its exports point at the TypeScript sources the other workspace packages compile), so publishing
+// it by mistake is refused.
 import { copyFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
@@ -26,10 +27,11 @@ const manifest = {
   main: "./index.js",
   types: "./index.d.ts",
   bin: { letterlock: "./cli.js" },
-  files: ["*.js", "index.d.ts", "README.md", "LICENSE"],
+  files: ["*.js", "index.d.ts", "README.md", "CHANGELOG.md", "LICENSE"],
   dependencies: pkg.dependencies,
 };
 writeFileSync("dist/package.json", `${JSON.stringify(manifest, null, 2)}\n`);
 copyFileSync("README.md", "dist/README.md");
+copyFileSync("CHANGELOG.md", "dist/CHANGELOG.md");
 copyFileSync("LICENSE", "dist/LICENSE");
 console.log(`staged ${manifest.name}@${manifest.version} in dist/`);

@@ -152,20 +152,25 @@ recipient, epoch, directory or chain.
 - **Metadata.** Recipient, epoch and timing are public on the transport the app chooses.
 - **Key loss.** If every synced copy of the passkey is lost, the key is lost. v1 has no recovery.
 - **Domain change.** PRF output is bound to the WebAuthn rpId. Letterlock pins ONE production rpId,
-  `LETTERLOCK_RP_ID` (`letterlock-app.vercel.app`). Keys derived on another origin (localhost, preview deploys)
-  cannot be re-derived in production. The chain client refuses `publish`, `rotate` and `publishForAgent` when its
+  `LETTERLOCK_RP_ID` (`app.letterlock.edycu.dev` since SDK 0.1.1; 0.1.0 pinned `letterlock-app.vercel.app`). Keys
+  derived on another origin (localhost, preview deploys, the rpId 0.1.0 pinned) cannot be re-derived in production. The chain client refuses `publish`, `rotate` and `publishForAgent` when its
   rpId is another one, unless it was created with `unsafeAllowAnyRpId: true`, for tests. It publishes a key only
   when the key carries the client's rpId: keys from `createEncryptionAddress`, `deriveFromPasskey` and
   `deriveForAgent` record theirs, and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it
   could come from any passkey. `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another
   rpId. Reads and seals are not pinned: sealing needs no passkey.
 - **Whoever serves the rpId's host** can run passkey ceremonies for it, and so gets the PRF output of every
-  Letterlock passkey: every encryption key (§2) and the passkey account's key (§7). The host must stay under the
-  Letterlock owner's control for as long as keys derived under it are in use. `letterlock-app.vercel.app` is a
-  Vercel project name, held only while that project exists; a domain the owner registers is sturdier. Since the SDK
-  pins the rpId, moving to another host takes a new release. Since 2026-09-27 that host serves the Letterlock app
-  (the Vercel project `letterlock-app`), where passkeys for the rpId are made; the directory's keys so far are demo
-  and test keys (§8).
+  Letterlock passkey: every encryption key (§2) and the passkey account's key (§7). A page on a subdomain of the
+  host may name it as its rpId too, and the host may name other origins in `/.well-known/webauthn`. The host must
+  stay under the Letterlock owner's control for as long as keys derived under it are in use. Host ownership: the
+  rpId is a subdomain of `edycu.dev`, a domain the owner registered, whose DNS points it at the Vercel project
+  `letterlock-app`; that host serves the Letterlock app, where passkeys for the rpId are made. Whoever controls the
+  domain's registration or its DNS controls the host, so the domain must be renewed for as long as the keys are in
+  use. SDK 0.1.0 pinned `letterlock-app.vercel.app`, a Vercel project name held only while that project exists (once
+  released, anyone could claim it and derive every key); 0.1.1 moved the pin, and since 2026-09-28 the old host
+  answers every request with a 308 to the new one, so no key is made there. Since the SDK pins the rpId, moving to
+  another host takes a new release. The only keys derived under the old rpId are the app's live-check test keys; the
+  directory's other keys are demo keys and the reference agent's seed-derived key (§8).
 - **A compromised device during `open`** exposes that epoch's key. Rotate to recover forward secrecy for new
   notes.
 

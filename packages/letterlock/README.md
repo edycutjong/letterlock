@@ -81,15 +81,17 @@ and `publishForAgent` refuse a key from any other passkey (or one rebuilt from i
 ## Honest limits
 
 - **One rpId.** PRF output is bound to the WebAuthn rpId, so Letterlock pins one: `LETTERLOCK_RP_ID`
-  (`letterlock-app.vercel.app`). `publish`, `rotate` and `publishForAgent` refuse any other rpId (a key derived on
+  (`app.letterlock.edycu.dev`). `publish`, `rotate` and `publishForAgent` refuse any other rpId (a key derived on
   localhost could never be re-derived in production), and a key that does not carry its rpId: publish the key object
   `createEncryptionAddress`, `deriveFromPasskey` or `deriveForAgent` returned, not `{ publicKey, epoch }` rebuilt
   from it. `unsafeAllowAnyRpId: true` lifts this, for tests only. Browsers let a page use only its own domain as the
   rpId, so people publish their key on the Letterlock app itself, and other apps only seal to them. **That host
-  serves the Letterlock app** (the Vercel project `letterlock-app`, since 2026-09-27). Whoever serves pages there can
-  run passkey ceremonies for the rpId and so derive every Letterlock key, the passkey accounts included
-  (`docs/SPEC.md` §6): the host must stay with the Letterlock owner for as long as keys derived under it are in use,
-  and moving to another host takes a new SDK release, since the SDK pins it.
+  serves the Letterlock app** (the Vercel project `letterlock-app`), on the owner's own domain, edycu.dev, since
+  0.1.1 ([CHANGELOG.md](CHANGELOG.md)): 0.1.0 pinned `letterlock-app.vercel.app`, a Vercel project name, and keys
+  derived there cannot be re-derived here. Whoever serves pages on the host, or on a subdomain of it, can run passkey
+  ceremonies for the rpId and so derive every Letterlock key, the passkey accounts included (`docs/SPEC.md` §6): the
+  domain must stay registered to the Letterlock owner and pointed at the app for as long as keys derived under it are
+  in use, and moving to another host takes a new SDK release, since the SDK pins it.
 - **What is in the directory.** On Monad mainnet (`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`) the deploy smoke test
   published two DEMO KEYs (the deployer's, and agent 10260's epoch 1), derived from random bytes with no passkey; the
   testnet key is a TEST KEY of the same kind. Whoever holds their stand-ins can open anything sealed to them: do not

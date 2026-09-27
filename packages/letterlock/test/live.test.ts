@@ -69,6 +69,16 @@ describe.skipIf(!live)("names the docs point at (LIVE=1, read-only)", () => {
     expect(r.status, "the rpId's host serves no page: the app is gone, and the name may be taken").toBe(200);
     expect(await r.text(), "the page at the rpId's host does not name the mainnet directory: whose is it?").toContain(DEPLOYMENTS.monad.directory);
   });
+
+  it(`the rpId 0.1.0 pinned (letterlock-app.vercel.app) answers every path with a 308 to ${LETTERLOCK_RP_ID}, so no key is made there`, async () => {
+    for (const path of ["/", "/judge?pass=x", "/open?to=0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C"]) {
+      const r = await fetch(`https://letterlock-app.vercel.app${path}`, { redirect: "manual" });
+      expect([r.status, r.headers.get("location")], `${path}: the old host serves a page, where a passkey would be made under the old rpId`).toEqual([
+        308,
+        `https://${LETTERLOCK_RP_ID}${path}`,
+      ]);
+    }
+  });
 });
 
 describe.skipIf(!live)("live Monad testnet (LIVE=1, read-only)", () => {

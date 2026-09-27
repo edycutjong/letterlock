@@ -46,10 +46,11 @@ export const DEPLOYMENTS = {
  * rpId, so a key derived on any other origin (localhost, a preview deploy) can never be re-derived here, and every
  * note sealed to it would be unopenable in production. The client refuses publish() and rotate() under any other
  * rpId unless it is created with `unsafeAllowAnyRpId: true` (tests only). Whoever serves pages on this host can derive
- * every Letterlock key, so it must stay under the owner's control (docs/SPEC.md §6). Since 2026-09-27 the host
- * serves the Letterlock app (the Vercel project `letterlock-app`), where passkeys for this rpId are made.
+ * every Letterlock key, so it must stay under the owner's control (docs/SPEC.md §6): since 0.1.1 it is on the owner's
+ * own domain, edycu.dev, where it serves the Letterlock app (the Vercel project `letterlock-app`) and passkeys for
+ * this rpId are made. 0.1.0 pinned `letterlock-app.vercel.app`; keys derived there cannot be re-derived here.
  */
-export const LETTERLOCK_RP_ID = "letterlock-app.vercel.app";
+export const LETTERLOCK_RP_ID = "app.letterlock.edycu.dev";
 
 /** The directory's "no agent" marker (type(uint256).max): `toAgent` of a drop to an address. */
 export const NO_AGENT = (1n << 256n) - 1n;

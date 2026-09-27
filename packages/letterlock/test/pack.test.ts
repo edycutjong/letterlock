@@ -36,12 +36,12 @@ const browserBundle = async (source: string) => {
 describe("npm package", () => {
   beforeAll(() => { execFileSync("npm", ["run", "build"], { cwd: pkgDir, stdio: "pipe" }); }, 180_000);
 
-  it("npm pack --dry-run holds only the build, README.md, LICENSE and package.json", () => {
+  it("npm pack --dry-run holds only the build, README.md, CHANGELOG.md, LICENSE and package.json", () => {
     const out = execFileSync("npm", ["pack", "./dist", "--dry-run", "--json"], { cwd: pkgDir, stdio: ["ignore", "pipe", "pipe"] }).toString();
     const [info] = JSON.parse(out) as { name: string; version: string; files: { path: string }[] }[];
     const files = info!.files.map((f) => f.path).sort();
     expect([info!.name, info!.version]).toEqual(["letterlock", VERSION]);
-    expect(files.filter((f) => !/^chunk-[A-Z0-9]+\.js$/.test(f))).toEqual(["LICENSE", "README.md", "cli.js", "index.d.ts", "index.js", "package.json"]);
+    expect(files.filter((f) => !/^chunk-[A-Z0-9]+\.js$/.test(f))).toEqual(["CHANGELOG.md", "LICENSE", "README.md", "cli.js", "index.d.ts", "index.js", "package.json"]);
   });
 
   it("no packed file carries a source map, a test, or the name of a private planning note", () => {
@@ -64,6 +64,8 @@ describe("npm package", () => {
       repository: { type: "git", url: expect.stringMatching(/^git\+https:\/\/github\.com\//), directory: "packages/letterlock" },
     });
     for (const k of ["private", "scripts", "devDependencies"]) expect(m, k).not.toHaveProperty(k);
+    // npm's install-time fields (_resolved, _from, _integrity...) name a local path when a tarball is published: none here
+    expect(Object.keys(m).filter((k) => k.startsWith("_"))).toEqual([]);
     expect(JSON.stringify(m.dependencies)).not.toContain("workspace:");
     expect(readFileSync(dist("cli.js"), "utf8").startsWith("#!/usr/bin/env node\n")).toBe(true);
   });
