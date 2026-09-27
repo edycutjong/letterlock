@@ -44,7 +44,7 @@ img,svg{display:block}
 
 .stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;box-shadow:0 20px 60px -30px rgba(30,27,22,.5)}
 .slide{position:absolute;inset:0;padding:96px 132px 120px 150px;opacity:0;visibility:hidden;transition:opacity .35s ease,visibility 0s linear .35s;overflow:hidden;
-  background:radial-gradient(55% 60% at 12% 8%,#FBF8F1 0,transparent 62%),radial-gradient(50% 55% at 94% 92%,#EAE2D2 0,transparent 70%),var(--bg)}
+  background:radial-gradient(55% 60% at 12% 8%,#FBF8F1 0,transparent 62%),radial-gradient(50% 55% at 94% 92%,#EFE9DC 0,transparent 70%),var(--bg)}
 .slide.on{opacity:1;visibility:visible;transition:opacity .35s ease}
 /* the register page: ruling and the double margin rule */
 .slide::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0 53px,color-mix(in srgb,var(--rule) 42%,transparent) 53px 54px)}
@@ -53,7 +53,7 @@ img,svg{display:block}
 .foot{position:absolute;left:150px;right:132px;bottom:44px;display:flex;align-items:center;gap:18px;font:600 17px/1 var(--font-body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .foot .wm{font:700 24px/1 var(--font-display);letter-spacing:-.01em;text-transform:none;color:var(--ink)}
 .foot .wm em{font-style:italic}
-.counter{position:absolute;right:132px;bottom:44px;z-index:5;font:500 20px/1 var(--font-data);color:var(--muted)}
+.counter{position:absolute;right:132px;bottom:44px;z-index:5;font:500 20px/1 var(--font-data);color:var(--ink-2)}
 
 .folio{display:flex;align-items:center;gap:16px;font:600 19px/1.3 var(--font-body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:26px}
 .folio::before{content:"";width:40px;border-top:1.5px solid var(--muted)}
@@ -62,7 +62,7 @@ h2{font-size:88px;line-height:1.02;letter-spacing:-.02em;max-width:1500px}
 
 /* frames for the real screenshots */
 .frame{background:var(--sheet);border:2px solid var(--ink);border-radius:6px;overflow:hidden;box-shadow:0 2px 2px rgba(30,27,22,.12),0 34px 60px -34px rgba(30,27,22,.55)}
-.frame .bar{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1.5px solid var(--rule);background:var(--sunk);font:500 20px/1 var(--font-data);color:var(--ink-2)}
+.frame .bar{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1.5px solid var(--rule);background:color-mix(in srgb,var(--sunk) 55%,var(--sheet));font:500 20px/1 var(--font-data);color:var(--ink-2)}
 .frame .bar svg{width:20px;height:20px}
 .frame .bar .when{margin-left:auto;color:var(--muted)}
 .frame img{width:100%;height:auto}
@@ -202,7 +202,7 @@ h2{font-size:88px;line-height:1.02;letter-spacing:-.02em;max-width:1500px}
 #notes{display:none;position:fixed;left:0;right:0;bottom:0;height:20vh;overflow:auto;padding:18px 28px;background:var(--ink);color:var(--sheet);font:400 clamp(15px,2.2vh,22px)/1.5 var(--font-body);z-index:20}
 body.presenter #notes{display:block}
 body.presenter.idle{cursor:none}
-.keys{position:fixed;left:14px;bottom:10px;z-index:15;font:500 12px/1.4 var(--font-data);color:var(--muted);opacity:.85}
+.keys{position:fixed;left:14px;bottom:10px;z-index:15;margin:0;padding:3px 6px;border-radius:2px;background:color-mix(in srgb,var(--sheet) 90%,transparent);font:500 12px/1.4 var(--font-data);color:var(--ink-2)}
 body.presenter .keys{display:none}
 /* Press C to toggle contrast debug mode */
 body.debug-contrast .contrast-check{outline:2px dashed var(--before);outline-offset:4px}
@@ -210,7 +210,7 @@ body.debug-contrast .contrast-check{outline:2px dashed var(--before);outline-off
 /* overview */
 #overview{display:none;position:fixed;inset:0;z-index:30;overflow:auto;background:#E6DECE;padding:28px;gap:22px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-content:start}
 body.overview #overview{display:grid}
-.thumb{position:relative;aspect-ratio:16/9;border:2px solid var(--rule);border-radius:6px;overflow:hidden;background:var(--bg);cursor:pointer;padding:0;transition:border-color .15s,transform .15s}
+.thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border:2px solid var(--rule);border-radius:6px;overflow:hidden;background:var(--bg);cursor:pointer;padding:0;margin:0;text-align:left;font:inherit;color:inherit;line-height:normal;transition:border-color .15s,transform .15s}
 .thumb:hover,.thumb:focus-visible{border-color:var(--ink);transform:translateY(-2px)}
 .thumb.cur{border-color:var(--before)}
 .thumb .inner{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;pointer-events:none}
@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
       overview.append(b);
     });
   };
-  const sizeThumbs = () => overview.querySelectorAll('.thumb').forEach((t) => { t.firstChild.style.transform = `scale(${t.clientWidth / 1920})`; });
+  const sizeThumbs = () => overview.querySelectorAll('.thumb').forEach((t) => { t.style.height = `${t.clientWidth * 9 / 16}px`; t.firstChild.style.transform = `scale(${t.clientWidth / 1920})`; });
   const toggleOverview = (on) => {
     const open = on ?? !document.body.classList.contains('overview');
     if (open) buildOverview();
@@ -386,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <path id="strip-e5b3" d="M0 -7h2.1v14h-2.1ZM4.4 -2.4h2.1v9.4h-2.1ZM8.8 -7h2.1v9.4h-2.1ZM13.2 -7h2.1v9.4h-2.1ZM17.6 -2.4h2.1v9.4h-2.1ZM22 -7h2.1v14h-2.1ZM26.4 -2.4h2.1v4.8h-2.1ZM30.8 -7h2.1v14h-2.1ZM35.2 -2.4h2.1v4.8h-2.1ZM39.6 -2.4h2.1v4.8h-2.1ZM44 -7h2.1v14h-2.1ZM48.4 -2.4h2.1v9.4h-2.1ZM52.8 -2.4h2.1v4.8h-2.1ZM57.2 -2.4h2.1v9.4h-2.1ZM61.6 -7h2.1v14h-2.1ZM66 -2.4h2.1v9.4h-2.1ZM70.4 -7h2.1v9.4h-2.1ZM74.8 -7h2.1v9.4h-2.1ZM79.2 -2.4h2.1v4.8h-2.1ZM83.6 -2.4h2.1v9.4h-2.1ZM88 -7h2.1v14h-2.1ZM92.4 -2.4h2.1v9.4h-2.1ZM96.8 -7h2.1v14h-2.1ZM101.2 -2.4h2.1v4.8h-2.1ZM105.6 -2.4h2.1v4.8h-2.1ZM110 -2.4h2.1v4.8h-2.1ZM114.4 -7h2.1v14h-2.1ZM118.8 -7h2.1v9.4h-2.1ZM123.2 -7h2.1v14h-2.1ZM127.6 -2.4h2.1v9.4h-2.1ZM132 -7h2.1v14h-2.1ZM136.4 -2.4h2.1v4.8h-2.1Z"/>
   </defs>
 </svg>
-<div class="stage" id="stage">
+<main class="stage" id="stage" aria-label="Letterlock pitch deck">
 
 <section class="slide cover on" aria-label="Cover">
   <div class="brandrow"><img src="../assets/icon.svg" alt="" width="78" height="78"><span class="wm">Letter<em>lock</em></span></div>
@@ -572,9 +572,9 @@ agent:10260 has a key on Monad mainnet (143)
 </section>
 
 <p class="counter" id="counter" aria-live="polite">01 / 10</p>
-</div>
+</main>
 <div id="notes" aria-live="polite"></div>
 <div id="overview" aria-label="All slides"></div>
-<p class="keys">← → slides · Esc overview · P notes · C contrast</p>
+<aside class="keys" aria-label="Keyboard shortcuts">← → slides · Esc overview · P notes · C contrast</aside>
 </body>
 </html>
