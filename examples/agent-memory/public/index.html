@@ -88,7 +88,7 @@
     <p>Name a recipient (an address, or <code>agent:&lt;id&gt;</code>) and up to 1,000 characters. The agent resolves the
       recipient's key with one <code>keyOf</code> / <code>keyOfAgent</code> read, seals the text to it and drops it on
       the directory. A recipient without a published key gets nothing.</p>
-<pre><code>curl -X POST https://letterlock-agent.vercel.app/remember \
+<pre><code>curl -X POST https://agent.letterlock.edycu.dev/remember \
   -H 'content-type: application/json' \
   -d '{"to":"0x…","text":"the dentist moved to Thursday 10:40"}'</code></pre>
     <p class="note">Answers <code>{ envelope, dropTx, kid, epoch, directory }</code>. The recipient finds the envelope in
@@ -127,7 +127,7 @@ inside the seal:
         cost (250,000 gas at the price drops pay). The wallet checks this on each drop as it signs it, by the drop's own
         nonce, so every instance counts the same drops.</li>
       <li>It keeps 0.1 MON for gas: it signs no drop whose own cost, at its fee cap, would take the wallet below that.</li>
-      <li>Web pages may ask it to send only from the <a href="https://letterlock-app.vercel.app">Letterlock app</a> and
+      <li>Web pages may ask it to send only from the <a href="https://app.letterlock.edycu.dev">Letterlock app</a> and
         this page. Servers and other agents are not affected.</li>
       <li>A kill switch (<code>AGENT_ENABLED</code>) turns every endpoint that sends anything off.</li>
     </ul>

@@ -2,27 +2,27 @@
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Letterlock memory agent",
   "description": "Seals notes to a Letterlock address on Monad, and answers tasks sealed to it. POST /remember {to, text} reads the recipient's passkey-derived X25519 key from the Letterlock directory (keyOf or keyOfAgent), seals the text to it with HPKE (RFC 9180) and drops the envelope on the directory from the agent's own wallet: only the recipient's passkey, on any device it syncs to, can open it. POST /task {from, envelope} opens a task sealed to agent:10260 with the agent's own key and drops an answer sealed to the address named inside the task. Sealed notes are opaque to this agent after sending: it keeps no copy and cannot open what it sealed.",
-  "image": "https://letterlock-agent.vercel.app/icon.svg",
+  "image": "https://agent.letterlock.edycu.dev/icon.svg",
   "services": [
     {
       "name": "web",
-      "endpoint": "https://letterlock-agent.vercel.app/"
+      "endpoint": "https://agent.letterlock.edycu.dev/"
     },
     {
       "name": "seal-a-memory",
-      "endpoint": "https://letterlock-agent.vercel.app/remember",
+      "endpoint": "https://agent.letterlock.edycu.dev/remember",
       "method": "POST",
       "version": "1"
     },
     {
       "name": "answer-a-sealed-task",
-      "endpoint": "https://letterlock-agent.vercel.app/task",
+      "endpoint": "https://agent.letterlock.edycu.dev/task",
       "method": "POST",
       "version": "1"
     },
     {
       "name": "health",
-      "endpoint": "https://letterlock-agent.vercel.app/health",
+      "endpoint": "https://agent.letterlock.edycu.dev/health",
       "method": "GET"
     }
   ],
@@ -34,13 +34,13 @@
       "agentRegistry": "eip155:143:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     }
   ],
-  "url": "https://letterlock-agent.vercel.app/",
+  "url": "https://agent.letterlock.edycu.dev/",
   "version": "1.0.0",
   "provider": {
     "organization": "Letterlock",
     "url": "https://github.com/edycutjong/letterlock"
   },
-  "documentationUrl": "https://letterlock-agent.vercel.app/",
+  "documentationUrl": "https://agent.letterlock.edycu.dev/",
   "capabilities": {
     "streaming": false,
     "pushNotifications": false
@@ -54,7 +54,7 @@
       "description": "POST /remember with {\"to\": \"0x…\" or \"agent:<id>\", \"text\": at most 1000 characters}. One keyOf / keyOfAgent read resolves the recipient's key; the text is sealed to it (HPKE base mode: X25519, HKDF-SHA256, ChaCha20-Poly1305) and the envelope is dropped on the Letterlock directory. Answers 200 {envelope, dropTx, kid, epoch, directory}. A recipient without a published key gets nothing (422 NO_KEY_PUBLISHED).",
       "tags": ["encryption", "hpke", "passkey", "webauthn-prf", "monad", "letterlock"],
       "examples": [
-        "curl -X POST https://letterlock-agent.vercel.app/remember -H 'content-type: application/json' -d '{\"to\":\"0x…\",\"text\":\"the dentist moved to Thursday 10:40\"}'"
+        "curl -X POST https://agent.letterlock.edycu.dev/remember -H 'content-type: application/json' -d '{\"to\":\"0x…\",\"text\":\"the dentist moved to Thursday 10:40\"}'"
       ],
       "inputModes": ["application/json"],
       "outputModes": ["application/json"]
@@ -95,7 +95,7 @@
       "maxDropGas": 250000,
       "gasReserveMON": "0.1: no drop is signed whose own cost at its fee cap (gas × maxFeePerGas) would take the wallet below it",
       "taskNonce": "each nonce is answered once per server instance, for 12 minutes",
-      "browserOrigins": ["https://letterlock-app.vercel.app", "https://letterlock-agent.vercel.app"],
+      "browserOrigins": ["https://app.letterlock.edycu.dev", "https://agent.letterlock.edycu.dev"],
       "killSwitch": "AGENT_ENABLED"
     },
     "explorer": "https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"

@@ -152,7 +152,7 @@ const arg = (args: string[], name: string): string | undefined => {
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const [command, ...args] = process.argv.slice(2);
-  const base = (arg(args, "url") ?? "https://letterlock-agent.vercel.app").replace(/\/+$/, "");
+  const base = (arg(args, "url") ?? "https://agent.letterlock.edycu.dev").replace(/\/+$/, "");
   const text = arg(args, "text");
   const openWith = arg(args, "open-with");
   if (!text) throw new Error("--text is required");

@@ -73,9 +73,16 @@ export class ConfigError extends Error {
 }
 
 export const DEFAULT_AGENT_ID = 10260n;
-export const DEFAULT_PUBLIC_URL = "https://letterlock-agent.vercel.app";
-/** The Letterlock app (its /judge route asks the agent from the page) and the agent's own page. */
-export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://letterlock-app.vercel.app", DEFAULT_PUBLIC_URL];
+export const DEFAULT_PUBLIC_URL = "https://agent.letterlock.edycu.dev";
+/**
+ * The Letterlock app (its /judge route asks the agent from the page) and the agent's own page. Not the app's retired
+ * origin, https://letterlock-app.vercel.app (the rpId SDK 0.1.0 pinned): every request there answers a 308 to the
+ * app, so no page runs on it, and a tab still open from before the move holds passkeys made under the old rpId. An
+ * allowed origin is a standing grant to spend this wallet from browsers, and a vercel.app name is released with its
+ * project, so none that only redirects is kept. The agent's former host, https://letterlock-agent.vercel.app, still
+ * serves this deployment (the agent's tokenURI names its card until the owner moves it), but its page sends no POST.
+ */
+export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://app.letterlock.edycu.dev", DEFAULT_PUBLIC_URL];
 
 export const DEFAULT_LIMITS: Limits = {
   textMaxChars: 1000,
@@ -120,7 +127,7 @@ const origins = (env: Env): readonly string[] => {
   if (raw === undefined || raw === "") return DEFAULT_ALLOWED_ORIGINS;
   const list = raw.split(",").map((o) => o.trim()).filter((o) => o !== "");
   for (const o of list)
-    if (!ORIGIN.test(o)) throw new ConfigError(`AGENT_ALLOWED_ORIGINS must list origins such as https://letterlock-app.vercel.app (scheme and host in lower case, no path), got ${JSON.stringify(o)}`);
+    if (!ORIGIN.test(o)) throw new ConfigError(`AGENT_ALLOWED_ORIGINS must list origins such as https://app.letterlock.edycu.dev (scheme and host in lower case, no path), got ${JSON.stringify(o)}`);
   return list;
 };
 

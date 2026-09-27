@@ -416,7 +416,7 @@ describe("GET /health", () => {
     expect(r.body).toMatchObject({
       ok: true,
       enabled: true,
-      agent: { agentId: "10260", recipient: "agent:10260", registry: "eip155:143:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432", card: "https://letterlock-agent.vercel.app/.well-known/agent-card.json" },
+      agent: { agentId: "10260", recipient: "agent:10260", registry: "eip155:143:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432", card: "https://agent.letterlock.edycu.dev/.well-known/agent-card.json" },
       chain: { chainId: 143, directory: DIRECTORY },
       wallet: { address, balance: "100 MON", reserve: "0.1 MON" },
       key: { held: { epoch: 2, kid: s.agentKey!.kid }, published: { epoch: 2, kid: s.agentKey!.kid }, matches: true },
@@ -468,8 +468,8 @@ describe("routing", () => {
     expect([wrong.status, wrong.headers.get("allow")]).toEqual([405, "POST, OPTIONS"]);
     expect((await s.post("/health", {})).status).toBe(405);
     expect((await s.get("/nope")).status).toBe(404);
-    const pre = await s.app(s.request("OPTIONS", "/remember", undefined, { origin: "https://letterlock-app.vercel.app", "access-control-request-method": "POST" }), IP);
-    expect([pre.status, pre.headers.get("access-control-allow-origin"), pre.headers.get("access-control-allow-headers")]).toEqual([204, "https://letterlock-app.vercel.app", "content-type"]);
+    const pre = await s.app(s.request("OPTIONS", "/remember", undefined, { origin: "https://app.letterlock.edycu.dev", "access-control-request-method": "POST" }), IP);
+    expect([pre.status, pre.headers.get("access-control-allow-origin"), pre.headers.get("access-control-allow-headers")]).toEqual([204, "https://app.letterlock.edycu.dev", "content-type"]);
     expect((await s.get("/remember/")).status).toBe(405); // a trailing slash is the same route
   });
 
@@ -489,14 +489,14 @@ describe("routing", () => {
 });
 
 describe("CORS", () => {
-  const APP = "https://letterlock-app.vercel.app";
+  const APP = "https://app.letterlock.edycu.dev";
   const OTHER = "https://some-page.example";
   const preflight = (s: ReturnType<typeof setup>, origin: string, method = "POST") =>
     s.app(s.request("OPTIONS", "/remember", undefined, { origin, "access-control-request-method": method, "access-control-request-headers": "content-type" }), IP);
 
   it("pages of the Letterlock app and of the agent may POST; any other page's preflight and POST are refused, and nothing is sent", async () => {
     const s = setup();
-    for (const origin of [APP, "https://letterlock-agent.vercel.app"]) {
+    for (const origin of [APP, "https://agent.letterlock.edycu.dev"]) {
       const ok = await preflight(s, origin);
       expect([ok.status, ok.headers.get("access-control-allow-origin"), ok.headers.get("access-control-allow-headers"), ok.headers.get("vary")]).toEqual([204, origin, "content-type", "origin"]);
     }
@@ -514,6 +514,20 @@ describe("CORS", () => {
     expect(s.chain.dropped).toHaveLength(2);
   });
 
+  it("the app's retired origin (the rpId SDK 0.1.0 pinned, now a 308 to the app) and the agent's former host may not POST", async () => {
+    const s = setup();
+    for (const origin of ["https://letterlock-app.vercel.app", "https://letterlock-agent.vercel.app"]) {
+      const no = await preflight(s, origin);
+      expect([origin, no.status, no.headers.get("access-control-allow-origin")]).toEqual([origin, 403, null]);
+      const post = await s.post("/remember", { to: s.maya.address, text: "asked from a page opened before the move" }, IP, { origin });
+      expect([origin, post.status, post.body.error.code]).toEqual([origin, 403, "ORIGIN_NOT_ALLOWED"]);
+    }
+    expect(s.chain.dropped).toHaveLength(0);
+    // reads are not a grant: the former host's own page still reads /health from any origin
+    const h = await s.app(s.request("GET", "/health", undefined, { origin: "https://letterlock-agent.vercel.app" }), IP);
+    expect([h.status, h.headers.get("access-control-allow-origin")]).toEqual([200, "*"]);
+  });
+
   it("reads stay open to any page: GET /health, and a GET preflight", async () => {
     const s = setup();
     const h = await s.app(s.request("GET", "/health", undefined, { origin: OTHER }), IP);
@@ -527,7 +541,7 @@ describe("CORS", () => {
     expect(s.config.allowedOrigins).toEqual(["http://localhost:3000", "https://staging.example"]);
     expect((await preflight(s, "http://localhost:3000")).status).toBe(204);
     expect((await preflight(s, APP)).status).toBe(403);
-    for (const bad of ["https://a.example/", "https://A.example", "letterlock-app.vercel.app", "*"])
+    for (const bad of ["https://a.example/", "https://A.example", "app.letterlock.edycu.dev", "*"])
       expect(() => loadConfig({ AGENT_ALLOWED_ORIGINS: bad }), bad).toThrow(/AGENT_ALLOWED_ORIGINS/);
   });
 });
@@ -583,7 +597,8 @@ describe("configuration", () => {
     const c = loadConfig({});
     expect([c.chain, c.agentId, c.keyFirstEpoch, c.limits.dailyDrops, c.limits.dailySpendPercent, c.limits.maxDropGas, c.limits.minBalanceWei, c.limits.textMaxChars, c.enabled])
       .toEqual(["monad", 10260n, 2, 150, 25, 250_000n, 10n ** 17n, 1000, false]);
-    expect(c.allowedOrigins).toEqual(["https://letterlock-app.vercel.app", "https://letterlock-agent.vercel.app"]);
+    expect(c.allowedOrigins).toEqual(["https://app.letterlock.edycu.dev", "https://agent.letterlock.edycu.dev"]);
+    expect(c.publicUrl).toBe("https://agent.letterlock.edycu.dev");
     expect(() => loadConfig({ LETTERLOCK_CHAIN: "ethereum" })).toThrow(/LETTERLOCK_CHAIN/);
     expect(() => loadConfig({ AGENT_DAILY_DROP_CAP: "-1" })).toThrow(/AGENT_DAILY_DROP_CAP/);
     expect(() => loadConfig({ AGENT_DAILY_SPEND_PERCENT: "0" })).toThrow(/AGENT_DAILY_SPEND_PERCENT/);
