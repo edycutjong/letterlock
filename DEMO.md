@@ -93,18 +93,20 @@ pnpm bench           # resolve + seal against Monad mainnet, 5 runs of 200
 pnpm readiness       # the submission checklist
 ```
 
-`pnpm verify` on 2026-09-27 (Node v22.22.0, forge 1.8.3), 691 passed, 0 failed, 9 skipped:
+`pnpm verify` in a fresh clone on 2026-09-27 (Node v22.22.0, forge 1.8.3), 701 passed, 0 failed, 12 skipped:
 
 | Step | Passed | Skipped |
 |---|---|---|
 | SDK: unit and anvil chain tests (vitest) | 222 | 9 (the live-RPC checks, run with `LIVE=1`: 9 of 9 passed) |
 | Contracts: unit, fuzz, invariant, fork, gas (forge) | 111 | 0 |
-| PRF spike: unit | 30 | 0 |
+| PRF spike: unit | 27 | 3 (that no file, commit or commit message names one of the author's private planning notes: they read that folder, next to the author's copy only, and pass 3 of 3 there) |
 | App | 99 | 0 |
 | Reference agent, with anvil | 95 | 0 |
 | Offline seal and open, with the network taken away by the OS | 73 | 0 |
 | Scripts: the seed script on anvil, the network guards | 32 | 0 |
-| Readiness checks | 29 | 0 |
+| Readiness checks | 42 | 0 |
+
+In the author's copy, next to the planning folder, the same run gives 704 passed, 0 failed, 9 skipped.
 
 `pnpm bench` on 2026-09-27 against the public RPC, N = 1,000 (5 runs of 200):
 **resolve + seal p50 25.578 ms, p95 29.636 ms, p99 32.436 ms**. Sealing alone took p50 3.534 ms; resolve alone,
