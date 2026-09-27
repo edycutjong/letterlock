@@ -7,3 +7,6 @@ next-env.d.ts
 # screenshots, axe reports and lint snapshots written by scripts/qa.mjs
 qa/
 test-results/
+
+# Vercel project link and the local build output of `vercel build`
+.vercel/
