@@ -219,22 +219,30 @@ def check_bench() -> dict | None:
 # 23.117, 17.7 never does, and a p50 never matches a min, a max or a mean. A range, "the p50 ranged 23.1–29.4 ms", must
 # equal the lowest and the highest value of that statistic among the runs. In prose a figure that cannot be tied to an
 # operation and a statistic fails; in a code block only a figure with a statistic is a claim (commands carry timeouts).
+# A clause (up to . ! ? or ;) that names both a resolve (resolve, look up, keyOf, read the key) and a seal is about
+# resolve + seal, unless it says the figure is one of them alone. "median", "min" or "max" in a clause about the runs
+# ("p50 across runs: 24.1 to 28.4 ms (median 28.1 ms)") is that value among the runs' own p50s: results.json's spread.
+# Latency in prose in any unit but ms ("0.02 s", "20 µs") next to an operation fails: write it in ms, or mark it.
 EXEMPT = "<!-- readiness: not a bench figure -->"
 NUM = r"\d+(?:\.\d+)?"
-FIGURE = re.compile(rf"(?<![\w.])(?P<nums>{NUM}(?:\s*(?:/|–|—|-|\bto\b|\band\b)\s*{NUM})*)\s*(?:ms|milliseconds?)\b", re.I)
+FIGURE = re.compile(rf"(?<![\w.])(?P<nums>{NUM}(?:\s*(?:/|–|—|-|\bto\b|\band\b)\s*{NUM})*)(?:-|\s*)(?:ms|msecs?|milliseconds?)\b", re.I)
+OTHER_UNIT = re.compile(rf"(?<![\w.])(?P<n>{NUM})(?:-|\s*)(?P<unit>s|secs?|seconds?|µs|μs|us|microseconds?|ns|nanoseconds?)\b", re.I)
+CLAUSE_END = re.compile(r"[.!?](?=\s|$)|;")
+ALONE = re.compile(r"\b(?:alone|only|just|by itself|on its own|without|excluding|minus)\b", re.I)
+ACROSS_RUNS = re.compile(r"\b(?:across|among|between) (?:the )?runs\b|\brun-to-run\b|\bruns?'? p(?:50|95|99)s\b", re.I)
 SEPARATOR = re.compile(r"\s*(?:/|–|—|-|\bto\b|\band\b)\s*", re.I)
 STAT_OF = {"p50": "p50", "median": "p50", "p95": "p95", "p99": "p99", "min": "min", "minimum": "min", "max": "max", "maximum": "max",
            "mean": "mean", "average": "mean", "avg": "mean"}
 LABEL = r"(?:p50|p95|p99|median|minimum|min|maximum|max|mean|average|avg)"
 LABELS = re.compile(rf"(?<![\w-]){LABEL}(?:\s*/\s*{LABEL})*(?![\w-])", re.I)
-BEFORE = re.compile(r"[\s*_:=~≈(]*(?:(?:of|is|was|were|at|in|about|around|roughly|approximately|ranged|ranges|range|from|between|varied|"
+BEFORE = re.compile(r"[\s*_:=~≈(]*(?:(?:of|is|was|were|at|in|about|around|roughly|approximately|ranged|ranges|range|from|between|varied|across|runs|"
                     r"moved|took|takes|stays|under|below)\b[\s*_:=~≈(]*)*", re.I)
 AFTER = re.compile(r"[\s*_(]*(?:(?:at|the|for|as|in)\b[\s*_(]*)*", re.I)
 OPS = [
-    ("resolveAndSeal", r"resolve\s*(?:\+|&|and)\s*seal|resolve-and-seal|resolveAndSeal|sealTo"),
+    ("resolveAndSeal", r"(?:resolve|look\s*up|lookup)\s*(?:\+|&|and)\s*seal|resolve-and-seal|resolveAndSeal|sealTo"),
     ("coldFirstResolve", r"cold(?:\s+first)?\s+resolve|first\s+resolve|coldFirstResolve"),
     ("rpcRoundTrip", r"(?:rpc\s+)?round[\s-]?trip|eth_blockNumber|rpcRoundTrip"),
-    ("resolve", r"resolv(?:e|es|ed|ing)"),
+    ("resolve", r"resolv(?:e|es|ed|ing)|look(?:s|ed|ing)?\s+(?:it\s+|them\s+)?up|(?:key\s+)?lookups?|keyOf(?:Agent)?|read(?:s|ing)?\s+(?:the|their|its|a)\s+(?:public\s+)?key"),
     ("seal", r"seal(?:s|ed|ing)?"),
 ]
 OP_MENTION = re.compile("|".join(rf"(?P<{key}>(?<![\w-])(?:{rx})(?![\w-]))" for key, rx in OPS), re.I)
@@ -249,7 +257,7 @@ def matches(quoted: str, held: float) -> bool:
 
 def figure_units(md: str) -> list[tuple[int, str, bool]]:
     """(first line, text, in a code block) for each paragraph, list item, heading, table row and code line. A table row
-    reads as "<first cell> ; <header stat> <cell> ms ; …", its other cells as units of their own."""
+    reads as "<first cell> | <header stat> <cell> ms | …", its other cells as units of their own."""
     lines = md.split("\n")
     units: list[tuple[int, str, bool]] = []
     buf: list[str] = []
@@ -302,7 +310,7 @@ def figure_units(md: str) -> list[tuple[int, str, bool]]:
                             others.append(c)
                     first = cs[0] if cs and not re.fullmatch(rf"[*_~\s]*{NUM}\s*(ms)?[*_\s]*", cs[0], re.I) else ""
                     exempt = EXEMPT if EXEMPT in row else ""
-                    units.append((k, " ; ".join([first, *figs]) + exempt, False))
+                    units.append((k, " | ".join([first, *figs]) + exempt, False))
                     units.extend((k, o, False) for o in others)
             else:
                 units.extend((i + 1 + k, row, False) for k, row in enumerate(rows))
@@ -341,15 +349,31 @@ def latency_problems(md: str, bench: dict) -> tuple[int, int, list[str]]:
         vals = [float(v) for v in vals if isinstance(v, (int, float))]
         return (min(vals), max(vals)) if len(vals) >= 2 else None
 
+    def spread(op: str, stat: str, which: str) -> float | None:
+        v = bench.get("spread", {}).get(op, {}).get(stat, {}).get(which)
+        return float(v) if isinstance(v, (int, float)) else None
+
+    def clause(text: str, start: int, end: int) -> tuple[int, int]:
+        lo = max((m.end() for m in CLAUSE_END.finditer(text, 0, start)), default=0)
+        hi = next((m.start() for m in CLAUSE_END.finditer(text, end)), len(text))
+        return lo, hi
+
     for first_line, text, in_code in figure_units(md):
         figures = list(FIGURE.finditer(text))
-        if not figures:
+        others = [] if in_code else list(OTHER_UNIT.finditer(text))
+        if not figures and not others:
             continue
         if EXEMPT in text:
             exempt += len(figures)
             continue
         labels = list(LABELS.finditer(text))
         ops = [(m.start(), m.end(), m.lastgroup) for m in OP_MENTION.finditer(text)]
+        for o in others:
+            lo, hi = clause(text, o.start(), o.end())
+            if any(lo <= s0 and e0 <= hi for s0, e0, _ in ops):
+                where = f"{first_line + text[:o.start()].count(chr(10))}"
+                problems.append(f"{where}: {o.group(0).strip()} next to an operation: write latency in ms, as bench/results.json holds it "
+                                f"(or mark the paragraph {EXEMPT})")
         for f in figures:
             where = f"{first_line + text[:f.start()].count(chr(10))}"
             shown = f.group(0).strip()
@@ -369,6 +393,26 @@ def latency_problems(md: str, bench: dict) -> tuple[int, int, list[str]]:
             prior = [o for o in ops if o[1] <= f.start()]
             later = [o for o in ops if o[0] >= f.end()]
             op = prior[-1][2] if prior else later[0][2] if later else None
+            c_lo, c_hi = clause(text, f.start(), f.end())
+            in_clause = {k for s0, e0, k in ops if c_lo <= s0 and e0 <= c_hi}
+            if op in ("resolve", "seal") and {"resolve", "seal"} <= in_clause and not ALONE.search(text[c_lo:c_hi]):
+                op = "resolveAndSeal"  # "look up a key and seal a note to it: …" is the whole send path
+            raw = label.group(0).lower() if label else ""
+            if op and raw in ("median", "min", "minimum", "max", "maximum") and ACROSS_RUNS.search(text[c_lo:c_hi]) \
+                    and len(SEPARATOR.split(f.group("nums"))) == 1:
+                # "p50 across runs: 24.1 to 28.4 ms (median 28.1 ms)": the median of the runs' own p50s
+                of = [l for l in labels if c_lo <= l.start() < label.start() and STAT_OF[l.group(0).split("/")[0].strip().lower()] in ("p50", "p95", "p99")
+                      and l.group(0).split("/")[0].strip().lower() != "median"]
+                base = STAT_OF[of[-1].group(0).split("/")[0].strip().lower()] if of else "p50"
+                which = {"minimum": "min", "maximum": "max"}.get(raw, raw)
+                h = spread(op, base, which)
+                q = f.group("nums")
+                checked += 1
+                if h is None:
+                    problems.append(f"{where}: {shown} is the {which} {base} across runs, and bench/results.json holds no spread for {OP_NAME[op]}")
+                elif not matches(q, h):
+                    problems.append(f"{where}: {q} ms for the {which} of {OP_NAME[op]}'s run {base}s: bench/results.json has {h} ms")
+                continue
             if in_code and not stats:
                 continue  # code: a figure without a statistic is a timeout or an interval, not a claim
             nums = SEPARATOR.split(f.group("nums"))
@@ -570,6 +614,19 @@ EXAMPLE_DOMAIN = re.compile(r"\bexample\.(?:com|org|net)\b", re.I)
 BARE_0X = re.compile(r"(?<![0-9A-Za-z])0x(?:…|\.\.\.)(?![0-9A-Fa-f])")
 SLOT = re.compile(r"<[A-Z][A-Z0-9_]{2,}>")  # <YOUR_EMAIL>, <ADDRESS>: an unfilled slot in prose
 HASH_COMMENTS = {".py", ".sh", ".yml", ".yaml", ".toml"}
+# Unfilled forms in Markdown prose (code blocks and spans blanked), where a writer leaves them: README.md, DEMO.md, docs
+MD_PROSE_PLACEHOLDERS = [
+    # the word as a value (PLACEHOLDER, [placeholder], "Twitter: placeholder"), not prose that says a field is one
+    ("PLACEHOLDER", re.compile(r"\bPLACEHOLDER\b|[\[<{(]\s*(?i:placeholder)\s*[\]>})]|(?::|\|)\s*(?i:placeholder)\s*(?:$|\|)")),
+    ("INSERT … HERE", re.compile(r"\binsert\b.{0,20}\bhere\b", re.I)),
+    ("WIP", re.compile(r"\bWIP\b")),
+    ("todo/tbd/fixme", re.compile(r"^\s*(?:[-*+>|]\s*|\d+[.)]\s+)?(?:\[[ xX]?\]\s*)?(?:todo|tbd|fixme)\b|\b(?:todo|fixme)\s*:|\btbd\b", re.I)),
+    ("empty or anchor-only link", re.compile(r"\]\(\s*#?\s*\)")),
+    ("unfilled slot", re.compile(r"<(?:[a-z][a-z0-9]*[-_][a-z0-9_-]+|(?:your|my|insert|enter)[a-z0-9]*)>", re.I)),
+    ("N/A table cell", re.compile(r"\|\s*n/?a\s*(?=\|)", re.I)),
+]
+ZERO_ADDRESS = re.compile(r"(?<![0-9A-Za-z])0x0{40}(?![0-9A-Za-z])")
+JUDGE_DOCS = {"README.md", "DEMO.md"}  # where the zero address can only be an owner or a contract left unfilled
 COMMENT_MARKER = re.compile(r"^(?:todo|fixme|tbd|xxx)\b|\b(?:todo|fixme|tbd)\s*[:(!]", re.I)
 
 
@@ -611,6 +668,12 @@ def placeholder_hits(path: str, text: str) -> list[str]:
                 hits.append(f"{path}:{i} bare 0x…")
             if SLOT.search(line):
                 hits.append(f"{path}:{i} unfilled {SLOT.search(line).group(0)}")
+            if path in JUDGE_DOCS and ZERO_ADDRESS.search(line):
+                hits.append(f"{path}:{i} zero address")
+            for label, rx in MD_PROSE_PLACEHOLDERS:
+                m = rx.search(line)
+                if m and not any(h.startswith(f"{path}:{i} ") for h in hits):
+                    hits.append(f"{path}:{i} {label}" + (f" {m.group(0).strip()}" if label == "unfilled slot" else ""))
     return hits
 
 
@@ -690,27 +753,27 @@ def planning_patterns() -> tuple[list[str], list[re.Pattern]]:
 
 
 def history_hits(pats: list[re.Pattern]) -> tuple[dict[str, set[int]], list[str], int]:
-    """Scans every commit's patch (git log --all -p): the commits whose added or removed lines name a planning note
-    ({commit: the patterns found}), the commits that add or remove a private key, and the number of commits read."""
-    out = subprocess.run(["git", "log", "--all", "-p", "--format=commit %h", "--abbrev=7", "--no-color", "--no-ext-diff"],
+    """Scans every commit's message and patch (git log --all -p), both of which go public with the history: the commits
+    whose message, or added or removed lines, name a planning note ({commit: the patterns found}), the commits that
+    add or remove a private key (or carry one in the message), and the number of commits read."""
+    out = subprocess.run(["git", "log", "--all", "-p", "--format=%x1e%h%n%B%x1f", "--abbrev=7", "--no-color", "--no-ext-diff"],
                          cwd=ROOT, capture_output=True, check=False).stdout.decode("utf-8", errors="replace")
     names: dict[str, set[int]] = {}
     keys: list[str] = []
-    commit = ""
     commits = 0
-    for line in out.split("\n"):
-        if line.startswith("commit "):
-            commit = line[7:].strip()
-            commits += 1
-            continue
-        if not line.startswith(("+", "-")) or line.startswith(("+++", "---")):
-            continue
-        body = line[1:]
-        for k, p in enumerate(pats):
-            if p.search(body):
-                names.setdefault(commit, set()).add(k)
-        if KEY_RX.search(body) and commit not in keys:
-            keys.append(commit)
+    for record in out.split("\x1e")[1:]:
+        commits += 1
+        commit, _, rest = record.partition("\n")
+        commit = commit.strip()
+        message, _, patch = rest.partition("\x1f")
+        bodies = message.split("\n") + [line[1:] for line in patch.split("\n")
+                                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
+        for body in bodies:
+            for k, p in enumerate(pats):
+                if p.search(body):
+                    names.setdefault(commit, set()).add(k)
+            if KEY_RX.search(body) and commit not in keys:
+                keys.append(commit)
     return names, keys, commits
 
 
@@ -747,10 +810,10 @@ def check_public(files: list[str]) -> None:
         found = {p for ps in in_history.values() for p in ps}
         record("public repo", "FAIL" if in_history else "PASS", "no private planning-note name in the git history",
                (f"{len(found)} pattern(s) of the planning-note names in {len(in_history)} commit(s): {', '.join(sorted(in_history))} (names not spelled "
-                "out here; git log --all -S<name> shows them). Rewrite those commits, or decide to publish them, before the repository goes public")
+                "out here; git log --all -S<name> or --grep=<name> shows them). Rewrite those commits, or decide to publish them, before the repository goes public")
                if in_history else f"{commits} commits, {len(names)} names")
     record("public repo", "FAIL" if key_commits else "PASS", "no private key or PEM block in the git history",
-           ("added or removed in " + ", ".join(key_commits)) if key_commits else f"{commits} commits scanned (git log --all -p)")
+           ("added or removed in " + ", ".join(key_commits)) if key_commits else f"{commits} commits scanned, messages and patches (git log --all -p)")
 
 
 def main() -> int:

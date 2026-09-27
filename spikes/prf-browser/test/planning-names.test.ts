@@ -2,7 +2,8 @@
 // names: the pre-publication leak scan flags any reference to one. The names are read at test time from the
 // planning folder that sits next to this repository, so this file never spells them out. In a clone without that
 // folder (anyone else's), the tests are skipped. The second test extends the check from HEAD to the whole history
-// (`git log --all -S<name>`), because the repository goes public with its history.
+// (`git log --all -S<name>`), and the third to every commit message, because the repository goes public with its
+// history.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -52,3 +53,17 @@ test("no commit in history adds or removes a planning-file name, other than the 
     }
     assert.deepEqual(hits, []);
   });
+
+// A commit message goes public with the history too, and -S reads only the patches.
+test("no commit message names a planning file", { skip: names.length === 0 ? "no planning folder next to this repository" : false }, () => {
+  const log = execFileSync("git", ["log", "--all", "--format=%h%x00%B%x1e", "--abbrev=7"], { cwd: root, maxBuffer: 64 << 20 }).toString();
+  const hits: string[] = [];
+  for (const record of log.split("\x1e")) {
+    const [hash, message] = record.replace(/^\n/, "").split("\0");
+    if (!hash || message === undefined) continue;
+    for (const name of new Set(patterns.filter((p) => message.split("\n").some((line) => p.re.test(line))).map((p) => p.name))) {
+      hits.push(`${hash}'s message names ${name}`);
+    }
+  }
+  assert.deepEqual(hits, []);
+});

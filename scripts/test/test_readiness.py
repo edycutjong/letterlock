@@ -42,6 +42,7 @@ BENCH = {
         "rpcRoundTrip": summary(19.614, 21.181, 23.161, 17.213, 28.929, 19.183),
         "coldFirstResolve": summary(104.998, 148.7, 148.7, 99.8, 148.7, 117.8, n=5),
     },
+    "spread": {"resolveAndSeal": {"p50": {"min": 23.117, "median": 25.637, "max": 29.435}}},
     "runs": [
         {"latencyMs": {"resolveAndSeal": summary(23.117, 26.0, 30.0, 20.1, 50.0, 23.5, 200)}},
         {"latencyMs": {"resolveAndSeal": summary(29.435, 33.0, 38.0, 22.0, 60.0, 29.9, 200)}},
@@ -107,6 +108,33 @@ class LatencyFigures(unittest.TestCase):
         self.assertIn("names no statistic", problems("The first resolve of a new client took 105 ms.")[0])
         self.assertEqual(problems("The cold first resolve took p50 105.0 ms over 5 runs."), [])
 
+    def test_a_clause_naming_a_lookup_and_a_seal_is_resolve_plus_seal(self):
+        # sealing's own p50 is 3.592: quoted for the whole send path it must fail
+        self.assertIn("for resolve + seal p50", problems("Look up a key on chain and seal a note to it: 3.6 ms (p50).")[0])
+        self.assertEqual(len(problems("Sealing a letter end to end, resolving the key over RPC and then sealing, takes 3.6 ms at the median.")), 1)
+        self.assertEqual(problems("Look up a key on chain and seal a note to it: 23.1 ms (p50)."), [])
+        self.assertEqual(problems("keyOf and seal together: p50 23.1 ms."), [])
+        # a clause that says the figure is one of them alone, or a ';' between them, keeps the nearest operation
+        self.assertEqual(problems("Sealing alone takes 3.6 ms (p50), without the keyOf read."), [])
+        self.assertEqual(problems("Sealing takes p50 3.592 ms; the rest is one keyOf read."), [])
+        self.assertIn("for resolve p50", problems("A key lookup takes p50 3.6 ms.")[0])
+
+    def test_latency_in_other_units_fails_and_msec_or_n_ms_is_read(self):
+        self.assertEqual(len(problems("resolve + seal p50: 20 msec")), 1)
+        self.assertEqual(problems("resolve + seal p50: 23.1 msec"), [])
+        self.assertEqual(len(problems("resolve + seal p50: 20-ms")), 1)
+        self.assertIn("write latency in ms", problems("resolve + seal p50: 0.020 s")[0])
+        self.assertIn("write latency in ms", problems("Sealing takes 3592 µs at the median.")[0])
+        self.assertEqual(problems("Monad blocks land every 0.4 s."), [])  # no operation named: not a latency claim
+        self.assertEqual(problems(f"resolve + seal in 0.02 s. {R.EXEMPT}"), [])
+
+    def test_median_across_runs_is_the_runs_spread(self):
+        line = "resolve+seal p50 across runs: 23.117 to 29.435 ms (median 25.637 ms)"
+        self.assertEqual(problems(line), [])
+        self.assertEqual(problems(f"```\n  {line}\n```\n"), [])
+        self.assertIn("run p50s", problems(line.replace("25.637", "23.117"))[0])  # the pooled p50 is not the runs' median
+        self.assertEqual(problems("resolve + seal p50 23.117 ms, the median of all 1,000 samples"), [])
+
     def test_rounding_is_half_up_on_the_held_value(self):
         self.assertTrue(R.matches("29.4", 29.435))
         self.assertTrue(R.matches("29", 29.435))
@@ -163,6 +191,18 @@ class Placeholders(unittest.TestCase):
         for path, text in clean:
             with self.subTest(path=path):
                 self.assertEqual(R.placeholder_hits(path, text), [])
+
+    def test_unfilled_forms_in_markdown_prose_are_found(self):
+        planted = ["todo: record the demo", "Team page: Tbd", "Twitter: PLACEHOLDER", "[Pitch deck](#)", "Contact: <your-email>",
+                   "Agent card owner: 0x" + "0" * 40, "Discord: [INSERT LINK HERE]", "Rotation UI: WIP", "[Slides]()", "| Pitch video | N/A |"]
+        for line in planted:
+            with self.subTest(line=line):
+                self.assertEqual(len(R.placeholder_hits("README.md", line + "\n")), 1)
+        self.assertEqual(R.placeholder_hits("docs/SPEC.md", "owner 0x" + "0" * 40 + "\n"), [])  # only README.md and DEMO.md
+        for fine in ("<details><summary>More</summary> <br> <img src=\"x.png\">", "The header is a placeholder, and the page says so.",
+                     "See [SPEC](docs/SPEC.md#3) and <https://monad.xyz>.", "`[x](#)` and `<your-email>` in code are notation."):
+            with self.subTest(fine=fine):
+                self.assertEqual(R.placeholder_hits("README.md", fine + "\n"), [])
 
     def test_only_generated_json_under_fixtures_is_skipped(self):
         self.assertTrue(R.skipped_from_scan("fixtures/envelopes.json"))
@@ -224,6 +264,14 @@ class History(TempRepo):
         self.assertEqual(status, "FAIL")
         self.assertIn("in 2 commit(s)", detail)
         self.assertNotIn("alpha-notes", detail)
+
+    def test_a_planning_name_in_a_commit_message_is_in_history(self):
+        self.commit("README.md", "clean\n")
+        self.git("commit", "-q", "--allow-empty", "-m", "docs: numbers follow alpha-notes.md section 2")
+        R.check_public(R.publishable_files())
+        status, detail = self.found("no private planning-note name in the git history")
+        self.assertEqual(status, "FAIL")
+        self.assertIn("in 1 commit(s)", detail)
 
     def test_a_private_key_removed_from_the_files_is_still_in_history(self):
         self.commit("config.env.txt", "PRIVATE_KEY=0x" + "ab" * 32 + "\n")
