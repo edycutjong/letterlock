@@ -359,6 +359,26 @@ describe.skipIf(noChain)("the key and the account come from one passkey (docs/SP
     expect([r.epoch, r.publicKey]).toEqual([1, `0x${toHex(own.publicKey)}`]);
   });
 
+  it("deriveForAgent and meraAccount name the passkey that ANSWERED, not the one asked for: a pin-ignoring client cannot slip another passkey's key or account in", async () => {
+    if (!ctx.ok) return;
+    const { dev, older, mine, account } = await twoPasskeys();
+    const agentId = newAgentId();
+    await sendAs(ctx.registry, registryAbi, "mint", [account.address, agentId]);
+    // asked for `mine`, answered by `older`: the agent key says so, and publishForAgent refuses it
+    const stray = await deriveForAgent({ rpId: LETTERLOCK_RP_ID, agentId, epoch: 1, credential: mine.credential, webAuthnClient: ignoresPin(dev) });
+    expect(stray.credentialId).toBe(older.credential.credentialId);
+    await rejects(client().publishForAgent({ account, agentId, keys: stray }), "INPUT_INVALID");
+    expect(await nonce(account.address)).toBe(0);
+    // the same for the account: asked for `mine`, it is `older`'s account and says so
+    const olderAccount = await meraAccount({ rpId: LETTERLOCK_RP_ID, credential: older.credential, webAuthnClient: dev });
+    const strayAccount = await meraAccount({ rpId: LETTERLOCK_RP_ID, credential: mine.credential, webAuthnClient: ignoresPin(dev) });
+    expect([strayAccount.address, strayAccount.credentialId]).toEqual([olderAccount.address, older.credential.credentialId]);
+    await fund(strayAccount.address, "1"); // so that only the passkey check can refuse
+    await rejects(client().publish({ account: strayAccount, keys: mine.keys }), "INPUT_INVALID");
+    expect(await nonce(strayAccount.address)).toBe(0);
+    for (const a of [account, olderAccount, strayAccount]) a.end();
+  });
+
   it("publish and publishForAgent take from a meraAccount() only a key that names its own passkey; nothing else is sent", async () => {
     if (!ctx.ok) return;
     const { dev, older, mine, account } = await twoPasskeys();
