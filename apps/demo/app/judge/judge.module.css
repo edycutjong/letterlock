@@ -147,6 +147,12 @@
   gap: 4px;
 }
 
+/* the address takes the link's colour, so it turns airmail blue with the link under the pointer (.data, a shared
+   class, sets ink) */
+.inline :global(.data) {
+  color: inherit;
+}
+
 @media (max-width: 959.98px) {
   .grid {
     grid-template-columns: minmax(0, 1fr);

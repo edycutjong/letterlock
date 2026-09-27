@@ -13,12 +13,37 @@
 
 .home {
   grid-area: home;
+  position: relative;
   display: inline-flex;
   align-items: center;
   min-height: var(--tap);
   padding-right: 4px;
   text-decoration: none;
   border-radius: 2px;
+}
+
+/* under the pointer the wordmark answers as the routes beside it do: "Letter" turns airmail blue and a rule is drawn
+   in under it ("lock" stays wax) */
+.home::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 4px;
+  bottom: 6px;
+  height: 1px;
+  background: var(--before);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform var(--transition-normal);
+}
+
+@media (hover: hover) {
+  .home:hover {
+    --wordmark-ink: var(--before);
+  }
+  .home:hover::after {
+    transform: scaleX(1);
+  }
 }
 
 .wordmark {
@@ -119,6 +144,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .home::after,
   .nav a::after {
     transition: none;
   }

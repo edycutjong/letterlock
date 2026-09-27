@@ -31,3 +31,8 @@
 .links a {
   color: var(--ink);
 }
+
+/* this rule is not in the base layer, so it outranks the base layer's a:hover: the hover colour is restated here */
+.links a:hover {
+  color: var(--before);
+}

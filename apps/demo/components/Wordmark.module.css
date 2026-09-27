@@ -4,8 +4,17 @@
   overflow: visible;
 }
 
+/* "Letter" is inked in --wordmark-ink when the place that sets the wordmark gives one (the header's home link turns
+   it airmail blue under the pointer); "lock" is always wax */
 .letter {
-  fill: var(--ink);
+  fill: var(--wordmark-ink, var(--ink));
+  transition: fill var(--transition-normal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter {
+    transition: none;
+  }
 }
 
 .sheen {
