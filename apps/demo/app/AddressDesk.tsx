@@ -275,9 +275,11 @@ export function AddressDesk({ intro, example }: AddressDeskProps) {
               Your first post was paid for by the Letterlock gas drip: <TxLink hash={drip} />
             </p>
           )}
+          {/* directly under the page's h1: the slip's heading is an h2 */}
           <FailureNotice
             failure={failure}
             className={styles.failure}
+            headingLevel={2}
             action={
               retryable ? (
                 <Button size="md" tone="outline" onClick={() => setFailure(undefined)}>
@@ -287,7 +289,7 @@ export function AddressDesk({ intro, example }: AddressDeskProps) {
             }
           />
           {/* why the register could not be read; its "Read the register again" is with the actions above */}
-          {onchain.status === "failed" && !failure && <FailureNotice failure={onchain.failure} className={styles.failure} />}
+          {onchain.status === "failed" && !failure && <FailureNotice failure={onchain.failure} className={styles.failure} headingLevel={2} />}
           {stored && !running && (
             <p className={styles.forget}>
               This device remembers only your passkey’s id{address ? " and your address" : ""}: nothing secret.{" "}

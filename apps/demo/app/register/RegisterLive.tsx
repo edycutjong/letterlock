@@ -144,7 +144,7 @@ export function RegisterLive() {
       </form>
       <div className={styles.result} aria-live="polite">
         {foundRow && <RegisterTable caption={`What keyOf returned for ${foundRow.addressee}`} layout="auto" rows={[foundRow]} />}
-        {lookup.status === "failed" && lookup.failure.kind !== "input" && <FailureNotice failure={lookup.failure} />}
+        {lookup.status === "failed" && lookup.failure.kind !== "input" && <FailureNotice failure={lookup.failure} headingLevel={2} />}
       </div>
 
       <section className={styles.section} aria-labelledby="live-title">

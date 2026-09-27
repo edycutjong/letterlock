@@ -201,7 +201,7 @@ export function SealDesk({ initialTo }: { initialTo?: string }) {
         <div aria-live="polite" className={styles.lookup}>
           {lookup.status === "reading" && <p className={styles.reading}>Reading keyOf…</p>}
           {foundRow && <RegisterTable className={styles.found} caption="The line keyOf returned for this address" layout="compact" rows={[foundRow]} />}
-          {lookupFailure && lookupFailure.kind !== "input" && <FailureNotice failure={lookupFailure} />}
+          {lookupFailure && lookupFailure.kind !== "input" && <FailureNotice failure={lookupFailure} headingLevel={2} />}
         </div>
 
         <NoteField label="Note" value={note} onValueChange={setNote} rows={4} maxBytes={NOTE_MAX_BYTES} disabled={stage !== "open"} placeholder="What only they should read" />
@@ -211,7 +211,8 @@ export function SealDesk({ initialTo }: { initialTo?: string }) {
             Seal
           </Button>
         </div>
-        <FailureNotice failure={failure} />
+        {/* the form comes before the result's h2, directly under the page's h1: its slips' headings are h2s */}
+        <FailureNotice failure={failure} headingLevel={2} />
       </form>
 
       <section className={styles.result} aria-labelledby="sealed-title">

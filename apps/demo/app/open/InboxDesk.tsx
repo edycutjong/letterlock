@@ -204,7 +204,8 @@ export function InboxDesk({ initialTo }: { initialTo?: string }) {
                   Find my inbox with my passkey
                 </PasskeyButton>
                 <p className={styles.detail}>One passkey prompt: your passkey derives your address again. No transaction, nothing stored but the address.</p>
-                <FailureNotice failure={findFailure} />
+                {/* above the page's first h2, directly under its h1 */}
+                <FailureNotice failure={findFailure} headingLevel={2} />
               </>
             ) : null}
             <form className={styles.readForm} onSubmit={onRead} aria-label="Read the inbox of an address">
