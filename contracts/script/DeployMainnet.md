@@ -11,23 +11,23 @@ registry on chain 143 by default and refuses any other one there.
 
 ## Source changes since the testnet deployment (applied)
 
-The earlier testnet deployment, `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`, was built from commit `d15fe63`. The
+The earlier testnet deployment, `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4`, was built from commit `10e95d1`. The
 changes to `src/Letterlock.sol` below came after it; none could go to that deployment without breaking its Sourcify
-exact match. All are in commit `56e3d95`, which this deploy shipped (as did the testnet redeploy of 2026-09-27), and
+exact match. All are in commit `b3bdff4`, which this deploy shipped (as did the testnet redeploy of 2026-09-27), and
 nothing else is held back:
 
-1. Registry-call rule (commit `f6f80fa`). `_ownerOf` reads only the registry's `ERC721NonexistentToken(uint256)`
+1. Registry-call rule (commit `b834302`). `_ownerOf` reads only the registry's `ERC721NonexistentToken(uint256)`
    revert (selector `0x7e273289`, the one the live registry uses) as "no owner", and reverts
    `RegistryCallFailed(agentId)` on any other failure, so a caller that forwards too little gas gets a revert
    instead of all zeros from `keyOfAgent`. This adds `RegistryCallFailed` to the ABI (25 entries;
    `abi/Letterlock.json` and the SDK's `letterlockAbi` are regenerated) and changes no gas snapshot entry. The fork
-   regression test `test_fork_gasStarvedReaderNeverReadsZeros` (commit `306fa5d`) reads `keyOfAgent` for agent
+   regression test `test_fork_gasStarvedReaderNeverReadsZeros` (commit `b1db21d`) reads `keyOfAgent` for agent
    10259 at every gas budget from 5,000 to 80,000 (step 20), each read cold: 0 of 3,751 budgets returned zeros
    (block 108228758; again at block 108279356). Under the previous rule the same test fails: 527 budgets, 35,920 to
    46,440 gas, returned zeros for the live key (block 108228931).
 2. `drop` NatSpec: it says only that the envelope format is the docs/SPEC.md §3 UTF-8 JSON, no longer that the SDK
    drops it (the SDK had no drop helper then; it has since gained `drop()` and `inbox()`, and the CLI `letterlock drop`).
-3. `keyOfAgent` NatSpec on starved reads (commit `56e3d95`): a read given too little gas reverts
+3. `keyOfAgent` NatSpec on starved reads (commit `b3bdff4`): a read given too little gas reverts
    `RegistryCallFailed`, or reverts with no data when it runs out of gas in Letterlock itself, as when the 1/64 of
    the gas kept back from a starved registry call cannot pay for the `RegistryCallFailed` revert. Any revert means
    "unknown", never "no key". Comments only: the executable code and every gas snapshot entry are unchanged.
@@ -44,7 +44,7 @@ the script artifact as it was. The mainnet dry runs of 2026-09-26 carried the me
 in no commit, so Sourcify could not have matched the deployed contract exactly; a logic edit would have deployed the
 old logic. Three guards, all part of the steps below:
 
-- `foundry.toml` sets `dynamic_test_linking = false` (commit `c1e2f39`), so the script recompiles whenever the
+- `foundry.toml` sets `dynamic_test_linking = false` (commit `b9a8613`), so the script recompiles whenever the
   source does. It is not a compiler input, so it changes no bytecode.
 - Step 1 rebuilds every artifact (`forge build --force`) and runs `test_scriptArtifactDeploysTheCurrentSource`
   (`test/Deploy.t.sol`), which fails when the script artifact deploys other code than the current source.

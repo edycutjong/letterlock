@@ -75,8 +75,8 @@ charge, and not a receipt): first publish 70,002, rotation 36,002, drop of a 1 K
 | Load average (1, 5, 15 min) | 4.38 / 4.87 / 5.3 at the start, 10.5 / 6.36 / 5.8 at the end (10 cores) |
 | Node.js | v22.22.0 |
 | Time zone of the machine | Asia/Jakarta |
-| SDK | letterlock 0.1.0, runtime code at `7a33337` (2026-09-27T09:35:08+07:00) |
-| Benchmark code | scripts/bench.ts and scripts/lib as of `c0cb4da`, no uncommitted changes; checkout `7e12dbf` |
+| SDK | letterlock 0.1.0, runtime code at `ae4a28f` (2026-09-27T09:35:08+07:00) |
+| Benchmark code | scripts/bench.ts and scripts/lib as of `d805670`, no uncommitted changes; checkout `9bf2215` |
 | RPC | https://rpc.monad.xyz (Monad's public endpoint), mainnet blocks 108372664 to 108372921 |
 | N | 5 runs of 200 rounds, each after 5 warm-up rounds; each round times resolve, seal, resolve + seal and an rpc round trip, in that order in even rounds and reversed in odd ones |
 | Percentiles | nearest-rank (every value is a measured sample) |

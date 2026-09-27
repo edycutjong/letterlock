@@ -130,7 +130,7 @@ contract LetterlockRegistryCallTest is KeyOfAgentGasSweep {
 
     /// Regression, offline: a contract reads keyOfAgent with every gas budget from 5,000 to 80,000 (step 20), each
     /// read cold in its own transaction, through a proxy registry like the live one. No budget may return zeros. Run
-    /// against the previous source (commit d15fe63, which read any ownerOf failure as "no owner"), this test fails:
+    /// against the previous source (commit 10e95d1, which read any ownerOf failure as "no owner"), this test fails:
     /// 512 budgets, 35,920 to 46,140 gas, returned zeros. script/mutate.mjs keeps that rule as a mutant.
     function test_gasStarvedReaderNeverReadsZeros_proxyRegistry() public {
         MockIdentityRegistry proxied =

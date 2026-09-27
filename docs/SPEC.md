@@ -209,10 +209,10 @@ unpinned prompt.
 | Monad mainnet (143) | `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e` | enabled: ERC-8004 IdentityRegistry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Monad testnet (10143) | `0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a` | disabled: ERC-8004 has no registry on testnet |
 
-Both directories are built from commit `56e3d95` and were deployed with the same creation code; only the constructor
+Both directories are built from commit `b3bdff4` and were deployed with the same creation code; only the constructor
 argument, the registry, differs (`deployments/143.json`, `deployments/10143.json`). The registry-call rule below is on
 the agent path only, which the testnet directory disables, so there it never calls a registry. The earlier testnet
-directory `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before the rule) is superseded.
+directory `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `10e95d1`, before the rule) is superseded.
 
 **Reading keys**
 - `keyOf(address)` and `keyOfAgent(agentId)` return `(pub, epoch, updatedAt)`. All zeros means no key

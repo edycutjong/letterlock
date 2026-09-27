@@ -8,7 +8,7 @@
   "deployer": "0xb7A232dfA12e636ad9A951503c25aBA188c9f062",
   "identityRegistry": "0x0000000000000000000000000000000000000000",
   "agentPath": "disabled: the ERC-8004 IdentityRegistry exists on Monad mainnet only, so this testnet deployment has identityRegistry = address(0) and publishForAgent / drop-to-agent revert AgentPathDisabled",
-  "sameSourceAs": "deployments/143.json: both deploy transactions carry the same creation code (keccak256 0x3c0142f9b37e10b9bcfe327e77ddd97f9a6374e84a86e04bd4c6c3ced4710b50, commit 56e3d95, same compiler settings); only the constructor argument, the registry, differs",
+  "sameSourceAs": "deployments/143.json: both deploy transactions carry the same creation code (keccak256 0x3c0142f9b37e10b9bcfe327e77ddd97f9a6374e84a86e04bd4c6c3ced4710b50, commit b3bdff4, same compiler settings); only the constructor argument, the registry, differs",
   "verified": true,
   "verification": {
     "verifier": "sourcify",
@@ -24,8 +24,8 @@
   "sdkAbiPath": "packages/letterlock/src/abi.ts",
   "source": {
     "path": "contracts/src/Letterlock.sol",
-    "commit": "56e3d95",
-    "deployedAtHead": "0df11e5",
+    "commit": "b3bdff4",
+    "deployedAtHead": "51579be",
     "compiler": "solc 0.8.33",
     "evmVersion": "osaka",
     "optimizerRuns": 10000
@@ -60,17 +60,17 @@
       "address": "0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4",
       "deployTx": "0x2193d484408e016200f949b020683242b06e6ffae143ad807ad309bb84369689",
       "block": 65875477,
-      "sourceCommit": "d15fe63",
+      "sourceCommit": "10e95d1",
       "verification": "Sourcify exact_match (runtime bytecode)",
       "publishTx": "0x4cb027dbb3c5da93f4709739ef404905a61fe34dee3bbbf606c53f30e06e72e1",
       "dropTx": "0xfddd6beb1d28e812b2e55620c2b0435718f703c9c93fd9673cb277ba838b8194",
       "publishedKey": "0x3168353ad64ba73f409b7e10a8348e7154165f362c278c2339f003fd514f633b",
-      "why": "built from commit d15fe63, before the registry-call rule (RegistryCallFailed) and the drop / keyOfAgent NatSpec changes. Its address path behaves as the current source does, but it is not the source the mainnet directory (deployments/143.json) runs, so it was replaced to keep testnet and mainnet on identical code. Superseded; do not publish to it."
+      "why": "built from commit 10e95d1, before the registry-call rule (RegistryCallFailed) and the drop / keyOfAgent NatSpec changes. Its address path behaves as the current source does, but it is not the source the mainnet directory (deployments/143.json) runs, so it was replaced to keep testnet and mainnet on identical code. Superseded; do not publish to it."
     },
     {
       "address": "0x311921118F2D40f37e554516069A918bA290e75C",
       "deployTx": "0x6897ebbdaad88004f077d5048e7c78940b161e51d46ede22a173e3b21c69b9fd",
-      "sourceCommit": "7f31f33",
+      "sourceCommit": "57238ff",
       "why": "deployed before audit A: any higher epoch was accepted, so one publish at 2^32 - 1 froze a slot (and a seller could freeze an agent's slot before a transfer). Superseded; do not publish to it."
     }
   ]

@@ -8,7 +8,7 @@
   "deployer": "0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3",
   "identityRegistry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
   "agentPath": "enabled: identityRegistry is the ERC-8004 IdentityRegistry on Monad mainnet (an upgradeable proxy); publishForAgent requires msg.sender == ownerOf(agentId), and keyOfAgent resolves only while the agent's owner is the key's publisher",
-  "sameSourceAs": "deployments/10143.json: both deploy transactions carry the same creation code (keccak256 0x3c0142f9b37e10b9bcfe327e77ddd97f9a6374e84a86e04bd4c6c3ced4710b50, commit 56e3d95, same compiler settings); only the constructor argument, the registry, differs",
+  "sameSourceAs": "deployments/10143.json: both deploy transactions carry the same creation code (keccak256 0x3c0142f9b37e10b9bcfe327e77ddd97f9a6374e84a86e04bd4c6c3ced4710b50, commit b3bdff4, same compiler settings); only the constructor argument, the registry, differs",
   "verified": true,
   "verification": {
     "verifier": "sourcify",
@@ -67,8 +67,8 @@
   "sdkAbiPath": "packages/letterlock/src/abi.ts",
   "source": {
     "path": "contracts/src/Letterlock.sol",
-    "commit": "56e3d95",
-    "deployedAtHead": "f20e681",
+    "commit": "b3bdff4",
+    "deployedAtHead": "61aa49e",
     "compiler": "solc 0.8.33",
     "evmVersion": "osaka",
     "optimizerRuns": 10000

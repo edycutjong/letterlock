@@ -36,11 +36,11 @@
         "scripts/lib"
       ],
       "git": {
-        "head": "7e12dbf73e216be34a06fee3b5e92ad98a2c96cf",
-        "sdkCommit": "7a33337371a33c75d902c1deead411d398a29f8a",
+        "head": "9bf22155ad6ad950d83721ee7df3056829732929",
+        "sdkCommit": "ae4a28f14090b916f08344405bb196140695cc5f",
         "sdkCommitDate": "2026-09-27T09:35:08+07:00",
         "sdkDirty": false,
-        "benchCommit": "c0cb4daa32ebd3663af97fdf6f69c9fd74dead76",
+        "benchCommit": "d805670622e459f5c3fe770cfe21113bf854fcb5",
         "benchDirty": false
       }
     },

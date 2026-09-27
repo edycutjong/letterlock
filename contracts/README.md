@@ -9,8 +9,8 @@ upgrade path, and no function accepts value.
 
 | Network | Address | Registry | Source |
 |---|---|---|---|
-| Monad mainnet (143) | [`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`](https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | commit `56e3d95`, Sourcify `exact_match` (creation and runtime) |
-| Monad testnet (10143) | [`0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a`](https://testnet.monadvision.com/address/0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a) | none: agent path disabled | commit `56e3d95`, Sourcify `exact_match` |
+| Monad mainnet (143) | [`0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`](https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e) | ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | commit `b3bdff4`, Sourcify `exact_match` (creation and runtime) |
+| Monad testnet (10143) | [`0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a`](https://testnet.monadvision.com/address/0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a) | none: agent path disabled | commit `b3bdff4`, Sourcify `exact_match` |
 
 Both deploy transactions carry the same creation code; only the constructor argument, the registry, differs. The
 mainnet record, [`deployments/143.json`](../deployments/143.json), was made with [script/DeployMainnet.md](script/DeployMainnet.md)
@@ -31,9 +31,9 @@ passkey PRF output, its stand-in kept the same way. The ERC-8004 IdentityRegistr
 testnet runs with the agent path disabled. Two earlier testnet deployments are superseded (both listed under
 `previous` in the record):
 `0x311921118F2D40f37e554516069A918bA290e75C` predates the epoch rule below (it accepted any higher epoch), and
-`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`) predates the registry-call rule and the current
+`0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `10e95d1`) predates the registry-call rule and the current
 `drop` and `keyOfAgent` NatSpec. The current testnet directory is the current `src/Letterlock.sol` (commit
-`56e3d95`), deployed with the same checks as the mainnet runbook: its deploy transaction's input was compared with
+`b3bdff4`), deployed with the same checks as the mainnet runbook: its deploy transaction's input was compared with
 `forge inspect Letterlock bytecode` plus the constructor argument before and after sending.
 
 ## Interface
@@ -185,7 +185,7 @@ proxy and costs more.
 - The registry-call rule left every entry unchanged: its extra code runs only when `ownerOf` fails. Turning dynamic
   test linking off left every entry unchanged too.
 
-Mainnet receipts (commit `56e3d95`), each equal to its transaction's gas limit: deploy 1,201,505 · `publish` 70,863 ·
+Mainnet receipts (commit `b3bdff4`), each equal to its transaction's gas limit: deploy 1,201,505 · `publish` 70,863 ·
 `publishForAgent` 108,799 against the live registry (89,198 against the test double above) · `drop` (490-byte
 envelope) 45,780; registering the agent (the registry's `register(string)`) took 224,739. At the 102 gwei every one of
 them paid, the five cost 0.168471972 MON, exactly the deployer's balance change. Testnet receipts (same commit): deploy

@@ -36,15 +36,12 @@ test("no tracked file mentions a private planning file", { skip: names.length ==
   assert.deepEqual(hits, []);
 });
 
-// Commits (full hashes) already known to add or remove a planning-file name. Rewriting them, or accepting them, is
-// the owner's decision before the repository goes public; this list only keeps a NEW one from slipping in unseen.
-// After a history rewrite these hashes no longer exist and the list should be emptied.
-const KNOWN_IN_HISTORY = new Set([
-  "d17c130", "fa0c62c", // one name, added then removed
-  "dc6e2d9", "02c7a6e", // a second name, added then removed
-]);
+// Commits (abbreviated hashes) allowed to add or remove a planning-file name: none. Four early commits named two of
+// them in code comments; the history was rewritten on 2026-09-27, before the repository went public, with those
+// comments reworded, so every commit hash from the third commit on changed. Keep this set empty.
+const KNOWN_IN_HISTORY = new Set<string>();
 
-test("no commit in history adds or removes a planning-file name, other than the known ones awaiting the pre-publication decision",
+test("no commit in history adds or removes a planning-file name",
   { skip: names.length === 0 ? "no planning folder next to this repository" : false }, () => {
     const hits: string[] = [];
     for (const n of names) {

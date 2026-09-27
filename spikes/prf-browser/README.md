@@ -150,18 +150,18 @@ pnpm --filter prf-browser-spike check:page   # check-page.mjs: taps the real but
 node check-page.mjs --url https://letterlock-spike.vercel.app/   # the same checks against the live page
 ```
 
-Results on 2026-09-26 with Chromium 153 virtual authenticators, page build `51e8eab`:
+Results on 2026-09-26 with Chromium 153 virtual authenticators, page build `77d39d6`:
 
 - `pnpm typecheck` (the SDK and this page, `tsc --strict`): no errors.
 - `test:unit`: **29/29**.
 - `check-page.mjs`: **40/40** on the local production build and **41/41** on the live page; the live run adds the
-  CSP header check. (An earlier round, against live build `fa47ecc`, had 9 of its checks fail, each on a defect
+  CSP header check. (An earlier round, against live build `d657646`, had 9 of its checks fail, each on a defect
   fixed since.)
 - `run-spike.mjs`: **13/14 passed, 1 SKIP**. The SKIP is the cross-device check, which is this human run.
 - The SDK's own suite (`pnpm --filter letterlock test`): **59/59**.
 
 Not everything is covered by `check-page.mjs`: the build stamp, the strict typecheck and the planning-file
-names are covered by the unit tests and `tsc`. (Commit `0c55419` said check-page covered every finding of that
+names are covered by the unit tests and `tsc`. (Commit `209dfd6` said check-page covered every finding of that
 audit; that overstated it.) `check-page.mjs` covers the following:
 - the rpId shown on the page with its test-only caveat, and the fingerprint matching the note's `kid`;
 - the QR code decoding (jsQR) to exactly the link, also for a 200-byte note, and coming back after the
