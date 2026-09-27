@@ -1,35 +1,35 @@
 # Benchmark: resolve + seal on Monad mainnet
 
-Measured 2026-09-27 04:42 UTC with `pnpm bench` (scripts/bench.ts). Every number below is
+Measured 2026-09-27 07:44 UTC with `pnpm bench` (scripts/bench.ts). Every number below is
 copied from [results.json](results.json), which also holds all 4,005 raw samples.
 
-**resolve + seal: p50 27.067 ms · p95 33.982 ms · p99 38.201 ms** over N = 1,000
-(5 runs of 200), against the public RPC https://rpc.monad.xyz. Sealing alone takes p50 4.918 ms on this machine; the rest is one
-`keyOf` read over the network. From run to run, the resolve + seal p50 ranged 24.144–28.363 ms,
-and the p99 32.002–38.201 ms.
+**resolve + seal: p50 25.578 ms · p95 29.636 ms · p99 32.436 ms** over N = 1,000
+(5 runs of 200), against the public RPC https://rpc.monad.xyz. Sealing alone takes p50 3.534 ms on this machine; the rest is one
+`keyOf` read over the network. From run to run, the resolve + seal p50 ranged 25.489–25.789 ms,
+and the p99 30.922–164.912 ms.
 
 ## Latency (milliseconds, every run pooled)
 
 | Operation | What is timed | n | p50 | p95 | p99 | min | max | mean |
 |---|---|---|---|---|---|---|---|---|
-| resolve | `ll.resolve(address)`: one `keyOf` eth_call | 1000 | **21.929** | 24.176 | 26.256 | 20.08 | 213.384 | 22.752 |
-| seal | `seal()`: HPKE to the resolved key, no network | 1000 | **4.918** | 8.885 | 11.36 | 1.782 | 17.337 | 4.993 |
-| resolve + seal | `ll.sealTo(address, note)`, as one call | 1000 | **27.067** | 33.982 | 38.201 | 21.915 | 298.353 | 28.424 |
-| rpc round trip | `eth_blockNumber` on the same RPC (context) | 1000 | **19.586** | 21.448 | 23.935 | 16.31 | 26.87 | 19.291 |
+| resolve | `ll.resolve(address)`: one `keyOf` eth_call | 1000 | **21.969** | 23.826 | 29.091 | 20.105 | 201.231 | 23.308 |
+| seal | `seal()`: HPKE to the resolved key, no network | 1000 | **3.534** | 5.471 | 6.338 | 1.895 | 10.11 | 3.673 |
+| resolve + seal | `ll.sealTo(address, note)`, as one call | 1000 | **25.578** | 29.636 | 32.436 | 22.628 | 291.491 | 27.357 |
+| rpc round trip | `eth_blockNumber` on the same RPC (context) | 1000 | **19.914** | 21.084 | 22.619 | 16.948 | 26.173 | 19.196 |
 
 The first resolve of a new client also runs its one-time checks (`eth_chainId`, `eth_getCode` and `NO_AGENT()`, in
 parallel with the `keyOf` read). Each run starts a new client, so the cold first resolve was timed once per run (the
-column below): p50 77.545 ms over 5 runs, min 70.497 ms, max 98.911 ms. It is not in the table.
+column below): p50 82.431 ms over 5 runs, min 77.184 ms, max 130.267 ms. It is not in the table.
 
 ## Run to run
 
 | Run | Mainnet blocks | resolve + seal p50 | p95 | p99 | resolve p50 | seal p50 | rpc round trip p50 | cold first resolve | failed calls |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | 108372664 to 108372715 | 28.246 | 33.946 | 38.003 | 22.287 | 5.676 | 19.748 | 98.911 | 0 |
-| 2 | 108372717 to 108372769 | 28.121 | 35.733 | 38.201 | 22.403 | 5.57 | 19.875 | 77.545 | 0 |
-| 3 | 108372770 to 108372822 | 28.363 | 34.819 | 38.006 | 22.168 | 5.687 | 19.83 | 83.408 | 0 |
-| 4 | 108372824 to 108372873 | 26.135 | 33.272 | 35.452 | 21.723 | 4.277 | 19.545 | 72.354 | 0 |
-| 5 | 108372874 to 108372921 | 24.144 | 26.961 | 32.002 | 21.293 | 2.862 | 19.298 | 70.497 | 0 |
+| 1 | 108408884 to 108408933 | 25.577 | 29.164 | 31.524 | 21.973 | 3.522 | 20.011 | 130.267 | 0 |
+| 2 | 108408934 to 108408981 | 25.504 | 29.518 | 30.922 | 21.939 | 3.534 | 19.9 | 82.431 | 0 |
+| 3 | 108408984 to 108409033 | 25.489 | 29.506 | 161.029 | 21.907 | 3.431 | 19.861 | 83.254 | 0 |
+| 4 | 108409035 to 108409084 | 25.789 | 29.964 | 164.912 | 22.053 | 3.547 | 19.85 | 80.377 | 0 |
+| 5 | 108409085 to 108409134 | 25.582 | 29.704 | 30.976 | 22 | 3.567 | 19.919 | 77.184 | 0 |
 
 The runs follow one another on one machine and one endpoint, so this spread is what the network and the machine did
 in those minutes; another hour, place or endpoint moves it further.
@@ -70,14 +70,14 @@ charge, and not a receipt): first publish 70,002, rotation 36,002, drop of a 1 K
 
 | | |
 |---|---|
-| Date | 2026-09-27T04:42:22.069Z to 2026-09-27T04:43:39.978Z |
+| Date | 2026-09-27T07:44:38.745Z to 2026-09-27T07:45:54.869Z |
 | Machine | MacBookPro18,2, Apple M1 Max, 10 cores, 32 GiB, macOS 26.5.2 (arm64) |
-| Load average (1, 5, 15 min) | 4.38 / 4.87 / 5.3 at the start, 10.5 / 6.36 / 5.8 at the end (10 cores) |
+| Load average (1, 5, 15 min) | 5.68 / 5.02 / 4.72 at the start, 3.64 / 4.51 / 4.54 at the end (10 cores) |
 | Node.js | v22.22.0 |
 | Time zone of the machine | Asia/Jakarta |
-| SDK | letterlock 0.1.0, runtime code at `ae4a28f` (2026-09-27T09:35:08+07:00) |
-| Benchmark code | scripts/bench.ts and scripts/lib as of `d805670`, no uncommitted changes; checkout `9bf2215` |
-| RPC | https://rpc.monad.xyz (Monad's public endpoint), mainnet blocks 108372664 to 108372921 |
+| SDK | letterlock 0.1.0, runtime code at `074a87a` (2026-09-27T14:44:34+07:00) |
+| Benchmark code | scripts/bench.ts and scripts/lib as of `d805670`, no uncommitted changes; checkout `074a87a` |
+| RPC | https://rpc.monad.xyz (Monad's public endpoint), mainnet blocks 108408884 to 108409134 |
 | N | 5 runs of 200 rounds, each after 5 warm-up rounds; each round times resolve, seal, resolve + seal and an rpc round trip, in that order in even rounds and reversed in odd ones |
 | Percentiles | nearest-rank (every value is a measured sample) |
 
