@@ -1,6 +1,8 @@
-// In-memory abuse limits. A Vercel function instance serves many requests in turn (Fluid compute), so these hold
-// across requests to one instance; instances do not share them. The limit every instance shares is the daily drop
-// cap, which chain.ts counts onchain from the wallet's nonce.
+// In-memory abuse limits, per server instance and best effort. A Vercel function instance serves many requests in turn
+// (Fluid compute), so these hold across requests to one instance, but instances do not share them: a burst that
+// lands on three instances meets three fresh limiters. The limits every instance shares are elsewhere: the Vercel
+// firewall rule (vercel-firewall.json) counts each IP's POSTs at the edge, and the wallet (spend.ts) counts the day's
+// drops on the chain, by the nonce of the transaction it is asked to sign.
 import type { Window } from "./config.ts";
 
 export type Verdict = { readonly ok: true } | { readonly ok: false; readonly retryAfterSec: number; readonly window: Window };
@@ -47,9 +49,23 @@ export class RateLimiter {
     while (this.hits.size > this.maxKeys) this.hits.delete(this.hits.keys().next().value!);
     return v;
   }
+
+  /** Give back a hit take() recorded at `at`: what it counted was refused before anything was sent. */
+  refund(key: string, at: number): void {
+    const list = this.hits.get(key);
+    if (!list) return;
+    const i = list.lastIndexOf(at);
+    if (i < 0) return;
+    list.splice(i, 1);
+    if (list.length === 0) this.hits.delete(key);
+  }
 }
 
-/** Keys seen within `ttlMs` (task nonces): a replayed task is refused while its nonce is remembered. */
+/**
+ * Keys seen within `ttlMs` (task nonces): a replayed task is refused while its nonce is remembered. In memory, so per
+ * server instance: a copy of a task that reaches another instance is answered again (another drop to the same
+ * sealed reply address, counted in the day's allowance like any other).
+ */
 export class ReplayGuard {
   private readonly seen = new Map<string, number>();
   private readonly ttlMs: number;

@@ -15,15 +15,14 @@ export class HttpError extends Error {
   }
 }
 
-export const CORS: Readonly<Record<string, string>> = {
-  "access-control-allow-origin": "*",
+/** What a CORS answer allows besides the origin itself. */
+export const CORS_ALLOW: Readonly<Record<string, string>> = {
   "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
   "access-control-allow-headers": "content-type",
   "access-control-max-age": "86400",
 };
 
 const BASE: Readonly<Record<string, string>> = {
-  ...CORS,
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
   "x-content-type-options": "nosniff",
@@ -38,6 +37,23 @@ export const json = (status: number, body: unknown, headers: Readonly<Record<str
 
 export const failure = (status: number, code: string, message: string, headers: Readonly<Record<string, string>> = {}): Response =>
   json(status, { error: { code, message } }, headers);
+
+/**
+ * `res` with CORS headers for `allowOrigin`: "*" (anyone may read it), one origin (echoed, with Vary: Origin), or
+ * null (none: a browser on another origin gets nothing).
+ */
+export const withCors = (res: Response, allowOrigin: string | null): Response => {
+  const headers = new Headers(res.headers);
+  headers.set("vary", "origin");
+  if (allowOrigin === null) {
+    headers.delete("access-control-allow-origin");
+    for (const name of Object.keys(CORS_ALLOW)) headers.delete(name);
+  } else {
+    headers.set("access-control-allow-origin", allowOrigin);
+    for (const [name, value] of Object.entries(CORS_ALLOW)) headers.set(name, value);
+  }
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+};
 
 /**
  * The request body as JSON: application/json only, at most `maxBytes` (checked on the declared length and again on the

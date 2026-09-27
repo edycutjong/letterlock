@@ -4,7 +4,9 @@
 // again. So the address to answer is sealed INSIDE the task, never taken from the request alone: someone who copies
 // a task sealed to agent:10260 and posts it with their own `from` gets a refusal, not the answer. A nonce and a
 // timestamp inside the seal let the agent refuse a replay (§6: "put a nonce and timestamp inside the plaintext and
-// deduplicate on it").
+// deduplicate on it"). Whatever parseTask finds wrong, the HTTP answer is one code, TASK_REFUSED (app.ts): a reason
+// would tell whoever posts a copied task something about what is sealed in it. The TaskError codes below are for
+// callers checking their own task (scripts/call.ts), and their messages repeat nothing from the seal either.
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalRecipient, type Recipient } from "letterlock";
 import { charCount } from "./limits.ts";
@@ -14,7 +16,7 @@ export type Task = {
   readonly v: 1;
   /** Where the answer is sealed and dropped: must equal the request's `from`. */
   readonly replyTo: Recipient;
-  /** 16 random bytes, 32 lower-case hex digits: the agent answers each nonce once. */
+  /** 16 random bytes, 32 lower-case hex digits: each server instance answers a nonce once (limits.ts, ReplayGuard). */
   readonly nonce: string;
   /** When the task was sealed, in seconds since the epoch. */
   readonly issuedAt: number;
@@ -38,7 +40,11 @@ export type TaskReply = {
     /** The key the task was sealed to. */
     readonly sealedTo: { readonly recipient: Recipient; readonly epoch: number; readonly kid: string };
   };
-  /** A sentence for people: what the agent read, quoted in full. */
+  /**
+   * A sentence for people: what the agent read, quoted in full when it is at most QUOTE_CHARS characters, else its
+   * first QUOTE_CHARS and "…" (task.sha256 names the whole text). The quote is bounded so that no task, whatever its
+   * characters, makes the answer cost more gas than the largest note /remember seals.
+   */
   readonly text: string;
 };
 
@@ -77,11 +83,10 @@ export const parseTask = (plaintext: Uint8Array, o: { nowSec: number; maxAgeSec:
   if (typeof t.issuedAt !== "number" || !Number.isSafeInteger(t.issuedAt))
     throw new TaskError("TASK_INVALID", 'the sealed task\'s "issuedAt" must be whole seconds since the epoch');
   if (t.issuedAt < o.nowSec - o.maxAgeSec || t.issuedAt > o.nowSec + o.maxSkewSec)
-    throw new TaskError("TASK_STALE", `the task was sealed at ${t.issuedAt}; the agent takes tasks sealed in the last ${o.maxAgeSec} s (now ${o.nowSec})`);
+    throw new TaskError("TASK_STALE", `the task was not sealed within the last ${o.maxAgeSec} s`);
   if (typeof t.text !== "string" || !t.text.isWellFormed() || t.text.trim() === "")
     throw new TaskError("TASK_INVALID", 'the sealed task\'s "text" must be a non-empty string');
-  const chars = charCount(t.text);
-  if (chars > o.textMaxChars) throw new TaskError("TASK_TOO_LONG", `the task's text is ${chars} characters; the agent takes at most ${o.textMaxChars}`);
+  if (charCount(t.text) > o.textMaxChars) throw new TaskError("TASK_TOO_LONG", `the task's text is over ${o.textMaxChars} characters`);
   return { v: 1, replyTo, nonce: t.nonce, issuedAt: t.issuedAt, text: t.text };
 };
 
@@ -94,6 +99,20 @@ export const newNonce = (): string => Array.from(crypto.getRandomValues(new Uint
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
+/** How much of a task the answer quotes. */
+export const QUOTE_CHARS = 80;
+
+/**
+ * The quote: the first QUOTE_CHARS characters, with control characters and line or paragraph separators as spaces
+ * (JSON writes a control character as a 6-byte escape), and "…" when the text is longer. At most QUOTE_CHARS × 4 + 3
+ * bytes of JSON, whatever the task holds.
+ */
+export const quoteOf = (text: string): string => {
+  const chars = Array.from(text);
+  const head = chars.slice(0, QUOTE_CHARS).join("").replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ");
+  return chars.length > QUOTE_CHARS ? `${head}…` : head;
+};
+
 export const buildReply = (o: {
   agent: Recipient;
   task: Task;
@@ -102,6 +121,9 @@ export const buildReply = (o: {
 }): TaskReply => {
   const digest = hex(sha256(new TextEncoder().encode(o.task.text)));
   const chars = charCount(o.task.text);
+  const wrote = chars > QUOTE_CHARS
+    ? `You wrote ${chars} characters, SHA-256 ${digest}, beginning “${quoteOf(o.task.text)}”`
+    : `You wrote (${chars} characters): “${quoteOf(o.task.text)}”`;
   return {
     v: 1,
     from: o.agent,
@@ -110,7 +132,7 @@ export const buildReply = (o: {
     task: { sha256: digest, chars, sealedTo: o.sealedTo },
     text:
       `I opened your task, sealed to ${o.sealedTo.recipient} at epoch ${o.sealedTo.epoch} (key ${o.sealedTo.kid}), ` +
-      `at ${new Date(o.openedAt * 1000).toISOString()}. You wrote (${chars} characters): “${o.task.text}” ` +
+      `at ${new Date(o.openedAt * 1000).toISOString()}. ${wrote} ` +
       `This answer is sealed to ${o.task.replyTo}'s published key; once it is sent, I cannot open it either.`,
   };
 };

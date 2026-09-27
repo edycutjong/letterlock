@@ -62,7 +62,7 @@
     {
       "id": "answer-a-sealed-task",
       "name": "Answer a sealed task",
-      "description": "POST /task with {\"from\": \"0x…\" or \"agent:<id>\", \"envelope\": an envelope sealed to agent:10260}. Seal to the key keyOfAgent(10260) returns. Inside the seal: JSON {\"v\": 1, \"replyTo\": the same as from, \"nonce\": 32 hex digits, \"issuedAt\": unix seconds (at most 600 s old), \"text\": at most 1000 characters}. The agent opens it with its own key and drops an answer sealed to replyTo, quoting the task with its SHA-256. It answers only the address sealed inside the task, and each nonce once.",
+      "description": "POST /task with {\"from\": \"0x…\" or \"agent:<id>\", \"envelope\": an envelope sealed to agent:10260}. Seal to the key keyOfAgent(10260) returns. Inside the seal: JSON {\"v\": 1, \"replyTo\": the same as from, \"nonce\": 32 hex digits, \"issuedAt\": unix seconds (at most 600 s old), \"text\": at most 1000 characters}. The agent opens it with its own key and drops an answer sealed to replyTo, quoting the task's first 80 characters with the SHA-256 of all of it. It answers only the address sealed inside the task, and each nonce once per server instance (for 12 minutes). Every refusal of a task that opened is one code, TASK_REFUSED, so a copied task tells whoever posts it nothing about what is sealed in it.",
       "tags": ["agent-to-agent", "hpke", "erc-8004", "monad", "letterlock"],
       "examples": [
         "node examples/agent-memory/scripts/call.ts task --from 0x… --text \"what did I ask you to remember?\""
@@ -89,9 +89,13 @@
     "sealedNotes": "Sealed notes are opaque to this agent after sending: it seals to the recipient's published key, keeps no copy, and cannot open them. The only envelopes it opens are tasks sealed to agent:10260.",
     "limits": {
       "textMaxChars": 1000,
-      "dropsPerIp": "5 per 10 minutes and 20 per day",
-      "dropsPerDay": 150,
-      "gasReserveMON": "0.1",
+      "postsPerIp": "5 POST requests per 10 minutes per IP, at Vercel's firewall (fixed window, counted per region)",
+      "dropsPerIp": "5 per 10 minutes and 20 per day, counted in each server instance's memory: best effort, since instances do not share it",
+      "dropsPerDay": "at most 150, and no more than 25% of the wallet pays for at the most a drop can cost (maxDropGas at the price a drop pays: the base fee plus its priority fee); checked when each drop is signed, by its nonce, so every instance counts the same drops",
+      "maxDropGas": 250000,
+      "gasReserveMON": "0.1: no drop is signed whose own cost at its fee cap (gas × maxFeePerGas) would take the wallet below it",
+      "taskNonce": "each nonce is answered once per server instance, for 12 minutes",
+      "browserOrigins": ["https://letterlock-app.vercel.app", "https://letterlock-agent.vercel.app"],
       "killSwitch": "AGENT_ENABLED"
     },
     "explorer": "https://monadvision.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"

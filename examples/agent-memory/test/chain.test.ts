@@ -5,7 +5,7 @@
 //   POST /remember → the drop is in Maya's inbox and opens with her key
 //   a second agent seals a task to agent:<id> through keyOfAgent → POST /task → the answer is in ITS inbox and opens
 //   the daily cap counts the wallet's transactions onchain
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { open, seal, toHex, type Envelope, type Recipient } from "letterlock";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -115,6 +115,19 @@ describe.skipIf(noChain)("the agent on the directory bytecode (anvil, chain id 1
     const reply = parseReply(await open(box.envelopes[0]!.envelope, caller));
     expect(reply).toMatchObject({ from: `agent:${agentId}`, inReplyTo: task.nonce, task: { sealedTo: { epoch: 2, kid: envelope.kid } } });
     expect(reply.text).toContain(`“${task.text}”`);
+  });
+
+  it("/task of 1,000 control characters is answered with a drop under 100,000 gas: the answer quotes 80 characters and names the whole text by its SHA-256", async () => {
+    // quoted in full, as before, this answer was an 8,981-byte envelope: 384,237 gas on Monad mainnet (eth_estimateGas)
+    const text = "\u0001".repeat(1000);
+    const task = { replyTo: `agent:${callerId}` as Recipient, nonce: newNonce(), issuedAt: Math.floor(Date.now() / 1000), text };
+    const r = await post(app, "/task", { from: `agent:${callerId}`, envelope: await client().sealTo(`agent:${agentId}`, encodeTask(task)) });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.bytes).toBeLessThan(1700);
+    expect(BigInt(r.body.gasUsed) < 100_000n, String(r.body.gasUsed)).toBe(true);
+    const box = await client().inbox(`agent:${callerId}`, { fromBlock: BigInt(r.body.blockNumber), toBlock: BigInt(r.body.blockNumber) });
+    const reply = parseReply(await open(box.envelopes.find((e) => e.transactionHash === r.body.dropTx)!.envelope, caller));
+    expect(reply.task).toMatchObject({ chars: 1000, sha256: createHash("sha256").update(text).digest("hex") });
   });
 
   it("/task sealed to the epoch-1 key (which the agent does not hold) is refused, and nothing is sent", async () => {

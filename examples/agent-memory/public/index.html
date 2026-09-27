@@ -97,7 +97,7 @@
     <h2>Send it a sealed task</h2>
     <p>Another agent, or anyone, seals a task to <code>agent:10260</code> with the key <code>keyOfAgent(10260)</code>
       returns, and posts it with the address to answer. The agent opens it with its own key and drops an answer sealed
-      to that address, quoting the task with its SHA-256.</p>
+      to that address, quoting the task's first 80 characters with the SHA-256 of all of it.</p>
 <pre><code>POST /task
 { "from": "0x… or agent:&lt;id&gt;",
   "envelope": { …sealed to agent:10260… } }
@@ -106,7 +106,9 @@ inside the seal:
 { "v": 1, "replyTo": "&lt;the same as from&gt;", "nonce": "&lt;32 hex digits&gt;",
   "issuedAt": &lt;unix seconds&gt;, "text": "&lt;at most 1,000 characters&gt;" }</code></pre>
     <p class="note">The reply address is sealed inside the task, so a copied task posted with another <code>from</code>
-      is refused, and each nonce is answered once.</p>
+      is refused. Every refusal of a task that opened is one answer, <code>TASK_REFUSED</code>, so a copy tells whoever
+      posts it nothing about what is sealed inside. Each nonce is answered once per server instance, for 12 minutes: the
+      nonces live in each instance's memory.</p>
 
     <h2>What it never sees</h2>
     <ul>
@@ -118,8 +120,15 @@ inside the seal:
     <h2>Limits</h2>
     <ul>
       <li>1,000 characters per note or task, 16 KiB per request.</li>
-      <li>5 drops per 10 minutes and 20 per day from one address; 150 drops a day in all, counted onchain.</li>
-      <li>It keeps 0.1 MON for gas, and stops sending below it.</li>
+      <li>5 POST requests per 10 minutes from one IP, at Vercel's firewall (counted per region), so every server instance
+        shares it. Behind it, 5 drops per 10 minutes and 20 per day from one IP, counted in each server instance's
+        memory: best effort, since instances do not share it.</li>
+      <li>Each day (UTC), at most 150 drops, and no more than a quarter of the wallet pays for at the most a drop can
+        cost (250,000 gas at the price drops pay). The wallet checks this on each drop as it signs it, by the drop's own
+        nonce, so every instance counts the same drops.</li>
+      <li>It keeps 0.1 MON for gas: it signs no drop whose own cost, at its fee cap, would take the wallet below that.</li>
+      <li>Web pages may ask it to send only from the <a href="https://letterlock-app.vercel.app">Letterlock app</a> and
+        this page. Servers and other agents are not affected.</li>
       <li>A kill switch (<code>AGENT_ENABLED</code>) turns every endpoint that sends anything off.</li>
     </ul>
 
@@ -146,12 +155,15 @@ inside the seal:
         const h = await res.json();
         const d = h.limits && h.limits.dailyDrops;
         box.dataset.state = h.ok ? "live" : "down";
-        title.textContent = h.ok ? "Live" : h.enabled ? "Not answering" : "Switched off";
+        const capped = d && d.used !== null && d.allowedToday !== null && d.allowedToday !== undefined && d.used >= d.allowedToday;
+        title.textContent = h.ok ? "Live" : !h.enabled ? "Switched off" : capped ? "Done for today" : "Not answering";
         text.textContent = h.ok
           ? "Both endpoints answer. Every drop is a real transaction on Monad mainnet."
-          : "The agent is not sending right now; /health says why.";
+          : capped
+            ? `It has sent the drops it allows itself today; it sends again from ${d.resetsAt}.`
+            : "The agent is not sending right now; /health says why.";
         document.getElementById("s-wallet").textContent = h.wallet ? `${h.wallet.balance} (keeps ${h.wallet.reserve})` : "not configured";
-        document.getElementById("s-drops").textContent = d && d.used !== null ? `${d.used} of ${d.cap}` : "unknown";
+        document.getElementById("s-drops").textContent = d && d.used !== null ? `${d.used} of the ${d.allowedToday ?? d.cap} it allows itself today` : "unknown";
         const k = h.key && h.key.published;
         document.getElementById("s-key").textContent = k && typeof k === "object"
           ? `epoch ${k.epoch}, kid ${k.kid}${h.key.matches ? ", held by this agent" : ", NOT the key this agent holds"}`

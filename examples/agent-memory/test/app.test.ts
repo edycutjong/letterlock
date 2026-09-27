@@ -1,14 +1,14 @@
 // The HTTP surface with a fake chain (test/fake-chain.ts) and the SDK's real seal and open: validation, limits, the
-// kill switch, the open-and-answer flow of /task with a software key, /health, and what the logs never contain.
+// kill switch, the open-and-answer flow of /task with a software key, /health, CORS, and what the logs never contain.
 import { randomBytes } from "node:crypto";
-import { deriveAgentKeyPair, deriveKeyPair, fingerprint, open, seal, toHex, type Envelope, type Recipient } from "letterlock";
+import { deriveAgentKeyPair, deriveKeyPair, encodeEnvelope, fingerprint, open, seal, toHex, type Envelope, type Recipient } from "letterlock";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { agentPublicKey } from "../src/agent-key.ts";
 import { createApp, createAppFromEnv, type LogEntry } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
-import { encodeTask, newNonce, parseReply, type TaskReply } from "../src/task.ts";
-import { DIRECTORY, fakeChain } from "./fake-chain.ts";
+import { QUOTE_CHARS, encodeTask, newNonce, parseReply, type TaskReply } from "../src/task.ts";
+import { DIRECTORY, GWEI, dropGas, fakeChain } from "./fake-chain.ts";
 
 const T0 = Date.UTC(2026, 8, 27, 10, 0, 0);
 const IP = "203.0.113.7";
@@ -20,9 +20,9 @@ const setup = (env: Record<string, string | undefined> = {}) => {
   const privateKey = generatePrivateKey();
   const seedHex = toHex(randomBytes(32));
   const config = loadConfig({ AGENT_ENABLED: "true", LETTERLOCK_AGENT_PRIVATE_KEY: privateKey, LETTERLOCK_AGENT_KEY_SEED: seedHex, ...env });
-  const chain = fakeChain();
   const logs: LogEntry[] = [];
   const clock = { t: T0 };
+  const chain = fakeChain({ limits: config.limits, now: () => clock.t });
   const app = createApp({ config, chain, now: () => clock.t, log: (e) => logs.push(e) });
   // the agent's key, published at epoch 2 as on mainnet (epoch 1 there is the deploy smoke test's demo key)
   const agentKey = config.seed ? agentPublicKey(config.seed, 10260n, 2) : undefined;
@@ -36,7 +36,7 @@ const setup = (env: Record<string, string | undefined> = {}) => {
       headers: body === undefined ? headers : { "content-type": "application/json", ...headers },
       ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
     });
-  const post = async (path: string, body: unknown, ip = IP, headers: Record<string, string> = {}) => {
+  const post = async (path: string, body: unknown, ip: string = IP, headers: Record<string, string> = {}) => {
     const res = await app(request("POST", path, body, headers), ip);
     return { status: res.status, headers: res.headers, body: (await res.json()) as Json };
   };
@@ -201,16 +201,64 @@ describe("POST /remember", () => {
     expect((await capped.post("/remember", { to: capped.maya.address, text: "fourth" })).body.error.code).toBe("DAILY_CAP");
   });
 
-  it("keeps a gas reserve: below 0.1 MON it sends nothing (503 GAS_RESERVE); an RPC that fails is 502", async () => {
-    const s = setup();
+  it("keeps a gas reserve, counting the drop's own cost: a drop that would take the wallet below 0.1 MON is not sent (503 GAS_RESERVE); an RPC that fails is 502", async () => {
+    const s = setup({ AGENT_DAILY_SPEND_PERCENT: "100" }); // the reserve alone decides here
     s.chain.state.balance = 10n ** 17n - 1n;
-    const r = await s.post("/remember", { to: s.maya.address, text: "x" });
-    expect([r.status, r.body.error.code]).toEqual([503, "GAS_RESERVE"]);
+    const below = await s.post("/remember", { to: s.maya.address, text: "x" });
+    expect([below.status, below.body.error.code]).toEqual([503, "GAS_RESERVE"]);
+    // exactly the reserve: the balance is not below it, but the drop's own cost would take it there
     s.chain.state.balance = 10n ** 17n;
+    const at = await s.post("/remember", { to: s.maya.address, text: "x" });
+    expect([at.status, at.body.error.code]).toEqual([503, "GAS_RESERVE"]);
+    expect(at.body.error.message).toMatch(/can cost up to 0\.\d+ MON; the wallet holds 0\.1 MON and keeps 0\.1 MON; nothing was sent$/);
+    // the reserve plus one drop's cost at its fee cap (182.4 gwei) is enough, and the wallet ends at or above the reserve
+    s.chain.state.balance = 10n ** 17n + 30_000_000n * GWEI;
     expect((await s.post("/remember", { to: s.maya.address, text: "x" })).status).toBe(200);
+    expect(s.chain.state.balance >= 10n ** 17n).toBe(true);
     s.chain.state.balanceFails = true;
     expect((await s.post("/remember", { to: s.maya.address, text: "x" })).body.error.code).toBe("CHAIN_UNAVAILABLE");
     expect(s.chain.dropped).toHaveLength(1);
+  });
+
+  it("the daily allowance follows the wallet: at most 25% of what it held at 00:00 UTC, at the most a drop can cost (250,000 gas at the price it pays)", async () => {
+    const s = setup();
+    const start = 988_393_318_000_000_000n; // the wallet on 2026-09-27; at 102 gwei a drop costs at most 0.0255 MON
+    s.chain.state.balance = start;
+    const largest = "🔒".repeat(1000); // what someone spending the wallet would send: the largest note
+    for (let i = 0; i < 9; i++) expect((await s.post("/remember", { to: s.maya.address, text: largest }, `198.51.100.${i}`)).status, `drop ${i}`).toBe(200);
+    const tenth = await s.post("/remember", { to: s.maya.address, text: largest }, "198.51.100.200");
+    expect([tenth.status, tenth.body.error.code]).toEqual([429, "DAILY_CAP"]);
+    expect(tenth.body.error.message).toContain("the agent has sent 9 of the 9 drops it allows itself today");
+    expect(Number(tenth.headers.get("retry-after"))).toBe(14 * 3600);
+    expect(s.chain.dropped).toHaveLength(9);
+    expect((start - s.chain.state.balance) * 4n <= start).toBe(true); // a quarter of the wallet at most
+    // a refill counts at once
+    s.chain.state.balance += 5n * 10n ** 18n;
+    expect((await s.post("/remember", { to: s.maya.address, text: "after the refill" }, "198.51.100.201")).status).toBe(200);
+    s.clock.t += 5000;
+    expect((await s.get("/health", "198.51.100.202")).body.limits.dailyDrops).toMatchObject({ cap: 150, spendPercent: 25, used: 10 });
+  });
+
+  it("concurrent requests from many IPs cannot spend past the reserve: each drop is checked when it is signed, one at a time", async () => {
+    const s = setup({ AGENT_DAILY_SPEND_PERCENT: "100" });
+    s.chain.state.maxFeePerGas = s.chain.state.baseFeePerGas + s.chain.state.maxPriorityFeePerGas; // pays its fee cap: the test counts exactly
+    const sample = await seal({ chainId: 143, directory: DIRECTORY, to: { recipient: s.maya.address.toLowerCase() as Recipient, publicKey: s.maya.keys.publicKey, epoch: 1 }, plaintext: utf8("burst 0") });
+    const cost = dropGas(encodeEnvelope(sample).length) * s.chain.state.maxFeePerGas;
+    s.chain.state.balance = 10n ** 17n + 3n * cost + cost / 2n; // the reserve, and three drops and a half
+    const all = await Promise.all(Array.from({ length: 8 }, (_, i) => s.post("/remember", { to: s.maya.address, text: `burst ${i}` }, `203.0.113.${10 + i}`)));
+    expect(all.filter((r) => r.status === 200)).toHaveLength(3);
+    expect(all.filter((r) => r.status === 503).map((r) => r.body.error.code)).toEqual(Array(5).fill("GAS_RESERVE"));
+    expect(s.chain.dropped).toHaveLength(3);
+    expect(s.chain.state.balance >= 10n ** 17n).toBe(true);
+  });
+
+  it("refuses to sign a drop above the gas cap (422 DROP_TOO_COSTLY), and the refusal does not use up the IP's drops", async () => {
+    const s = setup({ AGENT_MAX_DROP_GAS: "100000" });
+    const big = await s.post("/remember", { to: s.maya.address, text: "🔒".repeat(1000) }); // 5,585 bytes: about 248,600 gas
+    expect([big.status, big.body.error.code]).toEqual([422, "DROP_TOO_COSTLY"]);
+    expect(big.body.error.message).toMatch(/^this drop needs \d+ gas; the agent signs no drop above 100000; nothing was sent$/);
+    expect(s.chain.dropped).toHaveLength(0);
+    for (let i = 0; i < 5; i++) expect((await s.post("/remember", { to: s.maya.address, text: `small ${i}` })).status).toBe(200);
   });
 });
 
@@ -244,18 +292,70 @@ describe("POST /task", () => {
     s.chain.keys.set(mallory.address.toLowerCase() as Recipient, { publicKey: mallory.keys.publicKey, epoch: 1 });
     const envelope = await s.sealTask({ text: "my bank PIN hint" });
     const stolen = await s.post("/task", { from: mallory.address, envelope });
-    expect([stolen.status, stolen.body.error.code]).toEqual([403, "REPLY_TO_MISMATCH"]);
+    expect([stolen.status, stolen.body.error.code]).toEqual([422, "TASK_REFUSED"]);
     expect(s.chain.dropped).toHaveLength(0);
     expect((await s.post("/task", { from: s.maya.address, envelope })).status).toBe(200); // the sender's own request still works
   });
 
-  it("answers each nonce once: a replayed task is 409 REPLAYED", async () => {
+  it("answers each nonce once per server instance: a replayed task is refused", async () => {
     const s = setup();
     const envelope = await s.sealTask();
     expect((await s.post("/task", { from: s.maya.address, envelope })).status).toBe(200);
     const again = await s.post("/task", { from: s.maya.address, envelope });
-    expect([again.status, again.body.error.code]).toEqual([409, "REPLAYED"]);
+    expect([again.status, again.body.error.code]).toEqual([422, "TASK_REFUSED"]);
     expect(s.chain.dropped).toHaveLength(1);
+    // the nonce lives in this instance's memory: another instance (a second createApp) answers the copy again
+    const other = createApp({ config: s.config, chain: s.chain, now: () => s.clock.t, log: () => undefined });
+    const res = await other(s.request("POST", "/task", { from: s.maya.address, envelope }), IP);
+    expect(res.status).toBe(200);
+    expect(s.chain.dropped).toHaveLength(2);
+  });
+
+  it("every refusal of a task that opened is one answer: whoever posts a copy learns nothing about what is sealed in it", async () => {
+    const s = setup();
+    const mallory = privateKeyToAccount(generatePrivateKey()).address;
+    s.chain.keys.set(mallory.toLowerCase() as Recipient, { publicKey: deriveKeyPair(randomBytes(32), 1).publicKey, epoch: 1 });
+    const nowSec = Math.floor(T0 / 1000);
+    const answered = await s.sealTask({ text: "answered once already" });
+    expect((await s.post("/task", { from: s.maya.address, envelope: answered })).status).toBe(200);
+    const bad = await seal({ chainId: 143, directory: DIRECTORY, to: { recipient: "agent:10260", publicKey: s.agentKey!.publicKey, epoch: 2 }, plaintext: utf8('{"v":1,"replyTo":"nope"}') });
+    const cases: [string, { from: string; envelope: Envelope }][] = [
+      ["a wrong guess of the sealed replyTo", { from: mallory, envelope: await s.sealTask() }],
+      ["the right replyTo, sealed 601 s ago", { from: s.maya.address, envelope: await s.sealTask({ issuedAt: nowSec - 601 }) }],
+      ["the right replyTo, sealed 61 s ahead", { from: s.maya.address, envelope: await s.sealTask({ issuedAt: nowSec + 61 }) }],
+      ["the right replyTo, 1,001 characters", { from: s.maya.address, envelope: await s.sealTask({ text: "x".repeat(1001) }) }],
+      ["the right replyTo, a nonce answered already", { from: s.maya.address, envelope: answered }],
+      ["sealed JSON that is not a task", { from: s.maya.address, envelope: bad }],
+    ];
+    const answers = [];
+    for (const [what, body] of cases) {
+      const r = await s.post("/task", body);
+      answers.push([r.status, JSON.stringify(r.body)]);
+      expect([r.status, r.body.error.code], what).toEqual([422, "TASK_REFUSED"]);
+      // nothing sealed is repeated: not the time, the length, the nonce or an address
+      for (const leak of [String(nowSec - 601), String(nowSec + 61), "1001", s.maya.address.toLowerCase(), mallory.toLowerCase()])
+        expect(r.body.error.message, `${what}: ${leak}`).not.toContain(leak);
+    }
+    expect(new Set(answers.map((a) => JSON.stringify(a))).size).toBe(1);
+    expect(s.chain.dropped).toHaveLength(1);
+  });
+
+  it("quotes at most 80 characters of the task, so no task makes its answer cost more than a short note", async () => {
+    const s = setup();
+    // the longest reply address there is: an agent id of 78 digits
+    const far = `agent:${2n ** 256n - 2n}` as Recipient;
+    const farKeys = deriveAgentKeyPair(randomBytes(32), 2n ** 256n - 2n, 1);
+    s.chain.keys.set(far, { publicKey: farKeys.publicKey, epoch: 1 });
+    for (const text of ["\u0001".repeat(1000), "🔒".repeat(1000), '"\\'.repeat(500), `a${"\u2028".repeat(999)}`]) {
+      const r = await s.post("/task", { from: far, envelope: await s.sealTask({ replyTo: far, text }) });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      // 1,000 control characters quoted in full made an 8,981-byte answer (384,237 gas on Monad mainnet)
+      expect(r.body.bytes, JSON.stringify(text.slice(0, 2))).toBeLessThanOrEqual(1700);
+      const reply = parseReply(await open(r.body.reply as Envelope, farKeys));
+      expect(reply.task.chars).toBe(Array.from(text).length);
+      expect(reply.text).toContain(`${reply.task.sha256}, beginning “`);
+      expect(Array.from(reply.text.slice(reply.text.indexOf("“") + 1, reply.text.indexOf("”"))).length).toBe(QUOTE_CHARS + 1); // 80 and "…"
+    }
   });
 
   it("a task refused before anything was sent can be posted again (the nonce is released)", async () => {
@@ -273,8 +373,8 @@ describe("POST /task", () => {
     const stranger = deriveAgentKeyPair(randomBytes(32), 10260n, 2);
     const altered = await s.sealTask();
     const cases: [Promise<Envelope>, number, string][] = [
-      [s.sealTask({ issuedAt: Math.floor(T0 / 1000) - 601 }), 422, "TASK_STALE"],
-      [s.sealTask({ text: "x".repeat(1001) }), 422, "TASK_TOO_LONG"],
+      [s.sealTask({ issuedAt: Math.floor(T0 / 1000) - 601 }), 422, "TASK_REFUSED"],
+      [s.sealTask({ text: "x".repeat(1001) }), 422, "TASK_REFUSED"],
       [s.sealTask({}, { recipient: "agent:10261" }), 422, "NOT_FOR_THIS_AGENT"],
       [s.sealTask({}, { chainId: 10143 }), 422, "WRONG_DIRECTORY"],
       [s.sealTask({}, { directory: "0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a" }), 422, "WRONG_DIRECTORY"],
@@ -318,13 +418,29 @@ describe("GET /health", () => {
       enabled: true,
       agent: { agentId: "10260", recipient: "agent:10260", registry: "eip155:143:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432", card: "https://letterlock-agent.vercel.app/.well-known/agent-card.json" },
       chain: { chainId: 143, directory: DIRECTORY },
-      wallet: { address, balance: "1 MON", reserve: "0.1 MON" },
+      wallet: { address, balance: "100 MON", reserve: "0.1 MON" },
       key: { held: { epoch: 2, kid: s.agentKey!.kid }, published: { epoch: 2, kid: s.agentKey!.kid }, matches: true },
-      limits: { textMaxChars: 1000, dailyDrops: { cap: 150, used: 0, counted: "chain" } },
+      limits: {
+        textMaxChars: 1000,
+        dailyDrops: { cap: 150, spendPercent: 25, allowedToday: 150, used: 0, counted: "chain" },
+        maxDropGas: "250000",
+        gasPriceGwei: 102,
+        maxDropCost: "0.0255 MON",
+        taskNonce: "answered once per server instance, remembered for 720 s",
+      },
     });
+    expect(r.body.limits.perIpCounted).toMatch(/^in each server instance's memory: best effort/);
     const body = JSON.stringify(r.body).toLowerCase();
     expect(body).not.toContain(s.privateKey.slice(2).toLowerCase());
     expect(body).not.toContain(s.seedHex.toLowerCase());
+  });
+
+  it("is 503 when today's allowance is used up, and says how many drops the wallet allows today", async () => {
+    const s = setup();
+    s.chain.state.balance = 988_393_318_000_000_000n - 9n * 248_600n * 102n * GWEI; // after 9 of the largest notes today
+    s.chain.state.usedToday = 9;
+    const r = await s.get("/health");
+    expect([r.status, r.body.ok, r.body.limits.dailyDrops.allowedToday, r.body.limits.dailyDrops.used]).toEqual([503, false, 9, 9]);
   });
 
   it("is 503 when the published key is not the one the agent holds", async () => {
@@ -352,8 +468,8 @@ describe("routing", () => {
     expect([wrong.status, wrong.headers.get("allow")]).toEqual([405, "POST, OPTIONS"]);
     expect((await s.post("/health", {})).status).toBe(405);
     expect((await s.get("/nope")).status).toBe(404);
-    const pre = await s.app(s.request("OPTIONS", "/remember"), IP);
-    expect([pre.status, pre.headers.get("access-control-allow-origin"), pre.headers.get("access-control-allow-headers")]).toEqual([204, "*", "content-type"]);
+    const pre = await s.app(s.request("OPTIONS", "/remember", undefined, { origin: "https://letterlock-app.vercel.app", "access-control-request-method": "POST" }), IP);
+    expect([pre.status, pre.headers.get("access-control-allow-origin"), pre.headers.get("access-control-allow-headers")]).toEqual([204, "https://letterlock-app.vercel.app", "content-type"]);
     expect((await s.get("/remember/")).status).toBe(405); // a trailing slash is the same route
   });
 
@@ -369,6 +485,50 @@ describe("routing", () => {
     const r = await s.get("/health");
     expect([r.status, r.body.error.code]).toEqual([429, "RATE_LIMITED"]);
     expect((await s.get("/health", "198.51.100.9")).status).toBe(200);
+  });
+});
+
+describe("CORS", () => {
+  const APP = "https://letterlock-app.vercel.app";
+  const OTHER = "https://some-page.example";
+  const preflight = (s: ReturnType<typeof setup>, origin: string, method = "POST") =>
+    s.app(s.request("OPTIONS", "/remember", undefined, { origin, "access-control-request-method": method, "access-control-request-headers": "content-type" }), IP);
+
+  it("pages of the Letterlock app and of the agent may POST; any other page's preflight and POST are refused, and nothing is sent", async () => {
+    const s = setup();
+    for (const origin of [APP, "https://letterlock-agent.vercel.app"]) {
+      const ok = await preflight(s, origin);
+      expect([ok.status, ok.headers.get("access-control-allow-origin"), ok.headers.get("access-control-allow-headers"), ok.headers.get("vary")]).toEqual([204, origin, "content-type", "origin"]);
+    }
+    const no = await preflight(s, OTHER);
+    expect([no.status, no.headers.get("access-control-allow-origin")]).toEqual([403, null]);
+    const post = await s.post("/remember", { to: s.maya.address, text: "asked from another site" }, IP, { origin: OTHER });
+    expect([post.status, post.body.error.code, post.headers.get("access-control-allow-origin")]).toEqual([403, "ORIGIN_NOT_ALLOWED", null]);
+    const task = await s.post("/task", { from: s.maya.address, envelope: await s.sealTask() }, IP, { origin: "null" });
+    expect([task.status, task.body.error.code]).toEqual([403, "ORIGIN_NOT_ALLOWED"]);
+    expect(s.chain.dropped).toHaveLength(0);
+    const fromApp = await s.post("/remember", { to: s.maya.address, text: "asked from the app" }, IP, { origin: APP });
+    expect([fromApp.status, fromApp.headers.get("access-control-allow-origin")]).toEqual([200, APP]);
+    const fromServer = await s.post("/remember", { to: s.maya.address, text: "asked from a server" }); // no Origin: not a browser
+    expect([fromServer.status, fromServer.headers.get("access-control-allow-origin")]).toEqual([200, null]);
+    expect(s.chain.dropped).toHaveLength(2);
+  });
+
+  it("reads stay open to any page: GET /health, and a GET preflight", async () => {
+    const s = setup();
+    const h = await s.app(s.request("GET", "/health", undefined, { origin: OTHER }), IP);
+    expect([h.status, h.headers.get("access-control-allow-origin")]).toEqual([200, "*"]);
+    const pre = await s.app(s.request("OPTIONS", "/health", undefined, { origin: OTHER, "access-control-request-method": "GET" }), IP);
+    expect([pre.status, pre.headers.get("access-control-allow-origin")]).toEqual([204, "*"]);
+  });
+
+  it("AGENT_ALLOWED_ORIGINS replaces the list; an origin with a path or upper case is a configuration error", async () => {
+    const s = setup({ AGENT_ALLOWED_ORIGINS: "http://localhost:3000, https://staging.example" });
+    expect(s.config.allowedOrigins).toEqual(["http://localhost:3000", "https://staging.example"]);
+    expect((await preflight(s, "http://localhost:3000")).status).toBe(204);
+    expect((await preflight(s, APP)).status).toBe(403);
+    for (const bad of ["https://a.example/", "https://A.example", "letterlock-app.vercel.app", "*"])
+      expect(() => loadConfig({ AGENT_ALLOWED_ORIGINS: bad }), bad).toThrow(/AGENT_ALLOWED_ORIGINS/);
   });
 });
 
@@ -419,10 +579,14 @@ describe("configuration", () => {
     }
   });
 
-  it("defaults: mainnet, agent 10260, keys from epoch 2, 150 drops a day, 0.1 MON reserve, 1000 characters", () => {
+  it("defaults: mainnet, agent 10260, keys from epoch 2, at most 150 drops and 25% of the wallet a day, 250,000 gas a drop, 0.1 MON reserve, 1000 characters", () => {
     const c = loadConfig({});
-    expect([c.chain, c.agentId, c.keyFirstEpoch, c.limits.dailyDrops, c.limits.minBalanceWei, c.limits.textMaxChars, c.enabled]).toEqual(["monad", 10260n, 2, 150, 10n ** 17n, 1000, false]);
+    expect([c.chain, c.agentId, c.keyFirstEpoch, c.limits.dailyDrops, c.limits.dailySpendPercent, c.limits.maxDropGas, c.limits.minBalanceWei, c.limits.textMaxChars, c.enabled])
+      .toEqual(["monad", 10260n, 2, 150, 25, 250_000n, 10n ** 17n, 1000, false]);
+    expect(c.allowedOrigins).toEqual(["https://letterlock-app.vercel.app", "https://letterlock-agent.vercel.app"]);
     expect(() => loadConfig({ LETTERLOCK_CHAIN: "ethereum" })).toThrow(/LETTERLOCK_CHAIN/);
     expect(() => loadConfig({ AGENT_DAILY_DROP_CAP: "-1" })).toThrow(/AGENT_DAILY_DROP_CAP/);
+    expect(() => loadConfig({ AGENT_DAILY_SPEND_PERCENT: "0" })).toThrow(/AGENT_DAILY_SPEND_PERCENT/);
+    expect(() => loadConfig({ AGENT_MAX_DROP_GAS: "20000" })).toThrow(/AGENT_MAX_DROP_GAS/);
   });
 });

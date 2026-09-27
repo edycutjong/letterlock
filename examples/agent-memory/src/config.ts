@@ -12,13 +12,25 @@ export type Limits = {
   readonly textMaxChars: number;
   /** Bytes of request body read before the request is refused (413). */
   readonly bodyMaxBytes: number;
-  /** Drops one IP may cause (POST /remember or /task that reach the chain), per server instance. */
+  /**
+   * Drops one IP may cause (POST /remember or /task that reach the chain), counted in ONE server instance's memory:
+   * best effort, since instances do not share it. The per-IP limit every instance shares is the Vercel firewall rule
+   * in vercel-firewall.json.
+   */
   readonly perIpDrops: readonly Window[];
-  /** Requests of any kind one IP may make, per server instance. */
+  /** Requests of any kind one IP may make, counted in one server instance's memory, as above. */
   readonly perIpRequests: readonly Window[];
-  /** Drops per UTC day from the agent's wallet, counted onchain from its nonce: shared by every instance. */
+  /** The most drops per UTC day, whatever the wallet holds. */
   readonly dailyDrops: number;
-  /** The wallet keeps at least this much MON (in wei); below it no drop is sent. */
+  /**
+   * Per UTC day the agent commits at most this percentage of its wallet to drops, each counted at the most one drop
+   * may cost: maxDropGas at the price it pays (the base fee plus its priority fee). It is checked on the transaction's
+   * own nonce when the drop is signed (spend.ts), so every instance counts the same drops.
+   */
+  readonly dailySpendPercent: number;
+  /** No drop is signed with a gas limit above this: the largest /remember (1,000 four-byte characters) needs 248,600. */
+  readonly maxDropGas: bigint;
+  /** The wallet keeps at least this much MON (in wei): a drop whose gas × maxFeePerGas would take it below is not signed. */
   readonly minBalanceWei: bigint;
   /** A task is refused when its `issuedAt` is more than this many seconds old... */
   readonly taskMaxAgeSec: number;
@@ -44,6 +56,12 @@ export type AgentConfig = {
   readonly account: PrivateKeyAccount | undefined;
   /** Where the agent is served: links in /health. */
   readonly publicUrl: string;
+  /**
+   * The web origins whose pages may POST to the agent from a browser (CORS). Any other page's POST is refused, so no
+   * site can make its visitors' browsers spend the agent's gas. Requests without an Origin header (servers, agents,
+   * curl) are not affected.
+   */
+  readonly allowedOrigins: readonly string[];
   readonly limits: Limits;
 };
 
@@ -56,6 +74,8 @@ export class ConfigError extends Error {
 
 export const DEFAULT_AGENT_ID = 10260n;
 export const DEFAULT_PUBLIC_URL = "https://letterlock-agent.vercel.app";
+/** The Letterlock app (its /judge route asks the agent from the page) and the agent's own page. */
+export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://letterlock-app.vercel.app", DEFAULT_PUBLIC_URL];
 
 export const DEFAULT_LIMITS: Limits = {
   textMaxChars: 1000,
@@ -63,6 +83,8 @@ export const DEFAULT_LIMITS: Limits = {
   perIpDrops: [{ windowSec: 600, max: 5 }, { windowSec: 86_400, max: 20 }],
   perIpRequests: [{ windowSec: 60, max: 60 }],
   dailyDrops: 150,
+  dailySpendPercent: 25,
+  maxDropGas: 250_000n,
   minBalanceWei: parseEther("0.1"),
   taskMaxAgeSec: 600,
   taskMaxSkewSec: 60,
@@ -71,6 +93,7 @@ export const DEFAULT_LIMITS: Limits = {
 type Env = Readonly<Record<string, string | undefined>>;
 
 const HEX32 = /^(0x)?[0-9a-fA-F]{64}$/;
+const ORIGIN = /^https?:\/\/[a-z0-9.-]+(:\d{1,5})?$/;
 
 const integer = (env: Env, name: string, fallback: number, min: number, max: number): number => {
   const raw = env[name];
@@ -90,6 +113,15 @@ const secret32 = (env: Env, name: string): Uint8Array | undefined => {
   const bytes = Uint8Array.from(hex.match(/../g)!, (b) => parseInt(b, 16));
   if (bytes.every((b) => b === 0)) throw new ConfigError(`${name} must not be all zeros`);
   return bytes;
+};
+
+const origins = (env: Env): readonly string[] => {
+  const raw = env.AGENT_ALLOWED_ORIGINS?.trim();
+  if (raw === undefined || raw === "") return DEFAULT_ALLOWED_ORIGINS;
+  const list = raw.split(",").map((o) => o.trim()).filter((o) => o !== "");
+  for (const o of list)
+    if (!ORIGIN.test(o)) throw new ConfigError(`AGENT_ALLOWED_ORIGINS must list origins such as https://letterlock-app.vercel.app (scheme and host in lower case, no path), got ${JSON.stringify(o)}`);
+  return list;
 };
 
 export const loadConfig = (env: Env): AgentConfig => {
@@ -133,6 +165,7 @@ export const loadConfig = (env: Env): AgentConfig => {
     seed: secret32(env, "LETTERLOCK_AGENT_KEY_SEED"),
     account,
     publicUrl,
+    allowedOrigins: origins(env),
     limits: {
       ...DEFAULT_LIMITS,
       perIpDrops: [
@@ -140,6 +173,8 @@ export const loadConfig = (env: Env): AgentConfig => {
         { windowSec: 86_400, max: integer(env, "AGENT_PER_IP_DROPS_DAY", 20, 1, 100_000) },
       ],
       dailyDrops: integer(env, "AGENT_DAILY_DROP_CAP", DEFAULT_LIMITS.dailyDrops, 0, 1_000_000),
+      dailySpendPercent: integer(env, "AGENT_DAILY_SPEND_PERCENT", DEFAULT_LIMITS.dailySpendPercent, 1, 100),
+      maxDropGas: BigInt(integer(env, "AGENT_MAX_DROP_GAS", Number(DEFAULT_LIMITS.maxDropGas), 21_000, 30_000_000)),
       minBalanceWei: minBalanceRaw ? parseEther(minBalanceRaw) : DEFAULT_LIMITS.minBalanceWei,
     },
   };

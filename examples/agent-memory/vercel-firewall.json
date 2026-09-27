@@ -1,0 +1,23 @@
+{
+  "firewallEnabled": true,
+  "rules": [
+    {
+      "name": "agent POSTs per IP",
+      "description": "Every POST (POST /remember and /task: nothing else takes one) from one IP, 5 per 10 minutes, fixed window, counted per region. Shared by all server instances, unlike the agent's in-memory limits.",
+      "active": true,
+      "conditionGroup": [
+        {
+          "conditions": [
+            { "type": "method", "op": "eq", "value": "POST" }
+          ]
+        }
+      ],
+      "action": {
+        "mitigate": {
+          "action": "rate_limit",
+          "rateLimit": { "algo": "fixed_window", "window": 600, "limit": 5, "keys": ["ip"], "action": "rate_limit" }
+        }
+      }
+    }
+  ]
+}

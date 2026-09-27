@@ -1,9 +1,12 @@
 // Everything the agent reads from or sends to Monad: the SDK's client for resolve and drop, and a viem client for the
-// wallet's balance and nonce. Drops from one instance are sent one at a time, so two requests never race for a nonce.
+// wallet's balance, nonce and fees. Drops from one instance are sent one at a time, so two requests never race for a
+// nonce, and each is signed by the guarded wallet (spend.ts): the transaction itself is checked against the gas cap,
+// the day's allowance and the reserve at the moment it is signed.
 import { DEPLOYMENTS, letterlock, type DropResult, type Envelope, type LetterlockClient, type ResolvedKey } from "letterlock";
 import { createPublicClient, http, type Address, type PublicClient } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import type { AgentConfig } from "./config.ts";
+import { SpendRefused, guardedWallet, type SpendState } from "./spend.ts";
 
 export type DropsToday = {
   /** Transactions the wallet sent since 00:00 UTC: every one is a drop, since the wallet is used for nothing else. */
@@ -21,11 +24,16 @@ export type AgentChain = {
   readonly explorer: string;
   readonly ll: LetterlockClient;
   resolve(to: string): Promise<ResolvedKey>;
-  /** drop() from `account`, one at a time per instance; resent (fresh nonce) when another sender took the nonce. */
+  /**
+   * drop() from `account`, one at a time per instance, signed only if spend.ts finds no reason not to (it throws
+   * SpendRefused, inside the SDK's error, and nothing is sent); resent (fresh nonce) when another sender took the nonce.
+   */
   drop(account: PrivateKeyAccount, envelope: Envelope): Promise<DropResult>;
   balance(address: Address): Promise<bigint>;
   nonce(address: Address): Promise<number>;
   dropsToday(address: Address, nowMs: number): Promise<DropsToday>;
+  /** What a drop sent now pays per gas (eth_gasPrice: the base fee plus the priority fee), reused for 5 s. */
+  gasPrice(): Promise<bigint>;
 };
 
 const DAY_MS = 86_400_000;
@@ -46,7 +54,8 @@ const messages = (e: unknown): string => {
 /**
  * `send`, one call at a time (a call starts when the previous one has settled), and sent again, at most twice, when
  * the node says another transaction took its nonce: then nothing of this call was accepted, and a new send reads a
- * fresh nonce. Any other failure is thrown as it is, and does not hold up the calls queued behind it.
+ * fresh nonce (and the guarded wallet checks the new transaction again). Any other failure is thrown as it is, and
+ * does not hold up the calls queued behind it.
  */
 export const oneAtATime = <A extends unknown[], T>(send: (...args: A) => Promise<T>): ((...args: A) => Promise<T>) => {
   let queue: Promise<unknown> = Promise.resolve();
@@ -101,7 +110,9 @@ export const firstBlockAtOrAfter = async (pub: Pick<PublicClient, "getBlock">, t
   return hi;
 };
 
-export const agentChain = (config: Pick<AgentConfig, "chain" | "rpcUrl" | "directory" | "deployBlock"> & { pollingInterval?: number }): AgentChain => {
+export const agentChain = (
+  config: Pick<AgentConfig, "chain" | "rpcUrl" | "directory" | "deployBlock" | "limits"> & { pollingInterval?: number },
+): AgentChain => {
   const deployment = DEPLOYMENTS[config.chain];
   const rpcUrl = config.rpcUrl ?? deployment.rpcUrl;
   const ll = letterlock({
@@ -113,18 +124,50 @@ export const agentChain = (config: Pick<AgentConfig, "chain" | "rpcUrl" | "direc
   });
   const pub = createPublicClient({ transport: http(rpcUrl) });
 
-  // The day's baseline: the wallet's nonce before the day's first block. Read once per day per instance.
-  let day: { start: number; nonceBefore: number } | undefined;
+  // The day's baseline, per wallet: its nonce before the day's first block. Read once per day per instance.
+  const days = new Map<Address, { start: number; nonceBefore: number }>();
+  const dayStart = async (address: Address, nowMs: number) => {
+    const start = Math.floor(nowMs / DAY_MS) * DAY_MS;
+    const known = days.get(address);
+    if (known?.start === start) return known;
+    const first = await firstBlockAtOrAfter(pub, BigInt(start / 1000));
+    const day = { start, nonceBefore: first === 0n ? 0 : await pub.getTransactionCount({ address, blockNumber: first - 1n }) };
+    days.set(address, day);
+    return day;
+  };
   // This instance's own drops today: the count when the RPC refuses the historical read.
   let own = { start: 0, count: 0 };
 
+  /** What the guarded wallet reads when asked to sign. Without it the wallet signs nothing: it cannot count. */
+  const spendState = (address: Address) => async (): Promise<SpendState> => {
+    const nowMs = Date.now();
+    try {
+      const [balance, block, day] = await Promise.all([pub.getBalance({ address }), pub.getBlock({ blockTag: "latest" }), dayStart(address, nowMs)]);
+      return { balance, baseFeePerGas: block.baseFeePerGas ?? 0n, dayStartNonce: day.nonceBefore, resetsAt: day.start + DAY_MS };
+    } catch (e) {
+      throw new SpendRefused("COUNT_UNAVAILABLE", "the RPC did not answer the wallet's balance, the base fee or the wallet's nonce at 00:00 UTC, so the agent cannot count today's spend; nothing was signed", { cause: e });
+    }
+  };
+
   const nonce = (address: Address) => pub.getTransactionCount({ address, blockTag: "pending" });
   const drop = oneAtATime(async (account: PrivateKeyAccount, envelope: Envelope) => {
-    const result = await ll.drop({ account, envelope });
+    const signer = guardedWallet(account, { directory: ll.directory, limits: config.limits, state: spendState(account.address) });
+    const result = await ll.drop({ account: signer, envelope });
     const start = Math.floor(Date.now() / DAY_MS) * DAY_MS;
     own = own.start === start ? { start, count: own.count + 1 } : { start, count: 1 };
     return result;
   });
+
+  let price: { at: number; value: Promise<bigint> } | undefined;
+  const gasPrice = (): Promise<bigint> => {
+    const t = Date.now();
+    if (!price || t - price.at >= 5000) {
+      const value = pub.getGasPrice();
+      value.catch(() => { if (price?.value === value) price = undefined; });
+      price = { at: t, value };
+    }
+    return price.value;
+  };
 
   return {
     chainId: deployment.chainId,
@@ -136,15 +179,12 @@ export const agentChain = (config: Pick<AgentConfig, "chain" | "rpcUrl" | "direc
     drop,
     balance: (address) => pub.getBalance({ address }),
     nonce,
+    gasPrice,
     async dropsToday(address, nowMs) {
       const start = Math.floor(nowMs / DAY_MS) * DAY_MS;
       const resetsAt = start + DAY_MS;
       try {
-        if (day?.start !== start) {
-          const first = await firstBlockAtOrAfter(pub, BigInt(start / 1000));
-          const nonceBefore = first === 0n ? 0 : await pub.getTransactionCount({ address, blockNumber: first - 1n });
-          day = { start, nonceBefore };
-        }
+        const day = await dayStart(address, nowMs);
         return { used: Math.max(0, (await nonce(address)) - day.nonceBefore), resetsAt, source: "chain" };
       } catch {
         return { used: own.start === start ? own.count : 0, resetsAt, source: "instance" };

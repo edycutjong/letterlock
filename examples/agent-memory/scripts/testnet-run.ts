@@ -75,14 +75,14 @@ try {
   check("remember", rem.status === 200 && "opened" in rem && rem.opened!.matches, rem);
 
   const t = await task(s, { from: recipient, text: `testnet task ${stamp}: what did I seal to agent:10260?`, openWith, sealTo: "health" });
-  const tOk = t.status === 200 && "opened" in t && !!t.opened && t.opened.inReplyToMatches && t.opened.quotesTask && t.opened.sealedToMatches;
+  const tOk = t.status === 200 && "opened" in t && !!t.opened && t.opened.inReplyToMatches && t.opened.sha256Matches && t.opened.quotesTask && t.opened.sealedToMatches;
   const { envelope: taskEnvelope, ...tShown } = t as typeof t & { envelope: unknown };
   check("task", tOk, tShown);
 
   // refusals: none of these may send anything
   const nonceMid = await rpc.getTransactionCount({ address: wallet });
   const replay = await post(base, "/task", { from: recipient, envelope: taskEnvelope });
-  check("task replayed → 409", replay.status === 409, { status: replay.status, code: replay.body.error?.code });
+  check("task replayed → 422 TASK_REFUSED", replay.status === 422 && replay.body.error?.code === "TASK_REFUSED", { status: replay.status, code: replay.body.error?.code });
   const other = privateKeyToAccount(`0x${randomBytes(32).toString("hex")}`).address;
   const held = s.health.key.held as { epoch: number; publicKey: string };
   const fresh = await seal({
@@ -92,7 +92,8 @@ try {
     plaintext: encodeTask({ replyTo: recipient as `0x${string}`, nonce: newNonce(), issuedAt: Math.floor(Date.now() / 1000), text: "posted with another from" }),
   });
   const stolen = await post(base, "/task", { from: other, envelope: fresh });
-  check("task posted with another from → 403", stolen.status === 403, { status: stolen.status, code: stolen.body.error?.code });
+  // `other` has no published key, so the task is refused before it is opened (a keyed `from` gets TASK_REFUSED, as the replay above)
+  check("task posted with another from → 422", stolen.status === 422 && stolen.body.error?.code === "NO_KEY_PUBLISHED", { status: stolen.status, code: stolen.body.error?.code });
   const noKey = await post(base, "/remember", { to: other, text: "to an address without a key" });
   check("remember to an address without a key → 422", noKey.status === 422, { status: noKey.status, code: noKey.body.error?.code });
   const long = await post(base, "/remember", { to: recipient, text: "x".repeat(1001) });

@@ -28,8 +28,9 @@ import {
   type LetterlockClient,
   type Recipient,
 } from "letterlock";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { createPublicClient, http } from "viem";
-import { encodeTask, newNonce, parseReply, type TaskReply } from "../src/task.ts";
+import { encodeTask, newNonce, parseReply, quoteOf, type TaskReply } from "../src/task.ts";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -128,7 +129,16 @@ export const task = async (s: Session, o: { from: string; text: string; openWith
     epoch: r.body.epoch as number,
     onchain: { block: onchain.block, from: onchain.from, gasUsed: onchain.gasUsed, bytes: onchain.bytes, receipt: onchain.status, inInbox: true, sameEnvelope: true },
     ...(reply
-      ? { opened: { reply, inReplyToMatches: reply.inReplyTo === t.nonce, quotesTask: reply.text.includes(`“${o.text}”`), sealedToMatches: reply.task.sealedTo.kid === envelope.kid } }
+      ? {
+          opened: {
+            reply,
+            inReplyToMatches: reply.inReplyTo === t.nonce,
+            // the answer names the whole task by its SHA-256, and quotes its first 80 characters (src/task.ts, quoteOf)
+            sha256Matches: reply.task.sha256 === toHex(sha256(new TextEncoder().encode(o.text))) && reply.task.chars === Array.from(o.text).length,
+            quotesTask: reply.text.includes(`“${quoteOf(o.text)}”`),
+            sealedToMatches: reply.task.sealedTo.kid === envelope.kid,
+          },
+        }
       : {}),
     envelope,
     nonce: t.nonce,
