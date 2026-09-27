@@ -10,6 +10,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck && tsc -p scripts",
     "spike:browser": "pnpm --filter prf-browser-spike test",
+    "verify": "node scripts/verify.ts",
     "bench": "node scripts/bench.ts",
     "verify:offline": "node scripts/verify_offline.ts",
     "fixtures": "node scripts/fixtures.ts",
