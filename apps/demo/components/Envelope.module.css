@@ -1,40 +1,93 @@
 /* The envelope is drawn in layers inside one stacking context (the stage), back to front:
      1 the inside of the envelope · 2 the flap, when folded back · 3 the letter · 4 the pocket's face
      5 the address line, key strip and epoch · 6 the flap, when down · 7 the seal
-   Every length inside is in container units (cqi) of the envelope's own width, so the drawing, the lettering and the
-   seal keep their proportions from a 160 px inbox thumbnail to a 640 px letter on an iPad. */
+   Every length inside is in container units (cqi) of the envelope's own width, so the drawing, the lettering, the
+   seal and the flap's swing keep their proportions from a 160 px inbox thumbnail to a 640 px letter on an iPad. */
+
+/* The flap's angle on its hinge: 0deg down over the pocket, 180deg folded back. Registered so that it animates, and
+   inherited so that the flap turns by it and the room above the pocket follows it in the same frame. */
+@property --flap-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
 
 .envelope {
   /* the flap is 55% of the pocket's height (240/380 of its width): folded back, it rises 34.8% of the envelope's
-     width above the pocket. A bare number, so it can be a length in the envelope's own units (cqi) inside the stage
-     and a percentage on the stage itself. */
+     width above the pocket */
   --flap-rise: 34.8;
+  /* the eye's distance from the flap, in the same units (320cqi is 1,400 px at a 440 px envelope) */
+  --flap-depth: 320;
+  --flap-angle: 0deg;
+  container-type: inline-size;
   margin: 0;
   width: 100%;
+  /* closing: the flap waits while the letter slides back into the pocket, then swings down */
+  transition: --flap-angle 440ms cubic-bezier(0.45, 0, 0.2, 1) 280ms;
+}
+
+.envelope[data-flap="open"] {
+  --flap-angle: 180deg;
+  transition: --flap-angle 440ms cubic-bezier(0.45, 0, 0.2, 1);
 }
 
 .stage {
-  container-type: inline-size;
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-rows: 0fr auto;
+  /* Row 1 is the room above the pocket: as tall as the letter standing out of it, or as the room the flap needs at
+     this moment of its swing, whichever is taller, so the flap never leaves the figure while it moves or rests
+     (scripts/checks/envelope-flap.mjs). A flap of height h at angle a, seen from the depth d, stands
+     h·-cos(a) / (1 - h/d·sin(a)) above its hinge; the room is never less than that, and follows h·(1 - cos(a))/2 as
+     well, so it opens and closes in one smooth movement over the whole swing: nothing with the flap down, h with it
+     folded back. */
+  grid-template-rows:
+    minmax(
+      calc(
+        var(--flap-rise) * 1cqi *
+          max(
+            (1 - cos(var(--flap-angle))) / 2,
+            -1 * cos(var(--flap-angle)) / (1 - var(--flap-rise) / var(--flap-depth) * sin(var(--flap-angle)))
+          )
+      ),
+      auto
+    )
+    auto;
+}
+
+/* without trigonometry in calc() the room cannot follow the swing: then it is the whole rise while the flap is open */
+@supports not (width: calc(1px * cos(0deg))) {
+  .stage {
+    grid-template-rows: auto auto;
+  }
+  .envelope[data-flap="open"] .stage {
+    grid-template-rows: minmax(calc(var(--flap-rise) * 1cqi), auto) auto;
+  }
+}
+
+/* ---- the letter ------------------------------------------------------------------------------------------ */
+
+/* The letter's own track, standing on the pocket's edge at the foot of the room above it: 0fr while the letter is
+   in the pocket, 1fr when it stands out. It is always there, so a letter that arrives with the opening flap rises
+   from the pocket instead of appearing. */
+.letterRow {
+  grid-row: 1;
+  align-self: end;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: 0fr;
   /* closing: the letter slides back into the pocket first */
   transition: grid-template-rows 360ms cubic-bezier(0.4, 0, 0.6, 1);
 }
 
 /* opening: the letter rises once the flap is past upright */
-.envelope[data-flap="open"][data-letter] .stage {
-  grid-template-rows: 1fr auto;
+.envelope[data-flap="open"] .letterRow {
+  grid-template-rows: 1fr;
   transition: grid-template-rows 520ms cubic-bezier(0.2, 0.75, 0.25, 1) 260ms;
 }
 
-/* ---- the letter ------------------------------------------------------------------------------------------ */
-
-.letterRow {
-  grid-row: 1;
+.letterSlot {
   min-height: 0;
-  z-index: 3;
   display: flex;
   justify-content: center;
   /* nothing of a tall letter may show below the envelope while it is still inside */
@@ -168,20 +221,17 @@
   z-index: 6;
   transform-origin: 50% 0;
   transform-style: preserve-3d;
-  transform: perspective(1400px) rotateX(0deg);
+  transform: perspective(calc(var(--flap-depth) * 1cqi)) rotateX(var(--flap-angle));
   pointer-events: none;
-  /* closing: wait for the letter, swing down, and pass in front of it once past upright */
-  transition:
-    transform 440ms cubic-bezier(0.45, 0, 0.2, 1) 280ms,
-    z-index 0s linear 500ms;
+  /* closing: in front of the letter just before it passes upright (162 of its 440 ms, at 442 ms), when the letter is
+     already in the pocket (360 ms); later, the letter would show over the flap coming down */
+  transition: z-index 0s linear 420ms;
 }
 
+/* opening: behind the letter once past upright (162 ms), before the letter starts to rise (260 ms) */
 .envelope[data-flap="open"] .flap {
-  transform: perspective(1400px) rotateX(180deg);
   z-index: 2;
-  transition:
-    transform 440ms cubic-bezier(0.45, 0, 0.2, 1),
-    z-index 0s linear 220ms;
+  transition: z-index 0s linear 220ms;
 }
 
 .face {
@@ -290,14 +340,9 @@
   width: 31%;
 }
 
-/* an open flap with no letter in front of it stands above the envelope: keep it inside the figure. (A percentage,
-   not cqi: container units on the container itself would resolve against the page, not the envelope.) */
-.envelope[data-flap="open"]:not([data-letter]) .stage {
-  padding-top: calc(var(--flap-rise) * 1%);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .stage,
+  .envelope,
+  .letterRow,
   .flap {
     transition: none !important;
   }

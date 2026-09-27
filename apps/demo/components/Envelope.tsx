@@ -66,11 +66,15 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
       aria-hidden={decorative || undefined}
     >
       <div className={styles.stage}>
-        {hasLetter && (
-          <div className={styles.letterRow} inert={flap === "closed" || undefined} aria-hidden={flap === "closed" || undefined}>
-            <div className={styles.letter}>{children}</div>
-          </div>
-        )}
+        {/* the letter's track above the pocket, rendered with or without a letter: a letter that arrives with the
+            opening flap then rises out of the pocket instead of appearing at full height */}
+        <div className={styles.letterRow}>
+          {hasLetter && (
+            <div className={styles.letterSlot} inert={flap === "closed" || undefined} aria-hidden={flap === "closed" || undefined}>
+              <div className={styles.letter}>{children}</div>
+            </div>
+          )}
+        </div>
 
         <div className={styles.body}>
           {/* the inside of the envelope, seen through the open V */}
