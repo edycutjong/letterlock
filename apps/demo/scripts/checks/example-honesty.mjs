@@ -16,6 +16,14 @@ const CASES = [
     what: "the opened letter",
   },
   {
+    // the sheet itself, not only the caption: below 960 px the letter comes before the intro note and the caption
+    route: "/open",
+    scope: 'section[aria-labelledby="reader-title"] figure [class*="Envelope_note__"]',
+    stamped: true,
+    claims: [],
+    what: "the opened letter's sheet",
+  },
+  {
     route: "/seal",
     scope: 'tr[data-state="found"]',
     stamped: true,

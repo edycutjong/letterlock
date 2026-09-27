@@ -4,7 +4,15 @@
 import { openPage } from "./_lib.mjs";
 
 export const name = "open-fold";
-export const about = "on laptops, iPads and phones the opened letter's cracked seal is fully in the first screen";
+export const about = "on laptops, iPads and phones the opened letter's cracked seal, and an Example stamp, are fully in the first screen";
+
+// phones held sideways: too short for the whole seal, but the letter they show must still carry its Example stamp
+const LANDSCAPE = [
+  { width: 844, height: 390 }, // iPhone 13-15 on its side
+  { width: 932, height: 430 }, // iPhone Plus / Pro Max on its side
+  { width: 667, height: 375 }, // iPhone SE on its side
+  { width: 320, height: 568 }, // iPhone SE (1st gen) upright
+];
 
 const VIEWPORTS = [
   { width: 1024, height: 700 }, // iPad landscape, Safari
@@ -24,13 +32,18 @@ const VIEWPORTS = [
 
 export async function run({ browser, base, routes, fail }) {
   if (!routes.includes("/open")) return;
-  for (const vp of VIEWPORTS) {
+  for (const vp of [...VIEWPORTS, ...LANDSCAPE]) {
     const { page, context } = await openPage(browser, base, "/open", vp);
     const r = await page.evaluate(() => {
       const seal = document.querySelector('section[aria-labelledby="reader-title"] [data-wax]').getBoundingClientRect();
-      return { top: seal.top, bottom: seal.bottom, fold: window.innerHeight };
+      const stamped = [...document.querySelectorAll('main [class*="ExampleBadge_badge__"]')].some((b) => {
+        const x = b.getBoundingClientRect();
+        return x.height > 0 && x.top >= 0 && x.bottom <= window.innerHeight;
+      });
+      return { top: seal.top, bottom: seal.bottom, fold: window.innerHeight, stamped };
     });
-    if (r.bottom > r.fold) {
+    if (!r.stamped) fail(`/open ${vp.width}×${vp.height}: no Example stamp is fully in the first screen, which shows example content`);
+    if (!LANDSCAPE.includes(vp) && r.bottom > r.fold) {
       const seen = Math.max(0, Math.min(r.bottom, r.fold) - r.top) / (r.bottom - r.top);
       fail(`/open ${vp.width}×${vp.height}: the cracked seal ends at ${Math.round(r.bottom)}px, below the fold at ${r.fold}px (${Math.round(seen * 100)}% visible)`);
     }

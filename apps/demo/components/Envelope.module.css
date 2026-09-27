@@ -139,6 +139,15 @@
   margin-top: var(--pitch);
 }
 
+/* the sheet's stamp: floated into the first line's top right corner, so the note's words run beside it, never under */
+.stamp {
+  float: right;
+  display: flex;
+  margin: calc(var(--note) * 0.1) -2cqi 4px 12px;
+  font-style: normal;
+  line-height: 1;
+}
+
 /* ---- the envelope ---------------------------------------------------------------------------------------- */
 
 .body {

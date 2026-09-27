@@ -167,7 +167,14 @@ export function Envelope({ recipient, epoch, fingerprint, flap, seal, children, 
 
 /**
  * The letter's text, set as a note on ruled paper. Envelope takes any children; this is the usual one.
+ * `stamp` is struck in the sheet's top right corner (an <ExampleBadge> while the letter is example content), so the
+ * mark travels with the letter at every width instead of standing in a caption the layout may move away from it.
  */
-export function Letter({ children }: { children: ReactNode }) {
-  return <div className={styles.note}>{children}</div>;
+export function Letter({ children, stamp }: { children: ReactNode; stamp?: ReactNode }) {
+  return (
+    <div className={styles.note}>
+      {stamp && <span className={styles.stamp}>{stamp}</span>}
+      {children}
+    </div>
+  );
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Envelope, Letter } from "@/components/Envelope";
 import { ErrorSlip } from "@/components/ErrorSlip";
-import { ExampleNote } from "@/components/ExampleBadge";
+import { ExampleBadge, ExampleNote } from "@/components/ExampleBadge";
 import { ExampleAction } from "@/components/ExampleAction";
 import { PageHead, PageLede } from "@/components/PageHead";
 import { WaxSeal } from "@/components/WaxSeal";
@@ -44,7 +44,7 @@ export default function Inbox() {
           seal={<WaxSeal state="cracked" decorative />}
           label={`Opened envelope to address ${maya.address}, epoch ${opened.epoch}`}
         >
-          <Letter>
+          <Letter stamp={<ExampleBadge />}>
             <p>{opened.text}</p>
           </Letter>
         </Envelope>
