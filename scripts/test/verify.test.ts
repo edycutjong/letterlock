@@ -1,7 +1,7 @@
 // scripts/verify.ts's own rules: when a step passes, and how each runner's report is counted.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { offline, stepError, tap, unittest, type Counts } from "../verify.ts";
+import { offline, stepError, tap, unittest, vitestCounts, type Counts } from "../verify.ts";
 
 const counts = (passed: number, failed: number, skipped: number): Counts => ({ passed, failed, skipped, total: passed + failed + skipped, notes: [] });
 
@@ -48,15 +48,33 @@ test("verify_offline's result line: the OS block, the probes and the fixture rep
     checks: 71, passed: 71, failed: 0,
     osBlock: { tool: "sandbox-exec", ok: true, detail: "no network under sandbox-exec: TCP EPERM, UDP EPERM, DNS ENOTFOUND" },
     fixtures: { cases: 14, passed: 14, planned: 14 }, roundTrips: 9,
-    networkAttempts: { probes: 37, probesRefused: 37, refusedProbes: 52, duringOfflineWork: 0 }, maxPlaintextBytes: 12099,
+    networkAttempts: { probes: 37, probesRefused: 37, whileLoading: 0, refusedProbes: 52, duringOfflineWork: 0 }, maxPlaintextBytes: 12099,
   })}`;
   const c = offline(`noise\n${line}\n`);
   assert.deepEqual([c.passed, c.failed, c.total], [71, 0, 71]);
   assert.deepEqual(c.notes, [
     "OS-level network block: no network under sandbox-exec: TCP EPERM, UDP EPERM, DNS ENOTFOUND",
     "fixture replay 14/14 of 14 planned (fixtures/envelopes.json), 9 round trips to cached keys",
-    "37 of 37 ways out refused in-process (52 attempts counted), 0 attempts during the offline work",
+    "37 of 37 ways out refused in-process (52 attempts counted), 0 attempts while loading, 0 attempts during the offline work",
   ]);
   const bare = offline(line.replace(/"osBlock":\{[^}]*\},/, '"osBlock":{"tool":null,"ok":true,"detail":"none on this machine (no sandbox)"},'));
   assert.equal(bare.notes[0], "no OS-level network block: none on this machine (no sandbox)");
+});
+
+test("vitest: a test file that fails to load is one failed test, not a silent suite failure", () => {
+  const report = {
+    numTotalTests: 96, numPassedTests: 95, numFailedTests: 0, numPendingTests: 1, numTodoTests: 0,
+    testResults: [
+      { name: "/r/examples/agent-memory/test/a.test.ts", status: "passed", assertionResults: [
+        ...Array.from({ length: 95 }, () => ({ status: "passed", title: "t" })), { status: "skipped", title: "s" }] },
+      { name: "/r/examples/agent-memory/test/broken.test.ts", status: "failed", message: "Error: planted\n    at x", assertionResults: [] },
+    ],
+  };
+  const c = vitestCounts(report, "examples/agent-memory");
+  assert.deepEqual([c.passed, c.failed, c.skipped, c.total], [95, 1, 1, 97]);
+  assert.deepEqual(c.notes, ["FAILED test/broken.test.ts: did not load: Error: planted", "skipped 1 in test/a.test.ts"]);
+  assert.equal(stepError(1, c), "exit code 1");
+  // without the load failure, the same report counts as before
+  const clean = vitestCounts({ ...report, testResults: [report.testResults[0]!] }, "examples/agent-memory");
+  assert.deepEqual([clean.passed, clean.failed, clean.total], [95, 0, 96]);
 });

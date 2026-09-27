@@ -60,29 +60,41 @@ const vitest = (key: string, name: string, cwd: string, why: (file: string) => s
   name,
   cwd,
   command: (log) => ["pnpm", "test", "--reporter=dot", "--reporter=json", `--outputFile.json=${join(log, `${key}.json`)}`],
-  parse: (_, log) => {
-    const r = JSON.parse(readFileSync(join(log, `${key}.json`), "utf8")) as {
-      numTotalTests: number; numPassedTests: number; numFailedTests: number; numPendingTests: number; numTodoTests: number;
-      testResults: { name: string; message?: string; assertionResults: { status: string; fullName?: string; title?: string }[] }[];
-    };
-    const skippedByFile = new Map<string, number>();
-    const failedNames: string[] = [];
-    for (const f of r.testResults) {
-      const file = f.name.slice(f.name.indexOf(`${cwd}/`) + cwd.length + 1);
-      const n = f.assertionResults.filter((a) => a.status === "skipped" || a.status === "pending" || a.status === "todo").length;
-      if (n) skippedByFile.set(file, n);
-      for (const a of f.assertionResults) if (a.status === "failed") failedNames.push(`${file}: ${a.fullName ?? a.title}`);
-      if (f.assertionResults.length === 0 && f.message) failedNames.push(`${file}: ${f.message.split("\n")[0]}`); // a file that failed to load
-    }
-    return {
-      passed: r.numPassedTests,
-      failed: r.numFailedTests,
-      skipped: r.numPendingTests + r.numTodoTests,
-      total: r.numTotalTests,
-      notes: [...failedNames.map((f) => `FAILED ${f}`), ...[...skippedByFile].map(([file, n]) => `skipped ${n} in ${file}${why(file)}`)],
-    };
-  },
+  parse: (_, log) => vitestCounts(JSON.parse(readFileSync(join(log, `${key}.json`), "utf8")) as VitestReport, cwd, why),
 });
+
+export type VitestReport = {
+  numTotalTests: number; numPassedTests: number; numFailedTests: number; numPendingTests: number; numTodoTests: number;
+  testResults: { name: string; status?: string; message?: string; assertionResults: { status: string; fullName?: string; title?: string }[] }[];
+};
+
+/**
+ * vitest's JSON report, counted. A test file that fails to load has no assertion results, so vitest counts it only in
+ * numFailedTestSuites: here it is one failed test, so a broken file is never missing from the failed count.
+ */
+export const vitestCounts = (r: VitestReport, cwd: string, why: (file: string) => string = () => ""): Counts => {
+  const skippedByFile = new Map<string, number>();
+  const failedNames: string[] = [];
+  let unloaded = 0;
+  for (const f of r.testResults) {
+    const at = f.name.indexOf(`${cwd}/`);
+    const file = at < 0 ? f.name : f.name.slice(at + cwd.length + 1);
+    const n = f.assertionResults.filter((a) => a.status === "skipped" || a.status === "pending" || a.status === "todo").length;
+    if (n) skippedByFile.set(file, n);
+    for (const a of f.assertionResults) if (a.status === "failed") failedNames.push(`${file}: ${a.fullName ?? a.title}`);
+    if (f.assertionResults.length === 0 && (f.status === "failed" || f.message)) { // a file that failed to load
+      unloaded++;
+      failedNames.push(`${file}: did not load: ${(f.message ?? "no message").split("\n")[0]}`);
+    }
+  }
+  return {
+    passed: r.numPassedTests,
+    failed: r.numFailedTests + unloaded,
+    skipped: r.numPendingTests + r.numTodoTests,
+    total: r.numTotalTests + unloaded,
+    notes: [...failedNames.map((f) => `FAILED ${f}`), ...[...skippedByFile].map(([file, n]) => `skipped ${n} in ${file}${why(file)}`)],
+  };
+};
 
 /** python3 -m unittest -v: "Ran 12 tests in 0.1s", then "OK", "OK (skipped=1)" or "FAILED (failures=1, errors=2)". */
 export const unittest = (output: string): Counts => {
@@ -120,7 +132,7 @@ type OfflineResult = {
   osBlock?: { tool: string | null; ok: boolean; detail: string };
   fixtures: { cases: number; passed: number; planned?: number };
   roundTrips: number;
-  networkAttempts: { probes?: number; probesRefused?: number; refusedProbes: number; duringOfflineWork: number };
+  networkAttempts: { probes?: number; probesRefused?: number; whileLoading?: number; refusedProbes: number; duringOfflineWork: number };
   maxPlaintextBytes: number;
 };
 
@@ -139,7 +151,8 @@ export const offline = (output: string): Counts => {
       r.osBlock?.tool ? `OS-level network block: ${r.osBlock.detail}` : `no OS-level network block: ${r.osBlock?.detail ?? "not reported"}`,
       `fixture replay ${r.fixtures.passed}/${r.fixtures.cases}${r.fixtures.planned !== undefined ? ` of ${r.fixtures.planned} planned` : ""} (fixtures/envelopes.json), ` +
         `${r.roundTrips} round trips to cached keys`,
-      `${a.probesRefused ?? "?"} of ${a.probes ?? "?"} ways out refused in-process (${a.refusedProbes} attempts counted), ${a.duringOfflineWork} attempts during the offline work`,
+      `${a.probesRefused ?? "?"} of ${a.probes ?? "?"} ways out refused in-process (${a.refusedProbes} attempts counted), ` +
+        `${a.whileLoading !== undefined ? `${a.whileLoading} attempts while loading, ` : ""}${a.duringOfflineWork} attempts during the offline work`,
     ],
   };
 };

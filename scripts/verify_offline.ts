@@ -11,8 +11,10 @@
 // 2. The in-process guard (scripts/lib/no-network.ts) is installed before any Letterlock code is loaded: it refuses and
 //    counts every attempt made through Node's APIs. Each way out it closes (scripts/lib/network-probes.ts, aimed at an
 //    IP address, so no probe is stopped by DNS instead) must be refused and counted, and so must the SDK's own chain
-//    client: letterlock().resolve() must fail with CHAIN_UNAVAILABLE caused by the block.
-// 3. With the attempt counter noted, and required unchanged at the end:
+//    client: letterlock().resolve() must fail with CHAIN_UNAVAILABLE caused by the block. Loading the SDK must make no
+//    attempt, each probe exactly one, and resolve() only fetches to its RPC, so nothing else hides in the tally.
+// 3. With the attempt counter noted, and required unchanged at the end (after any timers the work left have run; an
+//    attempt later still, after the result line, sets exit code 1):
 //    - round trips to cached keys: fixtures/envelopes.json caches each software key as resolve() returns it; every
 //      cached key must equal the key re-derived from its PRF stand-in; notes from 0 bytes to the largest one a drop
 //      carries are sealed to the CACHED public key and opened with the re-derived key pair, byte for byte;
@@ -56,12 +58,16 @@ if (!sandboxedBy) {
 }
 
 const block = blockNetwork(); // before the SDK, its dependencies or viem are loaded
+const atInstall = block.attempts.length;
 
 const { ROOT } = await import("./lib/git.ts");
 const sdk = await import("letterlock");
 const { FIXTURE_FILE, FIXTURE_CASES, REQUIRED_OUTCOMES, keyFor, replay } = await import("./fixtures.ts");
 const plan = await import("./lib/plan.ts");
 const { OFFLINE_TARGET, PROBES } = await import("./lib/network-probes.ts");
+// Loading the SDK and its dependencies must not try the network: an attempt made while a module loads would otherwise
+// be added, unseen, to the probes' tally below.
+const loadAttempts = block.attempts.slice(atInstall);
 
 type Check = { group: string; name: string; ok: boolean; detail: string };
 const checks: Check[] = [];
@@ -71,29 +77,41 @@ const within = <T>(ms: number, p: Promise<T>) =>
   Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms} ms`)), ms).unref())]);
 
 if (osBlock.tool || osBlock.required) check("OS-level block", osBlock.tool ? `${osBlock.tool}: no network` : "a network sandbox", osBlock.ok, osBlock.detail);
+check("network", "attempts while loading the SDK", loadAttempts.length === 0, loadAttempts.length === 0 ? "none" : loadAttempts.join("; "));
 
 // 2. Every way out is refused, and counted.
 const deployer = JSON.parse(readFileSync(join(ROOT, "deployments/143.json"), "utf8")) as {
   address: `0x${string}`; deployer: `0x${string}`; smokeTest: { publishedKey: `0x${string}`; epoch: number; kid: string };
 };
+// Each probe makes exactly one attempt, and the SDK's resolve() only fetches from its RPC endpoint (viem retries, so
+// more than once): an attempt from anything else that lands while the probes run makes the tally wrong, and fails.
+const probeStart = block.attempts.length;
 for (const probe of PROBES) {
   const before = block.attempts.length;
   try {
     await within(5000, probe.attempt(OFFLINE_TARGET));
     check("network", probe.name, false, `reached ${OFFLINE_TARGET.host}`);
   } catch (e) {
-    const counted = block.attempts.length > before;
-    const ok = blockedInChain(e) && counted;
-    check("network", probe.name, ok, ok ? `refused by ${block.attempts[before]!.split(" ")[0]}`
-      : blockedInChain(e) ? "refused, but not counted" : `failed, but not by the block: ${errText(e)}`);
+    const made = block.attempts.slice(before);
+    const ok = blockedInChain(e) && made.length === 1;
+    check("network", probe.name, ok, ok ? `refused by ${made[0]!.split(" ")[0]}`
+      : !blockedInChain(e) ? `failed, but not by the block: ${errText(e)}`
+      : made.length === 0 ? "refused, but not counted" : `refused, but ${made.length} attempts counted: ${made.join("; ")}`);
   }
 }
-try {
-  await sdk.letterlock({ chain: "monad" }).resolve(deployer.deployer);
-  check("network", "SDK resolve()", false, "resolved a key with the network off");
-} catch (e) {
-  const ok = sdk.isLetterlockError(e, "CHAIN_UNAVAILABLE") && blockedInChain(e);
-  check("network", "SDK resolve()", ok, ok ? "CHAIN_UNAVAILABLE, caused by the block" : `unexpected: ${errText(e)}`);
+const sdkRpc = new URL(sdk.DEPLOYMENTS.monad.rpcUrl).href; // "https://rpc.monad.xyz/", as fetch is handed it
+{
+  const before = block.attempts.length;
+  try {
+    await sdk.letterlock({ chain: "monad" }).resolve(deployer.deployer);
+    check("network", "SDK resolve()", false, "resolved a key with the network off");
+  } catch (e) {
+    const made = block.attempts.slice(before);
+    const foreign = made.filter((a) => a !== `fetch ${sdkRpc}`);
+    const ok = sdk.isLetterlockError(e, "CHAIN_UNAVAILABLE") && blockedInChain(e) && made.length > 0 && foreign.length === 0;
+    check("network", "SDK resolve()", ok, ok ? `CHAIN_UNAVAILABLE, caused by the block (${made.length} fetches to ${sdkRpc})`
+      : foreign.length ? `attempts that are not the SDK's RPC: ${foreign.join("; ")}` : `unexpected: ${errText(e)}`);
+  }
 }
 const probeAttempts = block.attempts.length;
 
@@ -198,8 +216,25 @@ const seedMatches = JSON.stringify(fixtures.seed.notes.map(({ id, text }) => ({ 
   fixtures.seed.oldEpoch.id === plan.SEED_OLD_EPOCH.id && fixtures.seed.oldEpoch.text === plan.SEED_OLD_EPOCH.text;
 check("fixtures", "seed section = scripts/lib/plan.ts", seedMatches, seedMatches ? "the notes, the tampered byte and the old-epoch note match" : "run pnpm fixtures --write");
 
+// Anything the work left scheduled runs before the count: a timer set during a seal that fires after the result line
+// would otherwise try the network unseen. Our own wait has fired by the time the next check looks, so only work left
+// by others is seen (it must keep the process alive, or an await with nothing else pending would end it early).
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const pendingWork = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout" || r === "Immediate");
+for (const until = Date.now() + 10_000; pendingWork().length && Date.now() < until;) await sleep(50);
+const leftPending = pendingWork();
+check("network", "work left scheduled at the end", leftPending.length === 0,
+  leftPending.length === 0 ? "none" : `${leftPending.length} (${[...new Set(leftPending)].join(", ")}) still pending after 10 s`);
 const workAttempts = block.attempts.length - probeAttempts;
 check("network", "attempts during the offline work", workAttempts === 0, workAttempts === 0 ? "none" : block.attempts.slice(probeAttempts).join("; "));
+// Anything later still (after the result line) fails the run from here.
+const counted = block.attempts.length;
+process.on("exit", () => {
+  const late = block.attempts.slice(counted);
+  if (!late.length) return;
+  console.error(`FAIL  network attempts after the result line: ${late.length}: ${late.slice(0, 5).join("; ")}${late.length > 5 ? "; ..." : ""}`);
+  process.exitCode = 1;
+});
 
 if (!osBlock.tool && !osBlock.required) console.log(`OS-level block: ${osBlock.detail}`);
 for (const group of [...new Set(checks.map((c) => c.group))]) {
@@ -218,8 +253,9 @@ console.log(`VERIFY_OFFLINE_RESULT ${JSON.stringify({
   roundTrips: checks.filter((c) => c.group === "round trips").length,
   networkAttempts: {
     probes: PROBES.length + 1,
-    probesRefused: checks.filter((c) => c.group === "network" && c.name !== "attempts during the offline work" && c.ok).length,
-    refusedProbes: probeAttempts,
+    probesRefused: checks.filter((c) => c.group === "network" && (PROBES.some((p) => p.name === c.name) || c.name === "SDK resolve()") && c.ok).length,
+    whileLoading: loadAttempts.length,
+    refusedProbes: probeAttempts - probeStart,
     duringOfflineWork: workAttempts,
   },
   maxPlaintextBytes: maxPlaintext,

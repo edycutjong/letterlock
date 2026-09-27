@@ -68,3 +68,47 @@ test("a case repeated in place of another: the run fails", async () => {
   assert.equal(r.code, 1);
   assert.match(r.out, /FAIL {2}the planned cases, each once, in order +missing: tampered-ct/);
 });
+
+/**
+ * A preload that appends `code` to the SDK's entry module as it loads, so the run is the real one with one planted
+ * network attempt: nothing in the tree is edited. verify_offline passes execArgv on when it re-runs itself sandboxed.
+ */
+const planted = async (name: string, code: string) => {
+  const hooks = join(scratch, `${name}-hooks.mjs`);
+  await writeFile(hooks, `export async function load(url, context, next) {
+  const r = await next(url, context);
+  return url.endsWith("/packages/letterlock/src/index.ts") ? { ...r, source: String(r.source) + ${JSON.stringify(`\n${code}\n`)} } : r;
+}\n`);
+  const preload = join(scratch, `${name}.mjs`);
+  await writeFile(preload, `import { register } from "node:module";\nregister(${JSON.stringify(new URL(`file://${hooks}`).href)});\n`);
+  return preload;
+};
+const verifyOfflineWith = (preload: string): ReturnType<typeof verifyOffline> =>
+  new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, ["--import", preload, SCRIPT], { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    p.stdout.on("data", (d: Buffer) => { out += d.toString(); });
+    p.stderr.on("data", (d: Buffer) => { out += d.toString(); });
+    p.on("close", (code) => {
+      const line = /^VERIFY_OFFLINE_RESULT (\{.*\})$/m.exec(out)?.[1];
+      if (!line) reject(new Error(`no result line (exit ${code}):\n${out}`));
+      else resolve({ code, out, result: JSON.parse(line) as Result });
+    });
+  });
+
+test("a network attempt made while the SDK loads fails the run, and is not added to the probes' tally", async () => {
+  const r = await verifyOfflineWith(await planted("on-load",
+    `void (async () => { try { await fetch("https://rpc.monad.xyz", { method: "POST", body: "{}" }); } catch {} })();`));
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /FAIL {2}attempts while loading the SDK +fetch https:\/\/rpc\.monad\.xyz/);
+  assert.equal((r.result as unknown as { networkAttempts: { whileLoading: number } }).networkAttempts.whileLoading, 1);
+});
+
+test("a network attempt left on a timer fails the run: it is counted before the result line, not after it", async () => {
+  const r = await verifyOfflineWith(await planted("deferred",
+    `setTimeout(() => { globalThis.fetch("https://1.1.1.1/cdn-cgi/trace").catch(() => {}); }, 2500);`));
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /FAIL {2}attempts during the offline work +fetch https:\/\/1\.1\.1\.1\/cdn-cgi\/trace/);
+  const result = r.out.indexOf("VERIFY_OFFLINE_RESULT");
+  assert.ok(!r.out.slice(result).includes("network blocked"), "an attempt was made after the result line");
+});
