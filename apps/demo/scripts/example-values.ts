@@ -2,7 +2,8 @@
 //
 // Nothing here is a passkey, a published key or a transaction. Each example address is the first 20 bytes of
 // SHA-256 over a labelled string (no one holds a private key for it). Each example encryption key is the SDK's own
-// deriveKeyPair() over SHA-256 of another labelled string, standing in for a passkey PRF output. The example
+// deriveKeyPair() over SHA-256 of another labelled string, standing in for a passkey PRF output; an example agent's
+// is the SDK's deriveAgentKeyPair() (the agent id in the salt and the info), the only key publishForAgent accepts. The example
 // envelopes are real SDK seal() output to those keys, bound to the testnet directory the app points at (the address
 // in deployments/10143.json, read below, so a redeploy only needs this script run again), and were never dropped.
 // The failures are what the SDK's open() really throws for the listed inputs.
@@ -11,13 +12,15 @@
 //
 //   node scripts/example-values.ts > lib/examples.json     (from apps/demo; Node 22.18+ runs TypeScript directly)
 import { createHash } from "node:crypto";
-import { deriveKeyPair, fingerprint, isLetterlockError, open, seal, toHex, type Envelope } from "letterlock";
+import { deriveAgentKeyPair, deriveKeyPair, fingerprint, isLetterlockError, open, seal, toHex, type Envelope } from "letterlock";
 import testnet from "../../../deployments/10143.json" with { type: "json" };
 
 export const sha256 = (s: string): Uint8Array => new Uint8Array(createHash("sha256").update(s).digest());
 export const exampleAddress = (label: string): `0x${string}` =>
   `0x${toHex(sha256(`letterlock example address: ${label}`).slice(0, 20))}`;
 export const exampleKeys = (label: string, epoch: number) => deriveKeyPair(sha256(`letterlock example prf: ${label}`), epoch);
+export const exampleAgentKeys = (id: number, epoch: number) =>
+  deriveAgentKeyPair(sha256(`letterlock example prf: agent ${id}`), BigInt(id), epoch);
 
 export const TESTNET = { chainId: testnet.chainId, directory: testnet.address as `0x${string}` } as const;
 
@@ -53,7 +56,7 @@ const main = async () => {
   const agents = AGENTS.map(({ id, epochs }) => ({
     recipient: `agent:${id}`,
     keys: epochs.map((epoch) => {
-      const k = exampleKeys(`agent ${id}`, epoch);
+      const k = exampleAgentKeys(id, epoch);
       return { epoch, publicKey: `0x${toHex(k.publicKey)}`, fingerprint: fingerprint(k.publicKey) };
     }),
   }));

@@ -2,10 +2,11 @@
 // labelled string, every envelope really opens to the text the page prints, the tampered copy really fails as
 // TAMPERED, and every failure a slip quotes is what the SDK's open() really throws for those inputs.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { fingerprint, isLetterlockError, open, toHex, type Envelope } from "letterlock";
-import { TESTNET, exampleAddress, exampleKeys } from "../scripts/example-values.ts";
+import { deriveKeyPair, fingerprint, isLetterlockError, open, toHex, type Envelope } from "letterlock";
+import { TESTNET, exampleAddress, exampleAgentKeys, exampleKeys } from "../scripts/example-values.ts";
 
 type Key = { epoch: number; publicKey: string; fingerprint: string };
 const data = JSON.parse(readFileSync(new URL("../lib/examples.json", import.meta.url), "utf8")) as {
@@ -39,7 +40,20 @@ test("every example key is the SDK's derivation over its labelled string", () =>
     }
   }
   for (const a of data.agents)
-    for (const k of a.keys) assert.equal(k.publicKey, `0x${toHex(exampleKeys(`agent ${a.recipient.slice(6)}`, k.epoch).publicKey)}`);
+    for (const k of a.keys) {
+      const keys = exampleAgentKeys(Number(a.recipient.slice(6)), k.epoch);
+      assert.equal(k.publicKey, `0x${toHex(keys.publicKey)}`, `${a.recipient} epoch ${k.epoch}`);
+      assert.equal(k.fingerprint, fingerprint(keys.publicKey));
+    }
+});
+
+test("an example agent's key is the SDK's agent derivation, never its PRF's owner key", () => {
+  assert.ok(data.agents.length > 0);
+  for (const a of data.agents)
+    for (const k of a.keys) {
+      const owner = deriveKeyPair(createHash("sha256").update(`letterlock example prf: agent ${a.recipient.slice(6)}`).digest(), k.epoch);
+      assert.notEqual(k.publicKey, `0x${toHex(owner.publicKey)}`, `${a.recipient} epoch ${k.epoch}`);
+    }
 });
 
 test("Kai rotated: epoch 2 is a different key from epoch 1", () => {
