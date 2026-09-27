@@ -59,6 +59,11 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 900 
 await context.addInitScript(() => {
   document.addEventListener("securitypolicyviolation", (e) => console.error(`CSP violation: ${e.violatedDirective} ${e.blockedURI}`));
 });
+// every script of the build the pages load, as the browser received it
+const scripts = new Map();
+context.on("response", (r) => {
+  if (r.request().resourceType() === "script" && r.url().startsWith(`${base}/_next/static/`)) scripts.set(new URL(r.url()).pathname, r.text().catch(() => ""));
+});
 try {
   for (const route of [...ROUTES, "/no-such-page"]) {
     const page = await context.newPage();
@@ -226,9 +231,13 @@ try {
   }
   if (onHost) {
     // the host SDK 0.1.0 pinned serves nothing: every route, a query and a POST reach this host by a 308, which keeps
-    // the method and the body (the POST is answered by the redirect, before the drip's route runs: nothing is sent)
+    // the method and the body (the POST is answered by the redirect, before the drip's route runs: nothing is sent);
+    // and so do the build's own files, a script the pages just loaded among them, and any other path under /_next/
+    // (Next.js leaves /_next/ out of its own redirects: vercel.json's redirect answers there)
     const moved = [];
-    for (const path of [...ROUTES, "/judge?pass=smoke", "/api/drip"]) {
+    const built = [...scripts.keys()][0];
+    if (!built) fail(`${RETIRED_HOST}: no script of the build to ask for there`);
+    for (const path of [...ROUTES, "/judge?pass=smoke", "/api/drip", ...(built ? [built] : []), "/_next/data/smoke.json", "/_next/image?url=%2Ficon.svg&w=64&q=75"]) {
       const post = path === "/api/drip";
       const r = await fetch(`https://${RETIRED_HOST}${path}`, {
         method: post ? "POST" : "GET",
@@ -238,7 +247,7 @@ try {
       if (r.status !== 308 || r.headers.get("location") !== `${base}${path}`) moved.push(`${post ? "POST" : "GET"} ${path}: HTTP ${r.status} ${r.headers.get("location")}`);
     }
     if (moved.length) fail(`${RETIRED_HOST} does not send everything here: ${moved.join("; ")}`);
-    else pass(`${RETIRED_HOST}: ${ROUTES.length} routes, a query and a POST to /api/drip answer 308 to the same path on ${LETTERLOCK_RP_ID}`);
+    else pass(`${RETIRED_HOST}: ${ROUTES.length} routes, a query, a POST to /api/drip, a script of the build and two other paths under /_next/ answer 308 to the same path on ${LETTERLOCK_RP_ID}`);
   }
   for (const [path, type] of [["/og-image.png", "image/png"], ["/icon.svg", "image/svg+xml"]]) {
     const r = await fetch(base + path);

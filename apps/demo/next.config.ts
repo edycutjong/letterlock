@@ -25,6 +25,9 @@ export const APP_HOST = "app.letterlock.edycu.dev";
  * The rpId SDK 0.1.0 pinned, still attached to this Vercel project. Every request to it, any path and any method, is
  * answered 308 with the same path and query on APP_HOST: no page is served there, so no passkey is made under the old
  * rpId, and an old link (a judges' link with its pass, a POST to /api/drip) arrives unchanged at the same app.
+ * On Vercel the 308 is vercel.json's redirect, which Vercel's router answers before any file or function, the build's
+ * /_next/ files included. The rule in redirects() below is the same for any other server; Next.js leaves every path
+ * under /_next/ out of the redirects it is given, so alone it would serve the build's files, and its 404 page, there.
  */
 export const RETIRED_HOST = "letterlock-app.vercel.app";
 

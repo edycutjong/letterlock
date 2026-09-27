@@ -1,4 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "letterlock-app\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://app.letterlock.edycu.dev/$1",
+      "permanent": true
+    }
+  ]
 }

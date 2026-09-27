@@ -71,7 +71,8 @@ describe.skipIf(!live)("names the docs point at (LIVE=1, read-only)", () => {
   });
 
   it(`the rpId 0.1.0 pinned (letterlock-app.vercel.app) answers every path with a 308 to ${LETTERLOCK_RP_ID}, so no key is made there`, async () => {
-    for (const path of ["/", "/judge?pass=x", "/open?to=0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C"]) {
+    // the build's own paths too: Next.js leaves /_next/ out of its redirects, so the app's vercel.json answers them
+    for (const path of ["/", "/judge?pass=x", "/open?to=0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C", "/_next/static/chunks/main-app.js", "/_next/data/x.json"]) {
       const r = await fetch(`https://letterlock-app.vercel.app${path}`, { redirect: "manual" });
       expect([r.status, r.headers.get("location")], `${path}: the old host serves a page, where a passkey would be made under the old rpId`).toEqual([
         308,
