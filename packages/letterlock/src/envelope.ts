@@ -131,22 +131,29 @@ export const parseEnvelope = (env: Envelope): { enc: Uint8Array; ct: Uint8Array 
   catch (cause) { throw new LetterlockError("TAMPERED", "envelope fields are not canonical base64url", { cause }); }
 };
 
+/** The wire form's kid (docs/SPEC.md §3): the §2 fingerprint, 16 lower-case hex digits. */
 const KID = /^[0-9a-f]{16}$/;
+const checkKid = (kid: unknown): void => {
+  if (typeof kid !== "string" || !KID.test(kid)) throw new LetterlockError("INPUT_INVALID", "envelope kid must be 16 lower-case hex digits");
+};
 
 /**
  * The envelope as UTF-8 JSON, fields in the docs/SPEC.md §3 order: the bytes drop() sends and inbox() reads back.
- * Validates first, so malformed envelopes never leave the SDK.
+ * Validates first, exactly as decodeEnvelope() does (the kid format included), so malformed envelopes never leave
+ * the SDK and whatever drop() sends, inbox() lists.
  */
 export const encodeEnvelope = (env: Envelope): Uint8Array => {
+  checkKid(env.kid);
   parseEnvelope(env);
   const { v, chainId, directory, recipient, epoch, kid, enc, ct } = env;
   return utf8(JSON.stringify({ v, chainId, directory, recipient, epoch, kid, enc, ct }));
 };
 
 /**
- * Parses envelope JSON (a string, or UTF-8 bytes such as a Dropped log's) and validates it as parseEnvelope does.
- * Only the §3 fields are kept. Nothing is decrypted: a valid envelope can still fail to open.
- *   INPUT_INVALID — not UTF-8, not JSON, a missing or mistyped field, or a bad header
+ * Parses envelope JSON (a string, or UTF-8 bytes such as a Dropped log's) and validates it as encodeEnvelope does:
+ * parseEnvelope's checks plus the wire form's kid format. Only the §3 fields are kept. Nothing is decrypted: a valid envelope can still fail to open.
+ *   INPUT_INVALID — not UTF-8, not JSON, a missing or mistyped field, a bad header, or a kid that is not 16
+ *                   lower-case hex digits
  *   TAMPERED      — enc or ct is not canonical base64url
  */
 export const decodeEnvelope = (input: string | Uint8Array): Envelope => {
@@ -175,7 +182,7 @@ export const decodeEnvelope = (input: string | Uint8Array): Envelope => {
     enc: field<string>("enc", "string"),
     ct: field<string>("ct", "string"),
   };
-  if (!KID.test(env.kid)) throw new LetterlockError("INPUT_INVALID", "envelope kid must be 16 lower-case hex digits");
+  checkKid(env.kid);
   parseEnvelope(env);
   return env;
 };

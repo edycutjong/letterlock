@@ -170,6 +170,24 @@ describe.skipIf(noChain)("inbox", () => {
     } finally { await proxy.close(); }
   });
 
+  it("the same refusal of a 1-block page is still a wait, never a narrowing (nothing to narrow) nor a failure", async () => {
+    let refusals = 0;
+    const proxy = await rpcProxy(ctx.ok ? ctx.rpcUrl : "", {
+      intercept: (req) => {
+        if (req.method !== "eth_getLogs" || refusals >= 2) return undefined;
+        if (BigInt((req.params[0] as { toBlock: string }).toBlock) < lastDrop) return undefined;
+        refusals++;
+        return rpcError(req, -32602, "block range extends beyond current head block");
+      },
+    });
+    try {
+      const r = await client({ rpcUrl: proxy.url }).inbox(recipient, { fromBlock: lastDrop - 2n, toBlock: last, blockRange: 1 });
+      expect(refusals).toBe(2);
+      expect(r.envelopes.map((e) => e.transactionHash)).toEqual([sent[2]]);
+      expect(r.blockRange).toBe(1);
+    } finally { await proxy.close(); }
+  });
+
   it("pages that complete out of order (one refused for too many results while later ones succeed) still list the drops oldest first", async () => {
     // four drops: A alone in the first page (the probe), B and C together in the second (refused: too many results),
     // D in a later page of the same round of 4 requests, answered before the refused page's parts are asked for
@@ -227,6 +245,16 @@ describe.skipIf(noChain)("inbox", () => {
     ]);
   });
 
+  it("drop() refuses an envelope inbox() would reject (a kid that is not 16 lower-case hex digits): nothing is sent", async () => {
+    const sender = await fundedAccount();
+    const env = await client().sealTo(recipient, utf8("upper-case kid"));
+    for (const kid of [`A${env.kid.slice(1)}`, env.kid.slice(1), `${env.kid}0`]) {
+      const e = await client().drop({ account: sender, envelope: { ...env, kid } }).then(() => null, (x: unknown) => x);
+      expect(isLetterlockError(e, "INPUT_INVALID"), `kid ${kid}: ${String(e)}`).toBe(true);
+    }
+    expect(await publicClient().getTransactionCount({ address: sender.address })).toBe(0);
+  });
+
   it("agent:<id> recipients read the (address(0), agentId) topic", async () => {
     const r = await client().inbox(`agent:${123456789}`, { fromBlock: first });
     expect(r.envelopes).toEqual([]);
@@ -244,6 +272,10 @@ describe.skipIf(noChain)("inbox", () => {
     const code = (p: Promise<unknown>) => p.then(() => "no error", (e: unknown) => (isLetterlockError(e) ? e.code : String(e)));
     expect(await code(client().inbox("maya.eth"))).toBe("INPUT_INVALID");
     expect(await code(client().inbox(recipient, { blockRange: 0 }))).toBe("INPUT_INVALID");
+    // concurrency 0 would never send a request and never end
+    for (const concurrency of [0, -1, 1.5]) expect(await code(client().inbox(recipient, { concurrency })), `concurrency ${concurrency}`).toBe("INPUT_INVALID");
+    // the real directory, without its deploy block: refused, never a scan from block 0
+    expect(await code(client({ deployBlock: undefined }).inbox(recipient))).toBe("INPUT_INVALID");
     expect(await code(client({ deployBlock: undefined, directory: "0x000000000000000000000000000000000000bEEF" }).inbox(recipient))).toBe("INPUT_INVALID");
     expect(await code(client({ rpcUrl: "http://127.0.0.1:9" }).inbox(recipient, { fromBlock: 1n }))).toBe("CHAIN_UNAVAILABLE");
   });

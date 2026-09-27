@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fromB64url, toB64url, utf8 } from "../src/bytes.ts";
 import { deriveKeyPair, fingerprint } from "../src/derive.ts";
-import { infoFor, open, seal, suite, type Envelope, type RecipientKey } from "../src/envelope.ts";
+import { decodeEnvelope, encodeEnvelope, infoFor, open, seal, suite, type Envelope, type RecipientKey } from "../src/envelope.ts";
 import { isLetterlockError, type LetterlockErrorCode } from "../src/errors.ts";
 
 const maya = deriveKeyPair(new Uint8Array(32).fill(7), 1);
@@ -168,5 +168,58 @@ describe("info encoding", () => {
   it("is injective across field boundaries (length-prefixed)", () => {
     const h = { v: 1, chainId: 143, directory: DIR, epoch: 1 } as const;
     expect(Buffer.from(infoFor({ ...h, recipient: "agent:12" })).equals(Buffer.from(infoFor({ ...h, recipient: "agent:1" })))).toBe(false);
+  });
+});
+
+describe("wire form (encodeEnvelope → drop → inbox → decodeEnvelope)", () => {
+  const fixed = {
+    ct: "AgICAgICAgICAgICAgICAgI", enc: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE", kid: "0123456789abcdef", epoch: 1,
+    recipient: MAYA.toLowerCase(), directory: DIR.toLowerCase(), chainId: 143, v: 1, extra: "dropped",
+  } as unknown as Envelope;
+  const WIRE =
+    '{"v":1,"chainId":143,"directory":"0x00000000000000000000000000000000000000aa",' +
+    '"recipient":"0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6","epoch":1,"kid":"0123456789abcdef",' +
+    '"enc":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE","ct":"AgICAgICAgICAgICAgICAgI"}';
+  const invalid = (f: () => unknown, message: string) => {
+    let e: unknown = null;
+    try { f(); } catch (x) { e = x; }
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+    expect((e as Error).message).toContain(message);
+  };
+
+  it("is byte-exact: the docs/SPEC.md §3 field order, no whitespace, only the §3 fields", () => {
+    expect(new TextDecoder().decode(encodeEnvelope(fixed))).toBe(WIRE);
+    const { extra: _, ...plain } = fixed as unknown as Record<string, unknown>;
+    expect(decodeEnvelope(`{"x":1,${WIRE.slice(1)}`)).toEqual(plain);
+  });
+
+  it("a sealed envelope round-trips and still opens", async () => {
+    const env = await seal(base);
+    expect(await open(decodeEnvelope(encodeEnvelope(env)), maya)).toEqual(note);
+  });
+
+  it("encode and decode refuse the same kid spellings: 16 lower-case hex digits only", async () => {
+    const env = await seal(base);
+    for (const kid of [`A${env.kid.slice(1)}`, env.kid.toUpperCase().replace(/^[0-9]/, "F"), env.kid.slice(1), `${env.kid}0`, "", "g".repeat(16)]) {
+      invalid(() => encodeEnvelope({ ...env, kid }), "kid must be 16 lower-case hex digits");
+      invalid(() => decodeEnvelope(JSON.stringify({ ...env, kid })), "kid must be 16 lower-case hex digits");
+    }
+    // open() never checks the format: the kid is only a hint, consulted after decryption fails
+    expect(await open({ ...env, kid: env.kid.toUpperCase() }, maya)).toEqual(note);
+  });
+
+  it("decodes only valid UTF-8: an invalid byte, even inside an ignored field, is refused", () => {
+    const bytes = new TextEncoder().encode(`{"x":"?",${WIRE.slice(1)}`);
+    expect(decodeEnvelope(bytes).kid).toBe("0123456789abcdef");
+    bytes[6] = 0xff; // the "?"
+    invalid(() => decodeEnvelope(bytes), "envelope is not UTF-8");
+  });
+
+  it("the header's epoch is at most 2^32 − 1 (a u32 in info)", () => {
+    expect(decodeEnvelope(WIRE.replace('"epoch":1', `"epoch":${2 ** 32 - 1}`)).epoch).toBe(2 ** 32 - 1);
+    for (const epoch of [2 ** 32, 0]) {
+      invalid(() => decodeEnvelope(WIRE.replace('"epoch":1', `"epoch":${epoch}`)), "bad epoch");
+      invalid(() => encodeEnvelope({ ...fixed, epoch }), "bad epoch");
+    }
   });
 });

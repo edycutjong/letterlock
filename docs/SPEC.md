@@ -26,7 +26,7 @@ prf            = PRF(passkey, prfSalt(epoch))                                 32
 sk             = HKDF-SHA256(ikm = prf, salt = "letterlock/v1",
                              info = "letterlock/v1/x25519/" ‖ decimal(epoch), L = 32)
 pk             = X25519(sk, 9)                                                published as bytes32
-fingerprint    = hex(SHA-256(pk)[0..8])
+fingerprint    = lower-case hex(SHA-256(pk)[0..8])                            16 hex digits
 ```
 An ERC-8004 agent's key (§8) comes from its owner's passkey with the agent id in both labels:
 ```
@@ -68,7 +68,10 @@ lp(x) = u16(len(x)) ‖ x;  integers big-endian;  recipient = lower-cased 0x-add
   single `keyOf` read: an epoch-1 key labelled epoch 2 produces an envelope nobody can open. `resolve()` (§4)
   builds this value from one contract read so callers never assemble it by hand.
 - Wire form (`encodeEnvelope`, what `drop` sends): the JSON above as UTF-8, fields in the order shown, no
-  whitespace. `decodeEnvelope` keeps only these fields and validates them as `open` does, without decrypting.
+  whitespace, `kid` exactly 16 lower-case hex digits (the §2 fingerprint). `decodeEnvelope` keeps only these
+  fields and validates them as `encodeEnvelope` does (`open`'s header and base64url checks plus the `kid` format),
+  without decrypting. Both refuse any other `kid` spelling with `INPUT_INVALID`, so an envelope `drop` accepts is
+  one `inbox` lists; `open` itself never checks the `kid` format.
 
 ## 4. Operations
 | Call | Passkey prompt | Notes |
