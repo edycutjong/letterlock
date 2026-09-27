@@ -1,14 +1,14 @@
 // meraAccount(): the passkey's EVM account through mera's signing session and viem adapter, driven by the software
 // authenticator (test/soft-authenticator.ts) through the REAL mera ceremonies.
 import { getPasskeyPrfOutput } from "@category-labs/mera";
-import { entropyToMnemonic } from "@scure/bip39";
+import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { verifyMessage } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { LETTERLOCK_RP_ID, MERA_ACCOUNT_PATH, createEncryptionAddress, isLetterlockError, meraAccount, toHex } from "../src/index.ts";
 import { client, fund, noChain } from "./anvil/context.ts";
-import { softAuthenticator } from "./soft-authenticator.ts";
+import { fixedPrfAuthenticator, softAuthenticator, zeroedDuring } from "./soft-authenticator.ts";
 
 const rp = { id: LETTERLOCK_RP_ID, name: "Letterlock" };
 const user = { name: "maya", displayName: "Maya" };
@@ -24,6 +24,23 @@ describe("meraAccount", () => {
     expect(account.address).toBe(expected.address);
     expect(account.source).toBe("mera");
     expect(account.credentialId).toBe(credential.credentialId);
+  });
+
+  it("pins the account: PRF output 07…07 for mera's salt → the key at m/44'/60'/0'/0/0 → 0x2945…779f (checked with Foundry's cast)", async () => {
+    // cast wallet address --mnemonic "<entropyToMnemonic(07…07)>" --mnemonic-derivation-path "m/44'/60'/0'/0/0"
+    const dev = fixedPrfAuthenticator(new Uint8Array(32).fill(7));
+    const account = await meraAccount({ rpId: rp.id, webAuthnClient: dev });
+    expect(dev.salts.map(toHex)).toEqual(["896d46ac4ac191885c46137439db7bb52fb05cff3ecd34af7cdae0a1e0c00db9"]); // SHA-256("mera.prf.salt.v1")
+    expect(MERA_ACCOUNT_PATH).toBe("m/44'/60'/0'/0/0");
+    expect(account.address).toBe("0x29458C602E3DB4fC3b54EC2bbEE26Dbe64C7779f");
+  });
+
+  it("zeroes its copies of the PRF output and the BIP-39 seed once the signing session holds the key", async () => {
+    const prfOutput = new Uint8Array(32).fill(7);
+    const seed = mnemonicToSeedSync(entropyToMnemonic(prfOutput, wordlist));
+    const zeroed = await zeroedDuring(() => meraAccount({ rpId: rp.id, webAuthnClient: fixedPrfAuthenticator(prfOutput) }));
+    expect(zeroed).toContain(toHex(prfOutput));
+    expect(zeroed).toContain(toHex(seed));
   });
 
   it("the same passkey on a synced device gives the same account; another passkey another account", async () => {

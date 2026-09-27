@@ -10,7 +10,21 @@ export type RpcReply = { jsonrpc: "2.0"; id: unknown; result?: unknown; error?: 
 /** Answer a request in place of anvil (return the reply), or return undefined to forward it. `upstream()` forwards it now. */
 export type Intercept = (req: RpcRequest, upstream: () => Promise<RpcReply>) => Promise<RpcReply | undefined> | RpcReply | undefined;
 
-export type ProxyOptions = { readonly refuseBatches?: boolean; readonly intercept?: Intercept };
+export type ProxyOptions = {
+  readonly refuseBatches?: boolean;
+  /** Changes a request before it is answered or forwarded. */
+  readonly rewrite?: (req: RpcRequest) => RpcRequest;
+  readonly intercept?: Intercept;
+};
+
+/**
+ * As on Monad, where the "pending" tag behaves as "latest" (docs: JSON-RPC, block tags): eth_call and eth_estimateGas
+ * see only mined state, never transactions still waiting to be mined.
+ */
+export const pendingIsLatest = (req: RpcRequest): RpcRequest =>
+  req.method === "eth_estimateGas" || req.method === "eth_call"
+    ? { ...req, params: [req.params[0], req.params[1] === undefined || req.params[1] === "pending" ? "latest" : req.params[1], ...req.params.slice(2)] }
+    : req;
 
 export const rpcError = (req: RpcRequest, code: number, message: string): RpcReply => ({ jsonrpc: "2.0", id: req.id, error: { code, message } });
 
@@ -20,7 +34,8 @@ export const rpcProxy = async (upstreamUrl: string, o: ProxyOptions = {}) => {
     const r = await fetch(upstreamUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
     return (await r.json()) as RpcReply;
   };
-  const answer = async (req: RpcRequest): Promise<RpcReply> => {
+  const answer = async (original: RpcRequest): Promise<RpcReply> => {
+    const req = o.rewrite ? o.rewrite(original) : original;
     stats.requests++;
     stats.methods[req.method] = (stats.methods[req.method] ?? 0) + 1;
     return (await o.intercept?.(req, () => forward(req))) ?? forward(req);

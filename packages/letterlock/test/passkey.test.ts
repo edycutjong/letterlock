@@ -6,7 +6,7 @@ import { toHex, utf8 } from "../src/bytes.ts";
 import { open, seal } from "../src/envelope.ts";
 import { isLetterlockError } from "../src/errors.ts";
 import { createEncryptionAddress, deriveForAgent, deriveFromPasskey, openWithPasskey } from "../src/passkey.ts";
-import { softAuthenticator } from "./soft-authenticator.ts";
+import { softAuthenticator, zeroedDuring } from "./soft-authenticator.ts";
 
 const rp = { id: "letterlock.test", name: "Letterlock" };
 const user = { name: "maya", displayName: "Maya" };
@@ -95,6 +95,15 @@ describe("passkey → encryption address (via mera)", () => {
     const e = await openWithPasskey(env, { rpId: rp.id, credential: first.credential, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
     expect(isLetterlockError(e, "WRONG_KEY")).toBe(true);
     expect(await openWithPasskey(env, { rpId: rp.id, credential: second.credential, webAuthnClient: dev })).toEqual(utf8("hi"));
+  });
+
+  it("openWithPasskey zeroes its copy of the secret key once the envelope is open", async () => {
+    const dev = softAuthenticator();
+    const { keys, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+    const env = await seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
+      to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
+    const zeroed = await zeroedDuring(() => openWithPasskey(env, { rpId: rp.id, credential, webAuthnClient: dev }));
+    expect(zeroed).toContain(toHex(keys.secretKey));
   });
 
   it("a malformed envelope is rejected before any passkey prompt", async () => {

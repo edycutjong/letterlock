@@ -153,6 +153,52 @@ describe.skipIf(noChain)("inbox", () => {
     } finally { await proxy.close(); }
   });
 
+  it("an RPC node behind the head refuses the last page ('block range extends beyond current head block', rpc1.monad.xyz): the scan waits, asks again and misses nothing", async () => {
+    let refusals = 0;
+    const proxy = await rpcProxy(ctx.ok ? ctx.rpcUrl : "", {
+      intercept: (req) => {
+        if (req.method !== "eth_getLogs" || refusals >= 2) return undefined;
+        if (BigInt((req.params[0] as { toBlock: string }).toBlock) < lastDrop) return undefined;
+        refusals++;
+        return rpcError(req, -32602, "block range extends beyond current head block");
+      },
+    });
+    try {
+      const r = await client({ rpcUrl: proxy.url }).inbox(recipient, { fromBlock: first, toBlock: last });
+      expect(refusals).toBe(2);
+      expect(r.envelopes.map((e) => e.transactionHash)).toEqual(sent);
+    } finally { await proxy.close(); }
+  });
+
+  it("pages that complete out of order (one refused for too many results while later ones succeed) still list the drops oldest first", async () => {
+    // four drops: A alone in the first page (the probe), B and C together in the second (refused: too many results),
+    // D in a later page of the same round of 4 requests, answered before the refused page's parts are asked for
+    const account = await fundedAccount();
+    await client().publish({ account, keys: standIn(82, 1) });
+    const sender = await fundedAccount();
+    const dropped: { hash: string; block: bigint }[] = [];
+    for (const gap of [0, 100, 0, 250]) {
+      if (gap) await testClient().mine({ blocks: gap });
+      const r = await client().drop({ account: sender, envelope: await client().sealTo(account.address, utf8(`gap ${gap}`)) });
+      dropped.push({ hash: r.transactionHash, block: r.blockNumber });
+    }
+    const [a, b, c, d] = dropped.map((x) => x.block) as [bigint, bigint, bigint, bigint];
+    const range = b - a; // pages [a, b - 1], [b, b + range - 1] ∋ c, and d beyond it
+    expect(c - b < range && d - b >= range && d - b < 4n * range).toBe(true);
+    const proxy = await rpcProxy(ctx.ok ? ctx.rpcUrl : "", {
+      intercept: async (req, upstream) => {
+        if (req.method !== "eth_getLogs") return undefined;
+        const reply = await upstream();
+        return Array.isArray(reply.result) && reply.result.length > 1 ? rpcError(req, -32005, "query returned more than 1 results") : reply;
+      },
+    });
+    try {
+      const r = await client({ rpcUrl: proxy.url }).inbox(account.address, { fromBlock: a, toBlock: d, blockRange: Number(range) });
+      expect(r.envelopes.map((e) => e.transactionHash)).toEqual(dropped.map((x) => x.hash));
+      expect(r.blockRange).toBeLessThan(Number(range)); // the refused page was split
+    } finally { await proxy.close(); }
+  });
+
   it("any drop that is not an envelope for this recipient is listed as rejected, with the reason", async () => {
     if (!ctx.ok) return;
     const account = await fundedAccount();
@@ -163,9 +209,11 @@ describe.skipIf(noChain)("inbox", () => {
     const raw = (bytes: Uint8Array) => sendAs(anvil().directory, letterlockAbi, "drop", [account.address, NO_AGENT, toHex(bytes)]);
     const forOther: Envelope = await client().sealTo(other.address, utf8("not for you"));
     const elsewhere = await seal({ chainId: 10143, directory: ctx.directory, to: { recipient: account.address, publicKey: deriveKeyPair(new Uint8Array(32).fill(78), 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
+    const otherDirectory = await seal({ chainId: 143, directory: ctx.directoryNoAgents, to: { recipient: account.address, publicKey: deriveKeyPair(new Uint8Array(32).fill(78), 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
     await raw(utf8("hello, not JSON"));
     await raw(utf8(JSON.stringify(forOther)));
     await raw(utf8(JSON.stringify(elsewhere)));
+    await raw(utf8(JSON.stringify(otherDirectory)));
     await raw(utf8(JSON.stringify({ ...forOther, recipient: account.address.toLowerCase(), ct: "not base64!" })));
     const good = await client().drop({ account: other, envelope: await client().sealTo(account.address, utf8("for you")) });
     const r = await client().inbox(account.address, { fromBlock: from, toBlock: good.blockNumber });
@@ -174,6 +222,7 @@ describe.skipIf(noChain)("inbox", () => {
       "envelope is not JSON",
       `sealed to ${other.address.toLowerCase()}`,
       "sealed for chain 10143",
+      `sealed for directory ${ctx.directoryNoAgents.toLowerCase()}`,
       "envelope fields are not canonical base64url",
     ]);
   });

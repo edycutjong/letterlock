@@ -90,8 +90,10 @@ export const toLetterlockError = (e: unknown, action: string): LetterlockError =
   }
   if (find((x): x is ContractFunctionZeroDataError => x instanceof ContractFunctionZeroDataError))
     return new LetterlockError("INPUT_INVALID", `${action}: no Letterlock directory answered at that address on this chain`, { cause: e });
-  // viem names the error when the node's wording is the usual one; match the wording too, for nodes that differ
-  if (find((x): x is InsufficientFundsError => x instanceof InsufficientFundsError) || /insufficient (funds|balance)/i.test(e instanceof Error ? e.message : String(e)))
+  // viem names the error when the node's wording is the usual one; match the wording too, for nodes that differ:
+  // Monad says "Signer had insufficient balance", and its eth_call says "reserve balance violation" for a transaction
+  // that exceeds the sender's reserve balance
+  if (find((x): x is InsufficientFundsError => x instanceof InsufficientFundsError) || /insufficient (funds|balance)|reserve balance violation/i.test(e instanceof Error ? e.message : String(e)))
     return new LetterlockError("INSUFFICIENT_FUNDS", `${action}: the account cannot pay for gas; send it MON first`, { cause: e });
   return new LetterlockError("CHAIN_UNAVAILABLE", `${action}: ${brief}`, { cause: e });
 };

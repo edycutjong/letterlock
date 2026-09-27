@@ -17,9 +17,9 @@ import {
   type ChainErrorCode,
   type LetterlockErrorCode,
 } from "../src/index.ts";
-import { Fault, agentStandIn, anvil, client, ctx, faultyAbi, fund, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs, standIn } from "./anvil/context.ts";
-import { rpcProxy } from "./anvil/proxy.ts";
-import { softAuthenticator } from "./soft-authenticator.ts";
+import { Fault, agentStandIn, anvil, client, ctx, faultyAbi, fund, fundedAccount, newAgentId, noChain, privateChain, publicClient, registryAbi, sendAs, standIn, testClient } from "./anvil/context.ts";
+import { pendingIsLatest, rpcError, rpcProxy } from "./anvil/proxy.ts";
+import { softAuthenticator, zeroedDuring } from "./soft-authenticator.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 // looked up at call time, so this file still loads (and the test fails, not the file) against a build without it
@@ -94,15 +94,24 @@ describe.skipIf(noChain)("a directory address that holds no Letterlock directory
     expect((e as Error).message).toMatch(/is not a Letterlock directory on Monad mainnet/);
   };
 
+  // runtime code that answers any call with the word 1: PUSH1 1, PUSH1 0, MSTORE, PUSH1 32, PUSH1 0, RETURN
+  const catchAll = async () => {
+    const address = privateKeyToAccount(generatePrivateKey()).address;
+    await testClient().setCode({ address, bytecode: "0x600160005260206000f3" });
+    return address;
+  };
+
   it.each([
-    ["an address with no code (a typo, or the other network's directory)", () => privateKeyToAccount(generatePrivateKey()).address],
-    ["a contract that is not a directory (the registry)", () => anvil().registry],
-  ])("%s: publish, rotate, drop, inbox and resolve refuse it; the account's nonce and balance are unchanged", async (_, where) => {
-    const directory = where();
+    ["an address with no code (a typo, or the other network's directory)", async () => privateKeyToAccount(generatePrivateKey()).address, "the address has no code"],
+    ["a contract that is not a directory (the registry)", async () => anvil().registry, "its code does not answer NO_AGENT()"],
+    ["a contract that answers every call (a fallback)", catchAll, "NO_AGENT() returned 1, not 2^256 - 1"],
+  ])("%s: publish, rotate, drop, inbox and resolve refuse it; the account's nonce and balance are unchanged", async (_, where, why) => {
+    const directory = await where();
     const ll = client({ directory });
     const account = await fundedAccount();
     const before = await state(account.address);
-    await notADirectory(ll.publish({ account, keys: standIn(41, 1) }));
+    const e = await ll.publish({ account, keys: standIn(41, 1) }).then(() => null, (x: unknown) => x);
+    expect((e as Error).message).toContain(why);
     const env = await seal({ chainId: 143, directory, to: { recipient: account.address, publicKey: standIn(41, 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
     await notADirectory(ll.drop({ account, envelope: env }));
     await notADirectory(ll.inbox(account.address, { fromBlock: 0n }));
@@ -173,9 +182,92 @@ describe.skipIf(noChain)("publish", () => {
     await rejects(client().publish({ account: "not an account" as never, keys: standIn(7, 1) }), "INPUT_INVALID");
   });
 
+  it("an address the node signs for: a refused publish sends nothing either (the node signs whatever it is sent)", async () => {
+    // viem estimates gas before it signs for a local account, which a refused call also fails; for an address it sends
+    // eth_sendTransaction as is, so only the simulation keeps the reverting transaction (and its gas) off the chain
+    const signer = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720"; // anvil's default account 9, unlocked
+    const before = await nonce(signer);
+    await rejects(client().publish({ account: signer, keys: standIn(48, 2) }), "EPOCH_MISMATCH");
+    expect(await nonce(signer)).toBe(before);
+  });
+
   it("an account without MON → INSUFFICIENT_FUNDS", async () => {
     const broke = privateKeyToAccount(generatePrivateKey());
     await rejects(client().publish({ account: broke, keys: standIn(8, 1) }), "INSUFFICIENT_FUNDS");
+  });
+
+  it.each([
+    ["Signer had insufficient balance"], // Monad testnet, a publish from an empty account (2026-09-27)
+    ["reserve balance violation"], // Monad's eth_call when a transaction exceeds the sender's reserve balance
+  ])("a node that says '%s' → INSUFFICIENT_FUNDS (viem does not name that wording), and nothing is sent", async (wording) => {
+    const account = await fundedAccount();
+    const proxy = await rpcProxy(anvil().rpcUrl, {
+      intercept: (req) => {
+        if (req.method !== "eth_call" && req.method !== "eth_estimateGas") return undefined;
+        const from = (req.params[0] as { from?: string }).from?.toLowerCase();
+        return from === account.address.toLowerCase() ? rpcError(req, -32000, wording) : undefined;
+      },
+    });
+    try {
+      await rejects(client({ rpcUrl: proxy.url }).publish({ account, keys: standIn(44, 1) }), "INSUFFICIENT_FUNDS");
+      expect(await nonce(account.address)).toBe(0);
+    } finally { await proxy.close(); }
+  });
+});
+
+describe.skipIf(noChain)("drop", () => {
+  it("refuses an envelope sealed for another directory before sending: the directory itself takes any bytes", async () => {
+    if (!ctx.ok) return;
+    const account = await fundedAccount();
+    const keys = standIn(47, 1);
+    await client().publish({ account, keys });
+    const elsewhere = await seal({ chainId: 143, directory: ctx.directoryNoAgents, to: { recipient: account.address, publicKey: keys.publicKey, epoch: 1 }, plaintext: utf8("x") });
+    const before = await nonce(account.address);
+    const e = await client().drop({ account, envelope: elsewhere }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+    expect((e as Error).message).toContain(`sealed for directory ${ctx.directoryNoAgents.toLowerCase()}`);
+    expect(await nonce(account.address)).toBe(before);
+  });
+});
+
+describe.skipIf(noChain)("rotate", () => {
+  it("derives the next epoch's key from the passkey, publishes it, and zeroes its copy of the secret key", async () => {
+    const dev = softAuthenticator();
+    const { credential } = await createEncryptionAddress({ rp: { id: LETTERLOCK_RP_ID, name: "Letterlock" }, user: { name: "r", displayName: "R" }, webAuthnClient: dev });
+    const account = await meraAccount({ rpId: LETTERLOCK_RP_ID, credential, webAuthnClient: dev });
+    await fund(account.address, "1");
+    const next = await deriveFromPasskey({ rpId: LETTERLOCK_RP_ID, epoch: 1, credential, webAuthnClient: dev }); // no key yet: epoch 1
+    let r: Awaited<ReturnType<ReturnType<typeof client>["rotate"]>> | undefined;
+    const zeroed = await zeroedDuring(async () => { r = await client().rotate({ account, credential, webAuthnClient: dev }); });
+    expect([r?.epoch, r?.publicKey]).toEqual([1, `0x${toHex(next.publicKey)}`]);
+    expect(zeroed).toContain(toHex(next.secretKey));
+    account.end();
+  });
+});
+
+describe.skipIf(noChain)("a transaction that reverts when it is mined (a chain of the test's own, with mining paused)", () => {
+  it("a publish whose simulation passed but whose transaction reverted in its block is an error, never a result", async () => {
+    const chain = await privateChain();
+    // estimates and simulations see only mined state, as on Monad ("pending" behaves as "latest")
+    const proxy = await rpcProxy(chain.rpcUrl, { rewrite: pendingIsLatest });
+    try {
+      const ll = chain.client({ rpcUrl: proxy.url });
+      const account = await chain.fundedAccount();
+      const pending = () => chain.publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
+      const until = async (n: number) => { for (let i = 0; i < 200 && (await pending()) < n; i++) await new Promise((r) => setTimeout(r, 25)); };
+      await chain.testClient.setAutomine(false);
+      const first = ll.publish({ account, keys: standIn(45, 1) }).then((x) => x, (e: unknown) => e);
+      await until(1);
+      // simulated against the head, where epoch 1 is still free: its transaction is sent, then reverts EpochNotNext(1, 1)
+      const second = codeOf(ll.publish({ account, keys: standIn(46, 1) }));
+      await until(2);
+      await chain.testClient.mine({ blocks: 1 });
+      expect(await first).toMatchObject({ epoch: 1 });
+      expect(await second).toBe("EPOCH_MISMATCH");
+      const block = await chain.publicClient.getBlock({ blockTag: "latest", includeTransactions: true });
+      const statuses = await Promise.all(block.transactions.map(async (t) => (await chain.publicClient.getTransactionReceipt({ hash: t.hash })).status));
+      expect(statuses).toEqual(["success", "reverted"]);
+    } finally { await proxy.close(); chain.close(); }
   });
 });
 
@@ -367,6 +459,13 @@ describe.skipIf(noChain)("an agent's key is its own, never its owner's (the agen
     const note = await client().sealTo(owner.address, utf8("the owner's private note"));
     await rejects(open(note, agentKeys), "WRONG_KEY");
     expect(new TextDecoder().decode(await open(await client().sealTo(`agent:${agentId}`, utf8("a task")), agentKeys))).toBe("a task");
+
+    // an earlier key of the owner is no longer in the directory, and is refused all the same: it opens the owner's
+    // earlier notes (the owner rotates to epoch 3; its epoch-2 key is the agent's next epoch, which the directory takes)
+    await client().rotate({ account: owner, credential, webAuthnClient: dev });
+    await client().rotate({ account: owner, credential, webAuthnClient: dev });
+    const earlier = await deriveFromPasskey({ rpId: LETTERLOCK_RP_ID, epoch: 2, credential, webAuthnClient: dev });
+    await rejects(client().publishForAgent({ account: owner, agentId, keys: earlier }), "INPUT_INVALID");
     owner.end();
   });
 });

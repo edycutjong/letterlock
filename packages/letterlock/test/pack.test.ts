@@ -13,12 +13,16 @@ const pkgDir = fileURLToPath(new URL("..", import.meta.url));
 const dist = (f: string) => fileURLToPath(new URL(`../dist/${f}`, import.meta.url));
 const run = promisify(execFile);
 
-/** Bytes each package contributes to a minified browser bundle of `source` (esbuild fails on a Node built-in). */
+/**
+ * Bytes each package contributes to a minified browser bundle of `source` (esbuild fails on a Node built-in). Any
+ * warning fails too: esbuild only warns about, for example, an import that will always be undefined.
+ */
 const browserBundle = async (source: string) => {
   const r = await build({
     stdin: { contents: source, resolveDir: pkgDir, loader: "js" },
     bundle: true, platform: "browser", format: "esm", write: false, metafile: true, minify: true, logLevel: "silent",
   });
+  expect(r.warnings.map((w) => `${w.text} (${w.location?.file ?? "?"})`), "esbuild warnings").toEqual([]);
   const bytes: Record<string, number> = {};
   for (const [file, v] of Object.entries(Object.values(r.metafile.outputs)[0]!.inputs)) {
     if (!v.bytesInOutput) continue;

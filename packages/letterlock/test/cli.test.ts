@@ -56,6 +56,18 @@ describe("letterlock CLI without a chain", () => {
     expect((await cli(["drop", "env.json", "--private-key-env", key])).stderr).toContain("NAME of an environment variable");
   });
 
+  it("a private key typed where a variable NAME or a file is expected is shown as [redacted], never echoed", async () => {
+    const key = generatePrivateKey().slice(2);
+    const name = `a${key.slice(1)}`; // 64 hex digits that start with a letter: a valid variable name, and a valid key
+    const asName = await cli(["drop", "env.json", "--private-key-env", name]);
+    const asFile = await cli(["seal", "0x0000000000000000000000000000000000000001", key]);
+    for (const [r, secret] of [[asName, name], [asFile, key]] as const) {
+      expect(r.code).toBe(1);
+      expect(r.stdout + r.stderr).not.toContain(secret);
+      expect(r.stderr).toContain("[redacted]");
+    }
+  });
+
   it("drop needs --private-key-env naming a variable that is set and holds a key", async () => {
     expect((await cli(["drop", "-"], { stdin: "{}" })).code).toBe(2);
     const unset = await cli(["drop", "-", "--private-key-env", "LETTERLOCK_TEST_KEY"], { stdin: "{}" });
@@ -143,6 +155,7 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     expect(r.code, r.stderr).toBe(0);
     expect(r.stdout).toContain(`from       ${sender.address}`);
     expect(r.stdout + r.stderr).not.toContain(senderKey.slice(2));
+    expect(r.stdout).not.toContain("explorer"); // --rpc / --directory: the public explorer may not know this transaction
     const tx = /tx +(0x[0-9a-f]{64})/.exec(r.stdout)?.[1];
     const block = /block +(\d+)/.exec(r.stdout)?.[1];
     // by default inbox reads up to the finalized block, two blocks behind the one the drop is in: name the block
