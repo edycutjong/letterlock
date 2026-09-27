@@ -55,7 +55,13 @@
 
 .colEpoch {
   width: 6.5rem;
-  text-align: center !important;
+}
+
+/* the epoch column is centred, head and numbers alike: two classes outrank `.table th, .table td` (a class and an
+   element), which sets every other cell flush left (scripts/checks/module-overrides.mjs) */
+.table .colEpoch,
+.table .epoch {
+  text-align: center;
 }
 
 .colKey {
@@ -108,7 +114,6 @@
 }
 
 .epoch {
-  text-align: center;
   font-size: 1.125rem;
   font-weight: 500;
 }

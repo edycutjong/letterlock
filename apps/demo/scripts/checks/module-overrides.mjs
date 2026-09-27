@@ -18,6 +18,11 @@ const CASES = [
   { route: "/judge", sel: '[class*="judge_markLabel__"]', want: { fontSize: "11px" }, what: "judge: the tick labels are 11 px" },
   { route: "/", sel: '[class*="AddressCard_full__"]', want: { fontSize: "14px" }, what: "AddressCard: the full address is 14 px" },
   { route: "/", sel: '[class*="SiteFooter_addr__"]', want: { fontSize: "14px" }, what: "footer: the directory address is 14 px" },
+  // the epoch column is centred, head and numbers alike (.table td, a later and heavier rule, set the numbers left)
+  ...["/register", "/seal", "/kit"].flatMap((route) => [
+    { route, sel: 'th[class*="RegisterTable_colEpoch__"]', want: { textAlign: "center" }, what: "register: the epoch head is centred" },
+    { route, sel: 'td[class*="RegisterTable_epoch__"]', want: { textAlign: "center" }, what: "register: the epoch numbers are centred under their head" },
+  ]),
 ];
 
 // the envelope's epoch scales with the envelope: max(9.5px, 2.35cqi), tracked 0.2em, set solid
