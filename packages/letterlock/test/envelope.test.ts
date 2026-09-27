@@ -65,7 +65,7 @@ describe("seal → open", () => {
 });
 
 describe("tamper and misuse surface as named errors", () => {
-  it("a different person's key (same epoch) → WRONG_KEY before any crypto", async () =>
+  it("a different person's key (same epoch) → WRONG_KEY: decryption fails and the kid names another key", async () =>
     rejects(open(await seal(base), nadia), "WRONG_KEY"));
 
   it("an edited kid can never make the RIGHT key fail (decrypt first, kid only explains failures)", async () => {
