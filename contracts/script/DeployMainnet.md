@@ -26,7 +26,7 @@ nothing else is held back:
    (block 108228758; again at block 108279356). Under the previous rule the same test fails: 527 budgets, 35,920 to
    46,440 gas, returned zeros for the live key (block 108228931).
 2. `drop` NatSpec: it says only that the envelope format is the docs/SPEC.md §3 UTF-8 JSON, no longer that the SDK
-   drops it (the SDK has no drop helper yet).
+   drops it (the SDK had no drop helper then; it has since gained `drop()` and `inbox()`, and the CLI `letterlock drop`).
 3. `keyOfAgent` NatSpec on starved reads (commit `56e3d95`): a read given too little gas reverts
    `RegistryCallFailed`, or reverts with no data when it runs out of gas in Letterlock itself, as when the 1/64 of
    the gas kept back from a starved registry call cannot pay for the `RegistryCallFailed` revert. Any revert means

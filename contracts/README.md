@@ -67,7 +67,8 @@ both with `node script/export-abi.mjs`).
   agent (`InvalidRecipient` otherwise). The envelope is 1 to 16,384 bytes (`EmptyEnvelope`, `EnvelopeTooLarge`).
   The recipient must have a key that resolves now (`NoKeyPublished`), so no drop can target a recipient without a
   live key. The contract does not validate the envelope: any 1 to 16,384 bytes are accepted. The format is the
-  `docs/SPEC.md` §3 UTF-8 JSON. The SDK has no drop helper yet (planned): the testnet drop was sent with `cast send`.
+  `docs/SPEC.md` §3 UTF-8 JSON, which the SDK's `drop()` sends and its `inbox()` reads back from `Dropped` logs (from a
+  terminal: `letterlock drop`, `letterlock inbox`). The smoke-test drops on mainnet and testnet were sent with `cast send`.
 - **Agent keys follow the NFT.** After a transfer or burn, `keyOfAgent` returns zeros, because the previous owner
   holds the passkey. The new owner publishes the stored epoch + 1 (read it with `agentKeyRecord`). A drop to an
   agent is sealed to the key that resolves at that moment, so after a transfer only the previous owner can open it.
