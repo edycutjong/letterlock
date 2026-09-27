@@ -1,0 +1,53 @@
+{
+  "about": "The judge's step 2 on the production site on Monad mainnet (scripts/live-judge-agent.mjs): /judge asks the reference agent from the page to write to an address with a key; no passkey is made or used. Each run spends one of the agent's drops.",
+  "runs": [
+    {
+      "site": "https://app.letterlock.edycu.dev",
+      "rpId": "app.letterlock.edycu.dev",
+      "sdk": "0.1.1",
+      "network": "Monad mainnet",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "recipient": "0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
+      "dropTx": "0x760ea678082271d53ecf404621a6b95bad1f742c020061699366c3644f80eec7",
+      "startedAt": "2026-09-27T21:26:20.573Z",
+      "steps": {},
+      "failedAt": "2026-09-27T21:26:24.533Z",
+      "error": "the agent saw the app's origin",
+      "problems": [],
+      "diagnosis": "The page's POST reached the agent and the drop landed (dropTx, block 108,572,093); the run then stopped at its own check of the request's Origin header, which read null: Playwright's request.headers() leaves Origin out, and allHeaders() carries it. The agent's own log of the request (Vercel runtime log, deployment dpl_5BaqRCSyZ1urkdzjwYhHvnLUuUxU, 2026-09-27 21:26:23 UTC) shows OPTIONS /remember 204, the preflight it answers only for an allowed origin, then POST /remember 200 with this transaction and 396 bytes. The script now reads allHeaders(); the drop was checked afterwards without sending another (the next run, verifiedOnly)."
+    },
+    {
+      "site": "https://app.letterlock.edycu.dev",
+      "rpId": "app.letterlock.edycu.dev",
+      "sdk": "0.1.1",
+      "network": "Monad mainnet",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "recipient": "0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
+      "verifiedOnly": true,
+      "dropTx": "0x760ea678082271d53ecf404621a6b95bad1f742c020061699366c3644f80eec7",
+      "startedAt": "2026-09-27T21:27:53.157Z",
+      "steps": {
+        "the drop, read back (no page step: read-only)": {
+          "agentDropTx": "0x760ea678082271d53ecf404621a6b95bad1f742c020061699366c3644f80eec7",
+          "agentDropBlock": 108572093,
+          "agentWallet": "0xde8a4a3c3be2802bf9be78cfc1de1a5a0a4c47a4",
+          "gasUsed": 43485,
+          "envelopeBytes": 396,
+          "sealedTo": {
+            "epoch": 1,
+            "kid": "f30f499bd79f022e",
+            "keyOfEpoch": 1,
+            "keyOfKid": "f30f499bd79f022e"
+          }
+        },
+        "the inbox lists it": {
+          "page": "https://app.letterlock.edycu.dev/open?to=0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
+          "listed": true
+        }
+      },
+      "finishedAt": "2026-09-27T21:27:54.748Z"
+    }
+  ]
+}

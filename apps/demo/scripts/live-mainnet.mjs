@@ -45,6 +45,16 @@ const keyOfAbi = [
   { type: "function", name: "keyOf", stateMutability: "view", inputs: [{ name: "who", type: "address" }], outputs: [{ name: "pub", type: "bytes32" }, { name: "epoch", type: "uint32" }, { name: "updatedAt", type: "uint64" }] },
 ];
 const txOf = (href) => /\/tx\/(0x[0-9a-f]{64})/i.exec(href ?? "")?.[1];
+/**
+ * Waits until React has hydrated the element `selector` names. Before that a click on a form's button submits it
+ * natively (the register's lookup reloads as /register?q=…, which the page does not read) or does nothing: the
+ * 2026-09-28 run lost its register step to that race.
+ */
+const hydrated = (page, selector) =>
+  page.waitForFunction((s) => {
+    const el = document.querySelector(s);
+    return !!el && Object.keys(el).some((k) => k.startsWith("__reactProps$"));
+  }, selector, { timeout: 30_000 });
 const result = { site: BASE, rpId: LETTERLOCK_RP_ID, sdk: VERSION, network: record.network, chainId: record.chainId, directory: DIRECTORY, startedAt: new Date().toISOString(), steps: {} };
 const step = (name, value) => {
   result.steps[name] = value;
@@ -120,6 +130,7 @@ try {
 
   // 2. the register finds it live
   await page.goto(`${BASE}/register`, { waitUntil: "domcontentloaded" });
+  await hydrated(page, 'form[aria-label="Look up an address"]');
   await page.getByRole("textbox", { name: "Look up" }).fill(address);
   await page.getByRole("button", { name: "Look up" }).click();
   await page.getByText("Found by keyOf").first().waitFor({ timeout: 30_000 });
@@ -136,6 +147,7 @@ try {
   const envelope = (await page.locator("details pre").textContent()) ?? "";
   assert.equal(JSON.parse(envelope).chainId, 143);
   await page.goto(`${BASE}/open`, { waitUntil: "domcontentloaded" });
+  await hydrated(page, "form[aria-label='Open a pasted envelope']");
   await page.getByText("Paste an envelope").click();
   await page.getByLabel("Envelope JSON").fill(envelope);
   await page.locator("form[aria-label='Open a pasted envelope']").getByRole("button", { name: "Open with passkey" }).click();
@@ -164,6 +176,11 @@ try {
   // 5. storage cleared: the passkey finds the address again and opens the agent's letter
   await page.evaluate(() => localStorage.clear());
   await page.goto(`${BASE}/open`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Find my inbox with my passkey" }).waitFor({ timeout: 30_000 });
+  await page.waitForFunction(() => {
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent?.includes("Find my inbox with my passkey"));
+    return !!b && Object.keys(b).some((k) => k.startsWith("__reactProps$"));
+  }, null, { timeout: 30_000 });
   await page.getByRole("button", { name: "Find my inbox with my passkey" }).click();
   await reader.getByRole("button", { name: "Open with passkey" }).waitFor({ timeout: 90_000 });
   const again = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "null"), STORED);

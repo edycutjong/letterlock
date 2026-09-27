@@ -1,5 +1,5 @@
 {
-  "about": "Live runs of https://letterlock-app.vercel.app on Monad mainnet with a virtual passkey (scripts/live-mainnet.mjs). Each run spends one drip.",
+  "about": "Live runs of the production app on Monad mainnet with a virtual passkey (scripts/live-mainnet.mjs), each on the site it names: the first two at https://letterlock-app.vercel.app, the rpId SDK 0.1.0 pinned, the third at https://app.letterlock.edycu.dev, the rpId 0.1.1 pins. Each run spends one drip.",
   "runs": [
     {
       "site": "https://letterlock-app.vercel.app",
@@ -68,6 +68,43 @@
         }
       },
       "finishedAt": "2026-09-27T05:49:58.209Z"
+    },
+    {
+      "site": "https://app.letterlock.edycu.dev",
+      "rpId": "app.letterlock.edycu.dev",
+      "sdk": "0.1.1",
+      "network": "Monad mainnet",
+      "chainId": 143,
+      "directory": "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+      "startedAt": "2026-09-27T21:22:32.600Z",
+      "steps": {
+        "create + drip + publish": {
+          "address": "0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
+          "seconds": 3.4,
+          "dripTx": "0xbb56739007c7a575ec6c2a3f1085b51c84d50e06b207d76bec9934da71b49a7a",
+          "dripAmount": "0.01421795232",
+          "dripWalletSpent": "0.01635995232",
+          "dripBlock": 108571339,
+          "publishTx": "0x28f3f506813f6f3992a87892bd44c422614990749699b12a1c65467fa6b3312c",
+          "publishBlock": 108571344,
+          "publishGas": 70863,
+          "publishFeeCapGwei": 182.4,
+          "publishNeeded": "0.0129254112",
+          "publicKey": "0x8216af5a2ea1d245b6bd8809a2dc5a10d13e7bd786f5b5c96d0edd42669c4169",
+          "epoch": 1
+        }
+      },
+      "failedAt": "2026-09-27T21:23:09.378Z",
+      "error": "locator.waitFor: Timeout 30000ms exceeded.",
+      "problems": [],
+      "page": {
+        "url": "https://app.letterlock.edycu.dev/register?q=0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
+        "docket": [],
+        "alerts": [
+          ""
+        ]
+      },
+      "diagnosis": "Create, drip and publish passed on mainnet under the new rpId: a Chromium WebAuthn virtual authenticator with PRF made the passkey, the drip paid its account and the account published its own key (steps). The register step then timed out: the script typed the address and pressed Look up before React had hydrated the page, so the form submitted natively and reloaded as /register?q=…, which the page does not read, and 'Found by keyOf' never showed. The page itself listed the key, first of 5, read to block 108,571,434. The browser closed on the failure and the virtual passkey with it, so nothing sealed to this key can be opened: lib/known-keys.json labels it, and the script now waits for hydration before any click. No second create was run; the judge's step 2 for this address, the reference agent writing to it from /judge, is e2e-results/judge-agent-live.json."
     }
   ]
 }

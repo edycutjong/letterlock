@@ -6,6 +6,12 @@
       "address": "0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C",
       "txHash": "0xd49f881173dc3d3c2ab9cb8bb50b58dd090b3e13300715169d171844f2187ddf",
       "note": "Test key from the app’s live check: a browser’s virtual passkey, deleted after the run. Nothing sealed to it can be opened"
+    },
+    {
+      "chainId": 143,
+      "address": "0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
+      "txHash": "0x28f3f506813f6f3992a87892bd44c422614990749699b12a1c65467fa6b3312c",
+      "note": "Test key from the app’s live check: a browser’s virtual passkey, deleted after the run. Nothing sealed to it can be opened"
     }
   ]
 }
