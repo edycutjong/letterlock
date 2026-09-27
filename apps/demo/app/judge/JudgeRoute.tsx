@@ -171,6 +171,17 @@ export function JudgeRoute() {
           )}
           {Object.keys(reports).length > 0 && <Steps className={styles.docket} items={createItems} label="Creating your encryption address" />}
           <FailureNotice failure={createFailure} />
+          {/* the register could not be read: whether the key is posted is not known, so "Post my key" stays beside this */}
+          {onchain.status === "failed" && !createFailure && !creating && (
+            <FailureNotice
+              failure={onchain.failure}
+              action={
+                <Button size="md" tone="outline" onClick={refresh}>
+                  Read the register again
+                </Button>
+              }
+            />
+          )}
         </div>
         <Mark status={s1} />
       </li>

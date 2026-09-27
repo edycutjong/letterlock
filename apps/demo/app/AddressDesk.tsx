@@ -16,6 +16,7 @@ import { DIRECTORY } from "@/lib/deployment.ts";
 import type { ExampleKey } from "@/lib/examples.ts";
 import { toFailure, type Failure } from "@/lib/failure.ts";
 import { postmarkDate } from "@/lib/format.ts";
+import { homeAction } from "@/lib/home-action.ts";
 import { useKeyOf } from "@/lib/hooks.ts";
 import { forgetStored, useJudgePassFromUrl, useStoredPasskey } from "@/lib/session.ts";
 import styles from "./home.module.css";
@@ -164,60 +165,99 @@ export function AddressDesk({ intro, example }: AddressDeskProps) {
     );
   }
 
-  // ---- the action ------------------------------------------------------------------------------------------------
+  // ---- the action (lib/home-action.ts: seal and open follow only from a key the register holds) -------------------
+  const action = homeAction({
+    host: host === null ? "pending" : host.ok ? "ok" : "elsewhere",
+    stored: stored === null ? "pending" : stored ? "stored" : "none",
+    address: address !== undefined,
+    register: onchain.status,
+    ...(running ? { running } : {}),
+  });
   let cta: ReactNode;
-  if (host === null || stored === null) {
-    cta = <PasskeyButton status="disabled">Create my encryption address</PasskeyButton>;
-  } else if (!host.ok) {
-    cta = (
-      <div className={styles.elsewhere}>
-        <p>{host.reason}</p>
-        <ButtonLink href={`https://${LETTERLOCK_RP_ID}/`} icon={<ArrowRightIcon />}>
-          Go to the live site
-        </ButtonLink>
-      </div>
-    );
-  } else if (running && running !== "rotate") {
-    cta = (
-      <PasskeyButton status="waiting" waitingLabel={activeStep ? WAITING[activeStep] : undefined}>
-        {running === "create" ? "Create my encryption address" : "Post my key"}
-      </PasskeyButton>
-    );
-  } else if (!stored) {
-    cta = (
-      <>
-        <PasskeyButton status={running ? "disabled" : "idle"} onClick={() => void run("create")}>
-          Create my encryption address
-        </PasskeyButton>
-        <p className={styles.fine}>Two passkey prompts, three on some browsers: one for your key, one for the account that posts it. Nothing secret is stored or sent.</p>
-      </>
-    );
-  } else if (!address || onchain.status === "none") {
-    cta = (
-      <>
-        <p className={styles.state}>This device holds your passkey’s details, and its key is not in the register yet.</p>
-        <PasskeyButton status={running ? "disabled" : "idle"} onClick={() => void run("post")}>
-          Post my key
-        </PasskeyButton>
-        <p className={styles.fine}>Two passkey prompts: your key, then the account that posts it. The first post is paid for by the gas drip.</p>
-      </>
-    );
-  } else {
-    cta = (
-      <>
-        <p className={styles.state} role="status">
-          {onchain.status === "found" ? "Your address is in the register. Anyone can seal a note to it now." : onchain.status === "failed" ? "" : "Reading the register…"}
-        </p>
-        <div className={styles.next}>
-          <ButtonLink href={`/seal?to=${address}`} tone="ink" size="md" icon={<EnvelopeIcon />}>
-            Seal a note to yourself
-          </ButtonLink>
-          <ButtonLink href="/open" size="md" icon={<ArrowRightIcon />}>
-            Open your inbox
+  switch (action) {
+    case "wait":
+      cta = <PasskeyButton status="disabled">Create my encryption address</PasskeyButton>;
+      break;
+    case "elsewhere":
+      cta = (
+        <div className={styles.elsewhere}>
+          <p>{host && !host.ok ? host.reason : undefined}</p>
+          <ButtonLink href={`https://${LETTERLOCK_RP_ID}/`} icon={<ArrowRightIcon />}>
+            Go to the live site
           </ButtonLink>
         </div>
-      </>
-    );
+      );
+      break;
+    case "running":
+      cta = (
+        <PasskeyButton status="waiting" waitingLabel={activeStep ? WAITING[activeStep] : undefined}>
+          {running === "create" ? "Create my encryption address" : "Post my key"}
+        </PasskeyButton>
+      );
+      break;
+    case "create":
+      cta = (
+        <>
+          <PasskeyButton status={running ? "disabled" : "idle"} onClick={() => void run("create")}>
+            Create my encryption address
+          </PasskeyButton>
+          <p className={styles.fine}>Two passkey prompts, three on some browsers: one for your key, one for the account that posts it. Nothing secret is stored or sent.</p>
+        </>
+      );
+      break;
+    case "post":
+      cta = (
+        <>
+          <p className={styles.state}>This device holds your passkey’s details, and its key is not in the register yet.</p>
+          <PasskeyButton status={running ? "disabled" : "idle"} onClick={() => void run("post")}>
+            Post my key
+          </PasskeyButton>
+          <p className={styles.fine}>Two passkey prompts: your key, then the account that posts it. The first post is paid for by the gas drip.</p>
+        </>
+      );
+      break;
+    case "found":
+      cta = (
+        <>
+          <p className={styles.state} role="status">
+            Your address is in the register. Anyone can seal a note to it now.
+          </p>
+          <div className={styles.next}>
+            <ButtonLink href={`/seal?to=${address}`} tone="ink" size="md" icon={<EnvelopeIcon />}>
+              Seal a note to yourself
+            </ButtonLink>
+            <ButtonLink href="/open" size="md" icon={<ArrowRightIcon />}>
+              Open your inbox
+            </ButtonLink>
+          </div>
+        </>
+      );
+      break;
+    case "unknown":
+      // the key may or may not be posted: both ways on are offered, and the slip below says why
+      cta = (
+        <>
+          <p className={styles.state} role="status">
+            The register could not be read, so this page cannot tell whether your key is posted.
+          </p>
+          <div className={styles.next}>
+            <PasskeyButton size="md" status={running ? "disabled" : "idle"} onClick={() => void run("post")}>
+              Post my key
+            </PasskeyButton>
+            <Button size="md" tone="outline" status={running ? "disabled" : "idle"} onClick={refresh}>
+              Read the register again
+            </Button>
+          </div>
+        </>
+      );
+      break;
+    case "reading":
+      cta = (
+        <p className={styles.state} role="status">
+          Reading the register…
+        </p>
+      );
+      break;
   }
 
   const retryable = failure?.kind === "slip" && ["PASSKEY_FAILED", "CHAIN_UNAVAILABLE", "PRF_UNSUPPORTED"].includes(failure.code);
@@ -246,17 +286,8 @@ export function AddressDesk({ intro, example }: AddressDeskProps) {
               ) : undefined
             }
           />
-          {onchain.status === "failed" && !failure && (
-            <FailureNotice
-              failure={onchain.failure}
-              className={styles.failure}
-              action={
-                <Button size="md" tone="outline" onClick={refresh}>
-                  Read the register again
-                </Button>
-              }
-            />
-          )}
+          {/* why the register could not be read; its "Read the register again" is with the actions above */}
+          {onchain.status === "failed" && !failure && <FailureNotice failure={onchain.failure} className={styles.failure} />}
           {stored && !running && (
             <p className={styles.forget}>
               This device remembers only your passkey’s id{address ? " and your address" : ""}: nothing secret.{" "}
