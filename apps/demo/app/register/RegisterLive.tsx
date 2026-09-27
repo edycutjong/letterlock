@@ -8,13 +8,13 @@ import { TextField } from "@/components/Field";
 import { LookupIcon } from "@/components/Icons";
 import { RegisterTable, type RegisterRow } from "@/components/RegisterTable";
 import { DEPLOYMENT, explorerTx } from "@/lib/chain.ts";
-import { readClient, scanPublicClient } from "@/lib/client.ts";
+import { readClient } from "@/lib/client.ts";
 import { DIRECTORY, SMOKE_KEYS } from "@/lib/deployment.ts";
 import { toFailure, type Failure } from "@/lib/failure.ts";
 import { formatCount, shortHex } from "@/lib/format.ts";
 import { useNow, usePoll } from "@/lib/hooks.ts";
 import { KNOWN_KEYS } from "@/lib/known-keys.ts";
-import { readKeyLines, type KeyLine } from "@/lib/register.ts";
+import { readKeyLines, scanHead, type KeyLine } from "@/lib/register.ts";
 import styles from "./register.module.css";
 
 /** How often the register reads the chain again. Monad makes a block about every 400 ms. */
@@ -69,7 +69,7 @@ export function RegisterLive() {
   const read = useCallback(async () => {
     const { head: last, lines } = scanRef.current;
     try {
-      const head = await scanPublicClient().getBlockNumber({ cacheTime: 0 });
+      const head = await scanHead();
       const from = last === undefined ? BigInt(DEPLOYMENT.deployBlock) : last + 1n;
       if (from > head) {
         setScan((s) => ({ ...s, readAt: Math.floor(Date.now() / 1000), failure: undefined }));

@@ -7,6 +7,7 @@ import { NO_AGENT, fingerprint, fromHex, letterlockAbi } from "letterlock";
 import type { Address, Hex, PublicClient } from "viem";
 import { DEPLOYMENT, SCAN_RANGE } from "./chain.ts";
 import { publicClient, scanPublicClient } from "./client.ts";
+import { asChainError } from "./failure.ts";
 
 export type KeyLine = {
   /** transaction hash and log index: unique */
@@ -88,7 +89,7 @@ export const readKeyLines = async (
         for (let a = lo; a <= hi; a += BigInt(range)) pending.push([a, a + BigInt(range) - 1n < hi ? a + BigInt(range) - 1n : hi]);
         continue;
       }
-      throw r.reason;
+      throw asChainError(r.reason, `reading the register (eth_getLogs, blocks ${lo} to ${hi})`);
     }
     o.onProgress?.(done, total);
   }
@@ -124,15 +125,28 @@ const toLine = (log: RawLog): KeyLine => {
  * block to the head). Used on testnet, where no RPC scans the whole chain at once.
  */
 export const firstBlockAt = async (ts: number, client: PublicClient = publicClient()): Promise<bigint> => {
-  let lo = BigInt(DEPLOYMENT.deployBlock);
-  let hi = await client.getBlockNumber({ cacheTime: 0 });
-  while (lo < hi) {
-    const mid = (lo + hi) / 2n;
-    const b = await client.getBlock({ blockNumber: mid });
-    if (Number(b.timestamp) < ts) lo = mid + 1n;
-    else hi = mid;
+  try {
+    let lo = BigInt(DEPLOYMENT.deployBlock);
+    let hi = await client.getBlockNumber({ cacheTime: 0 });
+    while (lo < hi) {
+      const mid = (lo + hi) / 2n;
+      const b = await client.getBlock({ blockNumber: mid });
+      if (Number(b.timestamp) < ts) lo = mid + 1n;
+      else hi = mid;
+    }
+    return lo;
+  } catch (e) {
+    throw asChainError(e, "finding the block of a key's publish");
   }
-  return lo;
+};
+
+/** The chain's head as the register's scan RPC sees it. */
+export const scanHead = async (): Promise<bigint> => {
+  try {
+    return await scanPublicClient().getBlockNumber({ cacheTime: 0 });
+  } catch (e) {
+    throw asChainError(e, "reading the register's head block");
+  }
 };
 
 /**
@@ -142,7 +156,7 @@ export const firstBlockAt = async (ts: number, client: PublicClient = publicClie
 export const findPublish = async (address: Address, epoch: number, updatedAt: number): Promise<KeyLine | undefined> => {
   const match = (lines: KeyLine[]) =>
     lines.filter((l) => l.recipient === address.toLowerCase() && l.epoch === epoch).at(-1);
-  const head = await scanPublicClient().getBlockNumber({ cacheTime: 0 });
+  const head = await scanHead();
   if (SCAN_RANGE >= 1_000_000) return match(await readKeyLines({ fromBlock: BigInt(DEPLOYMENT.deployBlock), toBlock: head, args: { who: address } }));
   const from = await firstBlockAt(updatedAt);
   const to = from + 99n < head ? from + 99n : head;
@@ -156,7 +170,12 @@ export const findPublish = async (address: Address, epoch: number, updatedAt: nu
  */
 export const firstKeyBlock = async (address: Address, client: PublicClient = publicClient()): Promise<bigint | undefined> => {
   let lo = BigInt(DEPLOYMENT.deployBlock);
-  let hi = await client.getBlockNumber({ cacheTime: 0 });
+  let hi: bigint;
+  try {
+    hi = await client.getBlockNumber({ cacheTime: 0 });
+  } catch (e) {
+    throw asChainError(e, "reading the head block");
+  }
   try {
     while (lo < hi) {
       const mid = (lo + hi) / 2n;

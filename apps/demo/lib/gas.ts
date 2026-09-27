@@ -9,7 +9,7 @@ import { DEPLOYMENT } from "./chain.ts";
 import { publicClient } from "./client.ts";
 import { PUBLISH_GAS, dripMessage, unixMinute } from "./drip.ts";
 import { walletBidFeePerGas } from "./fees.ts";
-import { DripRefused } from "./failure.ts";
+import { DripRefused, asChainError } from "./failure.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -21,8 +21,12 @@ export type Postage = { readonly balance: bigint; readonly needed: bigint };
  */
 export const postageFor = async (address: Address, gas: bigint): Promise<Postage> => {
   const pc = publicClient();
-  const [balance, bid] = await Promise.all([pc.getBalance({ address }), walletBidFeePerGas(pc, address)]);
-  return { balance, needed: gas * bid };
+  try {
+    const [balance, bid] = await Promise.all([pc.getBalance({ address }), walletBidFeePerGas(pc, address)]);
+    return { balance, needed: gas * bid };
+  } catch (e) {
+    throw asChainError(e, "reading the account's balance and the fee cap");
+  }
 };
 
 export const publishPostage = (address: Address): Promise<Postage> => postageFor(address, PUBLISH_GAS);
@@ -32,7 +36,11 @@ export const dropGas = async (from: Address, envelope: Envelope): Promise<bigint
   const recipient = envelope.recipient.toLowerCase();
   const agent = recipient.startsWith("agent:");
   const args = [agent ? zeroAddress : (recipient as Address), agent ? toAgentId(recipient) : NO_AGENT, bytesToHex(encodeEnvelope(envelope))] as const;
-  return publicClient().estimateContractGas({ account: from, address: DEPLOYMENT.directory, abi: letterlockAbi, functionName: "drop", args });
+  try {
+    return await publicClient().estimateContractGas({ account: from, address: DEPLOYMENT.directory, abi: letterlockAbi, functionName: "drop", args });
+  } catch (e) {
+    throw asChainError(e, "estimating the drop's gas");
+  }
 };
 
 export type DripReceipt = { readonly transactionHash: Hex; readonly amount: string; readonly explorer: string };
