@@ -1,7 +1,9 @@
 // Read-only smoke of a running build: every route loads, carries the security headers and its per-request CSP, and
 // logs no console error, page error or CSP violation; /register shows the directory's real KeyPublished lines (the
-// deploy smoke test's publish transaction among them) and a live keyOf lookup finds the deployer's key. Sends no
-// transaction and makes no passkey.
+// deploy smoke test's publish transaction among them), each with its transaction link on a phone too, and a live
+// keyOf lookup finds the deployer's key; with the RPCs unreachable the register shows the CHAIN_UNAVAILABLE slip, not
+// the RPC client's report; /seal names the accepted forms for a malformed recipient. Sends no transaction and makes no
+// passkey.
 //
 //   node scripts/smoke.mjs https://letterlock-app.vercel.app      (production, Monad mainnet)
 //   node scripts/smoke.mjs http://127.0.0.1:3217                   (a local build)
@@ -60,6 +62,13 @@ try {
       else pass(`/register: keyOf(${record.deployer.slice(0, 10)}…) found its key live`);
     }
     if (route === "/seal") {
+      // a malformed recipient (a truncated paste) is named beside the field, not met with a silently disabled button
+      const typo = await context.newPage();
+      await typo.goto(`${base}/seal?to=0x1234`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      const named = await typo.getByText("An address is 0x and 40 hex digits; an agent is agent:").first().waitFor({ timeout: 10_000 }).then(() => true, () => false);
+      if (!named) fail("/seal?to=0x1234: no error beside the To field");
+      else pass("/seal?to=0x1234: the field names the two accepted forms");
+      await typo.close();
       // sealing is local: a keyOf read and HPKE in the page; nothing is sent
       await page.locator('main form input[name="to"]').fill(record.deployer);
       await page.locator('tr[data-state="found"]').first().waitFor({ timeout: 30_000 });
@@ -85,6 +94,34 @@ try {
     else pass(`${route}: HTTP ${status}, headers and nonce CSP, no console errors`);
     await page.close();
   }
+  {
+    // on a phone the register has no Posted column: each line still links the transaction that posted its key
+    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await phone.newPage();
+    await page.goto(`${base}/register`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page.waitForFunction(() => document.querySelectorAll("section[aria-labelledby=live-title] tbody tr").length > 0, null, { timeout: 45_000 }).catch(() => {});
+    const lines = await page.evaluate(() =>
+      [...document.querySelectorAll("section[aria-labelledby=live-title] tbody tr")].map(
+        (tr) => [...tr.querySelectorAll('a[href*="/tx/"]')].filter((a) => a.getBoundingClientRect().width > 0 && getComputedStyle(a).visibility !== "hidden").length,
+      ),
+    );
+    if (!lines.length || lines.some((n) => n !== 1)) fail(`/register at 390 px: transaction links shown per line ${JSON.stringify(lines)}, want 1 each`);
+    else pass(`/register at 390 px: each of ${lines.length} lines shows its transaction link`);
+    await phone.close();
+  }
+  {
+    // the RPCs unreachable: the register's own reads fail as the CHAIN_UNAVAILABLE slip, never as viem's report
+    // (which names the RPC URL, the request body and viem's version)
+    const cut = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await cut.route(/rpc1?\.monad\.xyz|testnet-rpc\.monad\.xyz/, (r) => r.abort());
+    const page = await cut.newPage();
+    await page.goto(`${base}/register`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    const slip = await page.locator('[data-code="CHAIN_UNAVAILABLE"]').first().waitFor({ timeout: 30_000 }).then(() => true, () => false);
+    const text = await page.locator("main").innerText();
+    if (!slip || /viem@|Request body|HTTP request failed/.test(text)) fail(`/register with the RPCs unreachable: ${slip ? "viem's report is on the page" : "no CHAIN_UNAVAILABLE slip"}`);
+    else pass("/register with the RPCs unreachable: the CHAIN_UNAVAILABLE slip, and none of the RPC client's report");
+    await cut.close();
+  }
   for (const [path, type] of [["/og-image.png", "image/png"], ["/icon.svg", "image/svg+xml"]]) {
     const r = await fetch(base + path);
     const t = r.headers.get("content-type") ?? "";
@@ -98,7 +135,9 @@ try {
   for (const m of ['property="og:image"', 'name="twitter:card"', 'property="og:title"', "<title>"]) if (!home.includes(m)) fail(`/: no ${m}`);
   const drip = await fetch(base + "/api/drip", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   const dripBody = await drip.json().catch(() => ({}));
-  if (drip.status !== 400 || dripBody.error !== "BAD_REQUEST") fail(`/api/drip: an empty request answered ${drip.status} ${JSON.stringify(dripBody)}`);
+  // the firewall's per-IP limit may answer first, with its own 429, when this IP has just posted to the drip
+  if (drip.status === 429 && typeof dripBody.error === "object") pass("/api/drip: an unsigned request is refused (the firewall's 429 for this IP), nothing sent");
+  else if (drip.status !== 400 || dripBody.error !== "BAD_REQUEST") fail(`/api/drip: an empty request answered ${drip.status} ${JSON.stringify(dripBody)}`);
   else pass("/api/drip: an unsigned request is refused (400 BAD_REQUEST), nothing sent");
 } finally {
   await browser.close();

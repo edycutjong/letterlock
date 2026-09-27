@@ -18,6 +18,7 @@ import { toFailure, type Failure } from "@/lib/failure.ts";
 import { addressLine, formatBytes, formatCount } from "@/lib/format.ts";
 import { KNOWN_KEYS } from "@/lib/known-keys.ts";
 import { groupFingerprint } from "@/lib/keystrip.ts";
+import { RECIPIENT, recipientError } from "@/lib/recipient.ts";
 import { findPublish, type KeyLine } from "@/lib/register.ts";
 import { useStoredPasskey } from "@/lib/session.ts";
 import styles from "./seal.module.css";
@@ -25,7 +26,6 @@ import styles from "./seal.module.css";
 /** The most a note may hold for its envelope to fit the directory's 16,384-byte drop (the JSON adds about a third). */
 export const NOTE_MAX_BYTES = 12_000;
 
-const RECIPIENT = /^(0x[0-9a-fA-F]{40}|agent:(0|[1-9][0-9]{0,77}))$/;
 /** the flap's and the letter's own transitions (Envelope.module.css): tuck + close ≈ 280 + 440 ms */
 const CLOSE_MS = 760;
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -64,6 +64,16 @@ export function SealDesk({ initialTo }: { initialTo?: string }) {
 
   // keyOf, read as soon as the field holds a whole address or agent id
   const target = to.trim();
+  // a recipient that is neither form says so beside the field, after the same pause as the lookup (so a whole address
+  // being typed shows nothing), rather than leaving Seal disabled without a word
+  const [malformed, setMalformed] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setMalformed(undefined);
+    const why = recipientError(target);
+    if (!why) return;
+    const t = window.setTimeout(() => setMalformed(why), 300);
+    return () => window.clearTimeout(t);
+  }, [target]);
   useEffect(() => {
     if (!RECIPIENT.test(target)) {
       setLookup({ status: "idle" });
@@ -177,7 +187,7 @@ export function SealDesk({ initialTo }: { initialTo?: string }) {
           data
           placeholder="0x… or agent:<id>"
           hint="An address (0x…) or an agent (agent:<id>). Its key is read from the register as you type."
-          error={lookupFailure?.kind === "input" ? lookupFailure.message : undefined}
+          error={malformed ?? (lookupFailure?.kind === "input" ? lookupFailure.message : undefined)}
         />
         {stored?.address && !mine && stage === "open" && (
           <p className={styles.quick}>

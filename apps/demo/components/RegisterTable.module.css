@@ -171,12 +171,40 @@
   color: var(--before);
 }
 
-/* ---- narrower than an iPad in landscape: addressee · epoch · key ---- */
+/* the line's transaction under its key: drawn only where the Posted column is not */
+.postedInline {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 10px;
+  margin-top: 4px;
+}
+
+/* a transaction hash is never split, and its arrow stays on its line (scripts/checks/label-wrap.mjs) */
+.inlineTx {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.inlineWhen {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ---- narrower than an iPad in landscape: addressee · epoch · key, the transaction under the key ---- */
 
 @media (max-width: 1023.98px) {
   .wrap[data-layout="auto"] .colPosted,
   .wrap[data-layout="auto"] .posted {
     display: none;
+  }
+  .wrap[data-layout="auto"] .postedInline {
+    display: flex;
   }
   .wrap[data-layout="auto"] .colAddressee {
     width: 40%;
@@ -186,6 +214,10 @@
 .wrap[data-layout="compact"] .colPosted,
 .wrap[data-layout="compact"] .posted {
   display: none;
+}
+
+.wrap[data-layout="compact"] .postedInline {
+  display: flex;
 }
 
 .wrap[data-layout="compact"] .colAddressee {

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { addressLine, addressSpoken } from "@/lib/format.ts";
+import { addressLine, addressSpoken, formatCount, shortHex } from "@/lib/format.ts";
 import { PostedValue, type Posted } from "./AddressCard";
 import { ExampleBadge } from "./ExampleBadge";
+import { ArrowOutIcon } from "./Icons";
 import { FingerprintText, KeyStrip } from "./KeyStrip";
 import { ScrollFrame } from "./ScrollFrame";
 import styles from "./RegisterTable.module.css";
@@ -30,8 +31,8 @@ export type RegisterTableProps = {
   captionHidden?: boolean;
   rows: RegisterRow[];
   /**
-   * `auto`: every column from 1024 px up; below that addressee · epoch · key. `full` and `compact` force one of the
-   * two (the /kit shows both at any width).
+   * `auto`: every column from 1024 px up; below that addressee · epoch · key, with the line's transaction link and
+   * block under the key. `full` and `compact` force one of the two (the /kit shows both at any width).
    */
   layout?: "auto" | "full" | "compact";
   /** shown when there are no rows */
@@ -90,6 +91,17 @@ export function RegisterTable({ caption, captionHidden, rows, layout = "auto", e
                   <KeyStrip fingerprint={r.fingerprint} tone={r.state === "superseded" ? "pencil" : "open"} height={12} className={styles.strip} />
                   <FingerprintText fingerprint={r.fingerprint} />
                 </span>
+                {/* the proof stays on the line where the Posted column is not drawn (compact, and below 1024 px) */}
+                {r.posted.kind === "tx" && (
+                  <span className={styles.postedInline}>
+                    <a className={`${styles.inlineTx} data`} href={r.posted.href} target="_blank" rel="noreferrer">
+                      {shortHex(r.posted.hash, 6, 4)}
+                      <ArrowOutIcon size={13} />
+                      <span className="visually-hidden"> (the transaction that posted this key, in the explorer)</span>
+                    </a>
+                    {r.posted.block !== undefined && <span className={styles.inlineWhen}>block {formatCount(r.posted.block)}</span>}
+                  </span>
+                )}
               </td>
               <td className={styles.posted}>
                 {r.posted.kind === "example" ? <span className={styles.muted}>Example, not posted</span> : <PostedValue posted={r.posted} />}
