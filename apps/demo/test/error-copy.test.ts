@@ -1,18 +1,34 @@
 // Every SDK error a person can meet has a slip, and no slip names a problem without saying what to do.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { SLIP_CODES, SLIP_COPY } from "../lib/error-copy.ts";
 
-const sdkCodes = () => {
+/** the members of one error-code union in the SDK's errors.ts */
+const sdkCodes = (union: "LetterlockErrorCode" | "ChainErrorCode") => {
   const src = readFileSync(new URL("../../../packages/letterlock/src/errors.ts", import.meta.url), "utf8");
-  return [...src.matchAll(/\|\s*"([A-Z_]+)"/g)].map((m) => m[1]!);
+  const body = src.match(new RegExp(`export type ${union} =([^;]+);`))?.[1] ?? "";
+  return [...body.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]!);
 };
 
-test("every SDK error code except INPUT_INVALID (a form error) has a slip", () => {
-  const codes = sdkCodes();
+test("every SDK protocol error code except INPUT_INVALID (a form error) has a slip", () => {
+  const codes = sdkCodes("LetterlockErrorCode");
   assert.ok(codes.length >= 7, `read ${codes.length} codes from the SDK`);
   assert.deepEqual([...SLIP_CODES].sort(), codes.filter((c) => c !== "INPUT_INVALID").sort());
+});
+
+// The chain client's codes (publish, resolve, drop, inbox) are their own union in the SDK. No page calls the chain
+// client yet, so no slip shows them; this fails when the SDK adds one, or when a page starts calling the chain
+// client, which is when its failures need slips.
+test("the chain client's codes are not slips yet, and no page calls the chain client", () => {
+  assert.deepEqual(sdkCodes("ChainErrorCode").sort(), ["CHAIN_UNAVAILABLE", "INSUFFICIENT_FUNDS", "NOT_AGENT_OWNER"]);
+  const sources = ["app", "components", "lib"].flatMap((dir) =>
+    readdirSync(new URL(`../${dir}/`, import.meta.url), { recursive: true, encoding: "utf8" })
+      .filter((f) => /\.tsx?$/.test(f))
+      .map((f) => readFileSync(new URL(`../${dir}/${f}`, import.meta.url), "utf8")),
+  );
+  const importsChainClient = sources.some((src) => /import\s*\{[^}]*\b(letterlock|meraAccount|toLetterlockError)\b[^}]*\}\s*from\s*"letterlock"/.test(src));
+  assert.equal(importsChainClient, false, "a page calls the chain client: give its failures (CHAIN_UNAVAILABLE, INSUFFICIENT_FUNDS, NOT_AGENT_OWNER) slips");
 });
 
 test("every slip has a reason, a box line, a meaning and a recovery, with and without quoted values", () => {
