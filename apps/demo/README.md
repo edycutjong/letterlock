@@ -32,13 +32,16 @@ passkey finds the address again. A tab opened with the judges' link keeps its pa
 
 A passkey account is new and holds no MON, and `publish()` must be sent by that account, so nobody else can pay for
 its first key. The drip sends it enough for **one publish**, once. The rules are pure functions in `lib/drip.ts`
-(24 unit tests with real viem signatures in `test/drip.test.ts`, 4 more for the page's side in
-`test/drip-client.test.ts`); `lib/drip-server.ts` reads the chain and sends.
+(29 unit tests with real viem signatures in `test/drip.test.ts`); `lib/drip-server.ts` reads the chain, keeps the
+per-instance limits and sends (4 tests of the checks before any chain read in `test/drip-server.test.ts`), and
+`test/drip-client.test.ts` has 4 for the page's side.
 
 Anyone can make a fresh key, and a fresh key passes every per-account rule, so what bounds a script that asks with
 new accounts in a loop is what the chain shows of the drip wallet: its spend over the last hour and the last day.
-`test/drip.test.ts` runs such a script for a whole simulated day against the wallet's real history: it gets at most 5
-drips an hour and 20 in the day, and a judge then still gets a drip, and 8 more after it.
+`test/drip.test.ts` runs such a script for a whole simulated day against the wallet's real history, each drip charged
+as the chain charges it: it gets at most 5 drips an hour and 20 in the day, and a judge then still gets a drip, and 8
+more after it. A script that also sends MON back to the wallet, to make its spend look different, changes nothing:
+after 12 public drips and 0.045 MON sent in, judges still get drips all day.
 
 - **Proof of the account:** an EIP-191 signature by the account over `letterlock-drip:<address, lower-case>:<chainId>:<unix minute>`,
   taken for 5 minutes either side of the server's clock, on this chain only. The passkey account's session signs it
@@ -54,22 +57,29 @@ drips an hour and 20 in the day, and a judge then still gets a drip, and 8 more 
   with its own 429 (`vercel-firewall.json`: fixed window, counted per region; six is one create's request and its
   five `DRIP_BUSY` retries). The page reads that 429 as "too many drip requests from this network". Checked live on
   2026-09-27: 10 concurrent unsigned POSTs from an IP that had posted 3 in the window got 3 answers from the route
-  (400, nothing read or sent) and 7 of the firewall's `{"error":{"code":"429",…}}`.
-- **Per IP, per instance:** 12 requests in 10 minutes, 3 drips a day. **Serverless memory is per instance**: Vercel
-  runs several, and a new one starts empty, so these limits and the LRU only slow a caller down. What cannot be
-  bypassed is read from the chain on every request.
-- **Hourly cap: 0.1 MON** in any hour for requests without the judges' pass (about 5 drips at today's fees), counted
-  like the daily cap from the wallet's balance and nonce an hour ago. A burst from any number of IPs cannot spend the
-  day in minutes, and what an hour spent is free again an hour later (`HOURLY_CAP`).
-- **Daily cap: 0.5 MON** in any 24 hours, drips and their fees together, counted from the drip wallet's own balance
-  and nonce a day ago (historical state). A top-up inside the window is caught by the nonce and then counted at the
-  most a drip can cost. If the RPC no longer holds that state, the drip refuses (`CAP_UNVERIFIABLE`).
+  (400, nothing read or sent) and 7 of the firewall's `{"error":{"code":"429",…}}`. The firewall cannot tell a judge's
+  request, so judges who share one network should create their addresses a few minutes apart.
+- **Per IP, per instance:** 12 requests in 10 minutes; 3 drips a day for requests without the judges' pass. Judges
+  who share one network (a venue's Wi-Fi, an office's NAT, one VPN exit) each get their drip: the pass is read
+  before the IP is counted. **Serverless memory is per instance**: Vercel runs several, and a new one starts empty,
+  so these limits and the LRU only slow a caller down. What cannot be bypassed is read from the chain on every
+  request.
+- **Hourly cap: 0.1 MON** in any hour for requests without the judges' pass (5 drips at today's fees), counted like
+  the daily cap from the wallet's nonce and balance an hour ago. A burst from any number of IPs cannot spend the day
+  in minutes, and what an hour spent is free again an hour later (`HOURLY_CAP`).
+- **Daily cap: 0.5 MON** in any 24 hours, drips and their fees together, counted from the drip wallet's own nonce and
+  balance a day ago (historical state). Each transfer the wallet sent counts for what one drip takes out at today's
+  fees (0.01677995232 MON: the drip and its transfer's gas at the fee cap), or the balance difference counts when
+  that is more. MON sent to the wallet (a top-up, or anyone's transfer) only lowers the balance difference, so it can
+  neither hide a drip nor close a lane; a drip never counts for less than at Monad's minimum base fee, so a day admits
+  at most 39 drips at any fees (29 at today's). If the RPC no longer holds that state, the drip refuses
+  (`CAP_UNVERIFIABLE`).
 - **The judges' reserve:** while `DRIP_JUDGE_PASS` is set (it is, in production), a request without the pass stops
-  once the day's spend would pass 70% of the cap (0.35 MON); the last 30% (0.15 MON, 8 to 9 drips) is spent only by
-  requests that carry it, and those are not held to the hour. The pass travels in the judges' link
-  (`/judge?pass=…` or `/?pass=…`, given with the submission, never in this repository); the page moves it from the
-  address bar to the tab's `sessionStorage` and sends it with the drip request. A wrong pass is simply the public's
-  lane.
+  once the day's spend would pass 70% of the cap (0.35 MON, 20 drips at today's fees); the last 30% (0.15 MON, 9
+  drips) is spent only by requests that carry it, and those are held neither to the hour nor to the per-IP drips
+  limit. The pass travels in the judges' link (`/judge?pass=…` or `/?pass=…`, given with the submission, never in
+  this repository); the page moves it from the address bar to the tab's `sessionStorage` and sends it with the drip
+  request. A wrong pass is simply the public's lane.
 - **One at a time:** under Monad's 10 MON reserve a value transfer must be its sender's only transaction in 3 blocks,
   so the drip refuses (`DRIP_BUSY`, the page asks again) when the wallet has anything pending or sent in the last 4
   blocks, and sends with the nonce it read, so two instances can never both spend.
@@ -79,8 +89,9 @@ drips an hour and 20 in the day, and a judge then still gets a drip, and 8 more 
 - **Kill switch:** `DRIP_ENABLED=true` turns it on; anything else, or no key, turns it off.
 - **The key** is the Vercel environment variable `LETTERLOCK_DRIP_PRIVATE_KEY` (production, sensitive), read in the
   route handler only, as is `DRIP_JUDGE_PASS`. No client module imports `lib/drip-server.ts` (a test checks), and a
-  scan of 7 production pages and the 19 scripts they load (1,935,271 bytes, deployment `dpl_8cqyaknmxH3kuaUyDimQEtgQFwhQ`)
-  found neither value nor either name.
+  scan of 8 production page loads (the judges' link among them) and the 19 scripts and 4 stylesheets they load
+  (2,046,474 bytes, deployment `dpl_BQrbMVrs6CYmQFP34kjzMXxGAo8E`) found neither value nor either name, and none of
+  its 42 strings of 64 hex digits is the key of a project wallet.
 
 The drip pays for a first key only: a rotation and a posted letter are paid from the account's own MON, and the page
 says how much to send, before any passkey prompt, when the account holds too little.
@@ -88,15 +99,20 @@ says how much to send, before any passkey prompt, when the account holds too lit
 ### Running the drip during judging
 
 - **Check it:** `node scripts/drip-status.ts` (read-only, no key) prints the wallet's balance, what one drip costs at
-  today's fees, the last hour's and day's spend, and the drips left in each lane. On 2026-09-27 at block 108,383,798:
-  0.987015961 MON, a drip of 0.01421795232 MON (0.01677995232 with its fee), 5 public drips left in the hour and 27
-  with the judges' pass.
-- **Top up:** send MON to the drip wallet, `0x679f4d96bB36fE383110E3Ef6F46daAf92fb315b`. A top-up hides the window's
-  spending from the balance, so for the next 24 hours each drip is counted at its most (0.041 MON): about 12 drips a
-  day and 2 an hour. Top up a day before the judging window opens, not during it.
+  today's fees, what the last hour and day count for, and the drips the route would pay in each lane, found by
+  stepping the route's own rule forward from the chain's state. On 2026-09-27 at block 108,394,428: 0.97065600868 MON
+  at nonce 2, a drip of 0.01421795232 MON (counted as 0.01677995232), and 4 public drips this hour, 18 in the day (at
+  most 5 an hour) and 27 with the judges' pass.
+- **Top up:** send MON to the drip wallet, `0x679f4d96bB36fE383110E3Ef6F46daAf92fb315b`, at any time: the caps count
+  the transfers the wallet sent, so MON coming in never changes what the route pays in a day. It held 59 drips' worth
+  on 2026-09-27; top up before judging if `drip-status` shows fewer than the judges will need.
 - **The judges' link:** `https://letterlock-app.vercel.app/judge?pass=<DRIP_JUDGE_PASS>`. The pass is kept outside
-  this repository, with the owner; to change it, `printf %s "$NEW" | vercel env add DRIP_JUDGE_PASS production
-  --sensitive` (after `vercel env rm`), redeploy, and send the new link.
+  this repository, with the owner, and goes only in the submission's private judge-access field; a pass seen in
+  public gives anyone the judges' lane. To change it: `vercel env rm DRIP_JUDGE_PASS production --yes`, then
+  `printf %s "$NEW" | vercel env add DRIP_JUDGE_PASS production --sensitive`, redeploy, and send the new link.
+- **If a script takes the public lane during judging:** `printf 0 | vercel env add DRIP_HOURLY_CAP_MON production`
+  and redeploy. Every request without the judges' pass is then refused `HOURLY_CAP`, and the judges' link still pays
+  (`test/drip.test.ts`). To undo it: `vercel env rm DRIP_HOURLY_CAP_MON production --yes`, and redeploy.
 - **The firewall:** `vercel firewall rules list` (in this folder) shows the rule `vercel-firewall.json` holds; edit
   the file, then `vercel firewall rules edit "drip POSTs per IP" --json "$(node -e 'console.log(JSON.stringify(require("./vercel-firewall.json").rules[0]))')" --yes`
   and `vercel firewall publish --yes`. The Hobby plan allows one rate-limit rule per project, and windows of up to 10
@@ -122,7 +138,7 @@ one) make passkeys for its own host, for the end-to-end tests on `localhost`.
 ## Tests
 
 ```sh
-pnpm test                 # 80 unit tests: the drip's rules, the page's chain failures and agent calls, the deployment records, slips, tokens, examples
+pnpm test                 # 97 unit tests: the drip's rules, the page's chain failures, agent calls and actions, the deployment records, slips, tokens, examples
 pnpm build && pnpm qa     # design checks on 6 routes at 5 widths: 24 checks, axe, overflow, the colour law
 set -a; source ~/.config/monad/testnet-deployer.env; set +a; pnpm e2e   # testnet, below
 pnpm smoke https://letterlock-app.vercel.app                            # read-only, below
@@ -138,8 +154,11 @@ pnpm smoke https://letterlock-app.vercel.app                            # read-o
 - **Smoke** (`scripts/smoke.mjs`, read-only): every route's status, headers and nonce CSP, no console error or CSP
   violation, the register's real lines and a live lookup, each line's transaction link on a 390 px phone, the
   `CHAIN_UNAVAILABLE` slip (and none of the RPC client's report) with the RPCs cut off, the field error for a
-  malformed recipient on `/seal`, a note sealed in the page (never sent), a live inbox, the social card, and an
-  unsigned drip refused.
+  malformed recipient on `/seal`, a note sealed in the page (never sent), a live inbox, the social card, an unsigned
+  drip refused, and a stale signed one refused by the drip's checks before any chain read. On the production host
+  also: the home page with the register unreadable offers "Post my key" and "Read the register again" and none of a
+  posted key's actions, and `/judge` says it is not known whether a letter went out when the agent answers 500 (its
+  POST answered inside the browser, never sent). 21 of 21 passed on deployment `dpl_BQrbMVrs6CYmQFP34kjzMXxGAo8E`.
 - **Live** (`scripts/live-mainnet.mjs`): create and publish on the production site with a virtual passkey; it
   spends a real drip, so it records every run in `e2e-results/mainnet-live.json` and needs `--again` after the first.
   The first run (2026-09-27, 03:37 UTC): the drip landed and the publish that followed was refused by the RPC for the

@@ -2,13 +2,17 @@
 // logs no console error, page error or CSP violation; /register shows the directory's real KeyPublished lines (the
 // deploy smoke test's publish transaction among them), each with its transaction link on a phone too, and a live
 // keyOf lookup finds the deployer's key; with the RPCs unreachable the register shows the CHAIN_UNAVAILABLE slip, not
-// the RPC client's report; /seal names the accepted forms for a malformed recipient. Sends no transaction and makes no
-// passkey.
+// the RPC client's report; /seal names the accepted forms for a malformed recipient; the drip refuses an unsigned
+// request and a stale signed one. On the production host also: with the register unreadable, the home page offers
+// "Post my key" and "Read the register again", none of a posted key's actions; and /judge, when the agent's answer
+// leaves it open whether a letter went out, says so (the agent's POST is answered inside the browser, never sent).
+// Sends no transaction and makes no passkey.
 //
 //   node scripts/smoke.mjs https://letterlock-app.vercel.app      (production, Monad mainnet)
 //   node scripts/smoke.mjs http://127.0.0.1:3217                   (a local build)
 import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3217").replace(/\/+$/, "");
 const chain = process.env.NEXT_PUBLIC_LETTERLOCK_CHAIN === "monad-testnet" ? "10143" : "143";
@@ -122,6 +126,61 @@ try {
     else pass("/register with the RPCs unreachable: the CHAIN_UNAVAILABLE slip, and none of the RPC client's report");
     await cut.close();
   }
+  // Two checks that need the passkey host (production): this device "remembers" the deployer's address, which is public
+  // metadata (a made-up credential id, never used: no passkey is made or asked for), and nothing is sent.
+  const onHost = new URL(base).hostname === "letterlock-app.vercel.app";
+  const remembering = async () => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const stored = { v: 1, chainId: record.chainId, rpId: "letterlock-app.vercel.app", credentialId: "AAAAAAAAAAAAAAAAAAAAAA", address: record.deployer };
+    await ctx.addInitScript(([k, v]) => {
+      try {
+        localStorage.setItem(k, v);
+      } catch {}
+    }, [`letterlock:v1:${record.chainId}:letterlock-app.vercel.app`, JSON.stringify(stored)]);
+    return ctx;
+  };
+  if (onHost) {
+    // the register unreadable: the home page cannot tell whether the key is posted, so it offers "Post my key" and
+    // "Read the register again", never the actions of a posted key (they lead to NO_KEY_PUBLISHED on /seal)
+    const ctx = await remembering();
+    await ctx.route(/rpc1?\.monad\.xyz/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto(`${base}/`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    const again = await page.getByRole("button", { name: "Read the register again" }).first().waitFor({ timeout: 30_000 }).then(() => true, () => false);
+    const post = await page.getByRole("button", { name: "Post my key" }).count();
+    const posted = await page.getByRole("link", { name: /Seal a note to yourself|Open your inbox/ }).count();
+    if (!again || post !== 1 || posted) fail(`/ with the register unreadable: "Read the register again" ${again}, "Post my key" ${post}, a posted key's actions ${posted}`);
+    else pass("/ with the register unreadable: \"Post my key\" and \"Read the register again\", none of a posted key's actions");
+    await ctx.close();
+  }
+  if (onHost) {
+    // /judge step 2 when the agent's answer leaves it open whether a letter went out: the page says so and points to the
+    // inbox, never "Nothing was sent". Every request to the agent's host is answered or refused inside this browser:
+    // POST /remember gets the agent's own 500 body, and nothing reaches the agent, so nothing is sent
+    const ctx = await remembering();
+    let reached = 0;
+    await ctx.route(/letterlock-agent\.vercel\.app/, (r) => {
+      if (r.request().method() === "POST" && new URL(r.request().url()).pathname === "/remember")
+        return r.fulfill({
+          status: 500,
+          contentType: "application/json",
+          headers: { "access-control-allow-origin": base },
+          body: JSON.stringify({ error: { code: "INTERNAL", message: "the agent failed unexpectedly; nothing more is known" } }),
+        });
+      reached++;
+      return r.abort();
+    });
+    const page = await ctx.newPage();
+    await page.goto(`${base}/judge`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    const ask = page.getByRole("button", { name: "Ask the agent" });
+    const ready = await ask.and(page.locator(":not([disabled])")).waitFor({ timeout: 45_000 }).then(() => true, () => false);
+    if (ready) await ask.click();
+    const open = ready && (await page.getByText("Whether a letter went out is not known").first().waitFor({ timeout: 20_000 }).then(() => true, () => false));
+    const text = await page.locator("main").innerText();
+    if (!open || /nothing was sent/i.test(text)) fail(`/judge step 2 after an agent's 500: ${!ready ? "the button never enabled" : open ? "the page says nothing was sent" : "no word that it is not known"}`);
+    else pass(`/judge step 2 after an agent's 500: "not known", and the inbox to look at; nothing reached the agent (${reached} other requests refused)`);
+    await ctx.close();
+  }
   for (const [path, type] of [["/og-image.png", "image/png"], ["/icon.svg", "image/svg+xml"]]) {
     const r = await fetch(base + path);
     const t = r.headers.get("content-type") ?? "";
@@ -139,6 +198,23 @@ try {
   if (drip.status === 429 && typeof dripBody.error === "object") pass("/api/drip: an unsigned request is refused (the firewall's 429 for this IP), nothing sent");
   else if (drip.status !== 400 || dripBody.error !== "BAD_REQUEST") fail(`/api/drip: an empty request answered ${drip.status} ${JSON.stringify(dripBody)}`);
   else pass("/api/drip: an unsigned request is refused (400 BAD_REQUEST), nothing sent");
+  {
+    // a request signed by a new account for a minute an hour gone: the route's admission (the switch, the judges'
+    // lane, the signature's minute) refuses it before any chain read, so nothing is read or sent
+    const a = privateKeyToAccount(generatePrivateKey());
+    const minute = Math.floor(Date.now() / 60_000) - 60;
+    const signature = await a.signMessage({ message: `letterlock-drip:${a.address.toLowerCase()}:${record.chainId}:${minute}` });
+    const r = await fetch(base + "/api/drip", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ address: a.address, chainId: record.chainId, minute, signature }),
+    });
+    const b = await r.json().catch(() => ({}));
+    if (r.status === 429 && typeof b.error === "object") pass("/api/drip: a stale signed request is refused (the firewall's 429 for this IP), nothing sent");
+    else if (r.status === 401 && b.error === "STALE_SIGNATURE") pass("/api/drip: a stale signed request passes the drip's admission to STALE_SIGNATURE (401), nothing read or sent");
+    else if (r.status === 503 && b.error === "DRIP_DISABLED" && !onHost) pass("/api/drip: this build's drip is switched off (503 DRIP_DISABLED)");
+    else fail(`/api/drip: a stale signed request answered ${r.status} ${JSON.stringify(b)}`);
+  }
 } finally {
   await browser.close();
 }

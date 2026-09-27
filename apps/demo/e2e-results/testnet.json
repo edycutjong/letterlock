@@ -3,35 +3,35 @@
   "chainId": 10143,
   "directory": "0x3Da5f339E20AB7325ffBb9df57Fb5656ca1f8b3a",
   "app": "http://localhost:3292",
-  "startedAt": "2026-09-27T05:43:16.811Z",
+  "startedAt": "2026-09-27T06:44:18.612Z",
   "steps": {
     "drip wallet (testnet deployer)": {
       "address": "0xb7A232dfA12e636ad9A951503c25aBA188c9f062",
-      "balanceBefore": "9.332812250357429217"
+      "balanceBefore": "9.277933515717429217"
     },
     "create + drip + publish": {
-      "address": "0x2E5f87BE960C3080A6765F58d147459a03225a9f",
-      "dripTx": "0x7ba1422cac89e9404d8530d070cb80001c4b9da21fcd85790cfca02864c52b4b",
+      "address": "0xb245E7682Add40429a770bF51CBB159612572dF6",
+      "dripTx": "0x1f41ea4fd35e00efc5c6c341708c843abff5aaebe2eb467864bd1e93f19d9028",
       "dripAmount": "0.01421795232",
-      "publishTx": "0xa3909cfad454605b2ce6b4387bda2041f9a8a08b19cba15155a2a1b5b65667fc",
-      "publishBlock": 66050749,
+      "publishTx": "0x496185527b7c722b7fd8ee1b6f0586b6d368170da0a55cd3fb362a02775133ee",
+      "publishBlock": 66062479,
       "publishGas": 70863,
       "publishFeeCapGwei": 182.4,
       "publishNeeded": "0.0129254112",
-      "publicKey": "0xf1cb89bcbf554db880e7fa802d93d388124681ac3e8fb0ea756c9cae01cc8f4c"
+      "publicKey": "0x7fa666133fab28dd89c4732db10e391a84a180d4698199f444b71abb487d870e"
     },
     "resolve on /register": {
       "found": true
     },
     "seal": {
-      "kid": "b8fccc5d6ab6a048",
+      "kid": "b98f428827b59452",
       "epoch": 1,
       "bytes": 360
     },
     "drop": {
-      "topUpTx": "0x4a3c98bc53e3aa09b3821e2a1c768d2fd99bc2d4572ad05cc59d6244a228939d",
-      "dropTx": "0xf99133c47d0256b3a8a1b30dceaf2ae67acd21bc35e7f129d617368cf1213ea3",
-      "dropBlock": 66050775,
+      "topUpTx": "0x0a906dd47a2f0d55351bbafeb57f865a14a43bacf990f4eea9c275e755279182",
+      "dropTx": "0x3eeacf489a08b2b8b293cb73d4135760f7e4bf1a3745c1ac115ad8dbc09e555b",
+      "dropBlock": 66062504,
       "dropGas": 42664
     },
     "inbox + open": {
@@ -43,8 +43,8 @@
       "opened": true
     },
     "rotate": {
-      "rotateTx": "0x3b33b9686af66b5dd70f0db7e38f8bbb94726ba8259b5ba59aaa868cc0373dea",
-      "rotateBlock": 66050813,
+      "rotateTx": "0x743eb013c93a942dc92b1a7ac94ccb83e6ff68eb0abe902e9d8836bbf8453d07",
+      "rotateBlock": 66062544,
       "epochOneStillOpens": true,
       "newSealEpoch": 2
     },
@@ -58,11 +58,11 @@
       "slip": "PRF_UNSUPPORTED"
     },
     "drip API": {
-      "fundedAccount": "0x8cD6C2523249c53613b29Aca4d168090f607373C",
-      "dripTx": "0x8a94b18841bd1b6a0468b29b047763dd0732e381125cc9ed072c0e395b1a42e5",
+      "fundedAccount": "0xfB3f45Ec8Da37753f50600d6f5002A25Bea22b2b",
+      "dripTx": "0xa9ad2061a4a3809d84983747f56e1c9001b7d117cecaf8a041a2247c83b1dfe9",
       "amount": "0.01421795232",
       "secondRequest": "ALREADY_DRIPPED"
     }
   },
-  "finishedAt": "2026-09-27T05:44:18.761Z"
+  "finishedAt": "2026-09-27T06:45:16.386Z"
 }
