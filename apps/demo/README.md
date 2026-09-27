@@ -52,7 +52,9 @@ drips an hour and 20 in the day, and a judge then still gets a drip, and 8 more 
   must hold 0.0129254112 MON, and the drip is 0.01421795232 MON (measured 2026-09-27).
 - **Per IP, for every instance:** Vercel's firewall answers a seventh `POST /api/drip` from one IP within 10 minutes
   with its own 429 (`vercel-firewall.json`: fixed window, counted per region; six is one create's request and its
-  five `DRIP_BUSY` retries). The page reads that 429 as "too many drip requests from this network".
+  five `DRIP_BUSY` retries). The page reads that 429 as "too many drip requests from this network". Checked live on
+  2026-09-27: 10 concurrent unsigned POSTs from an IP that had posted 3 in the window got 3 answers from the route
+  (400, nothing read or sent) and 7 of the firewall's `{"error":{"code":"429",…}}`.
 - **Per IP, per instance:** 12 requests in 10 minutes, 3 drips a day. **Serverless memory is per instance**: Vercel
   runs several, and a new one starts empty, so these limits and the LRU only slow a caller down. What cannot be
   bypassed is read from the chain on every request.
