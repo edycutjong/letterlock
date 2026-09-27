@@ -1,8 +1,16 @@
 # Developer experience
 
-What it takes for another app or agent to use Letterlock, and what was hard to build on Monad and mera. Every command
-below was run against Monad mainnet on 2026-09-27 with the published package, [`letterlock@0.1.0` on
-npm](https://www.npmjs.com/package/letterlock).
+What it takes for another app or agent to use Letterlock, and what was hard to build on Monad and mera.
+
+What was run, and where: the published package, [`letterlock@0.1.0` on npm](https://www.npmjs.com/package/letterlock),
+ran the seal snippet below and the CLI's `resolve`, `seal`, `verify` and `inbox` against Monad mainnet on 2026-09-27;
+they only read the chain. `drop` (the CLI's, and `ll.drop` below) sends a transaction: the same package ran it on
+Monad testnet that day and read the envelope back from the inbox
+([tx](https://testnet.monadvision.com/tx/0xcecdaf3d786ecfd73f94c017a08369ccc9e9559b43760f47fb634d7684dc36b8)), and the
+SDK's anvil tests cover it. The mainnet drops of that day came from the deploy smoke test and the reference agent. The
+receive snippet runs in a browser on the app's origin: the app makes the same calls
+([apps/demo/lib/actions.ts](../apps/demo/lib/actions.ts)) with the SDK in this repository, end to end on testnet and
+once on mainnet ([apps/demo/e2e-results](../apps/demo/e2e-results)).
 
 ## Seal to anyone, in five lines
 
@@ -125,8 +133,9 @@ and the agent's HTTP errors are listed in [its README](../examples/agent-memory/
 3. **A PRF output is bound to the rpId.** Keys made on `localhost` or a preview deploy can never be re-derived in
    production. The SDK pins `LETTERLOCK_RP_ID` and refuses to publish under another rpId; the end-to-end tests run a
    testnet build on `localhost`, where a build flag allows its own host.
-4. **Monad charges the gas limit, and checks the fee cap up front.** The first live drip sent the brief's
-   1.5 × gas × gas price, and mainnet's RPC refused the publish that followed ("Signer had insufficient balance"):
+4. **Monad charges the gas limit, and checks the fee cap up front.** The first version's drip sent
+   1.5 × gas × gas price ([tx](https://monadvision.com/tx/0x256047f0073ec3b15656509491b7b433b9b12b75ec4012ed86f68d8dfc4397f1)),
+   and mainnet's RPC refused the publish that followed ("Signer had insufficient balance"):
    viem bids 1.2 × the node's filled fee (182.4 gwei), and the account must hold gas limit × fee cap. The drip now
    pays `max(1.5 × 70,863 × gas price, 1.1 × 70,863 × fee cap)`, and the testnet end-to-end run asserts the drip
    covers the fee cap of the publish it funds.

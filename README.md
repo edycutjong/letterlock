@@ -149,7 +149,8 @@ Transactions a judge can open:
 - The agent's own key at epoch 2, [`publishForAgent`](https://monadvision.com/tx/0x072dc08d72aefacbe3fe05fedd2296c857c1181fbfa9f548c7ed9322594c294b),
   and a task sealed to `agent:10260`, opened by the agent and [answered sealed to its sender](https://monadvision.com/tx/0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640).
 
-Every mainnet transaction, with what it proves, is in [DEMO.md](DEMO.md#what-happened-on-mainnet).
+The transactions behind each claim, with what each proves, are in [DEMO.md](DEMO.md#what-happened-on-mainnet),
+every one that emitted a directory event up to block 108,422,676 among them.
 
 ## 📊 Engineering Rigor
 
@@ -163,7 +164,7 @@ Every mainnet transaction, with what it proves, is in [DEMO.md](DEMO.md#what-hap
 | Contract | 111 forge tests: unit, fuzz, invariant, mainnet fork against the live registry, gas snapshots |
 | End to end | the whole flow on testnet in Chromium with a PRF-capable virtual authenticator, and a live check on mainnet that published a passkey account's key ([records](apps/demo/e2e-results)) |
 | Design QA | 25 checks and axe on 6 routes at 1280 and 390 px: 0 failures, 0 violations |
-| Secrets | gitleaks over every commit ([.gitleaks.toml](.gitleaks.toml)): no leaks. The drip's and the agent's keys live in Vercel's sensitive environment variables and with the operator, never in the repository or a page's bundle |
+| Secrets | gitleaks over every commit's patch and every commit message ([.gitleaks.toml](.gitleaks.toml); `pnpm readiness` runs both): no leaks. The drip's and the agent's keys live in Vercel's sensitive environment variables and with the operator, never in the repository or a page's bundle |
 
 ### Attacks defeated
 

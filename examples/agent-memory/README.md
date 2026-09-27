@@ -180,11 +180,13 @@ escape: that answer was 8,981 bytes, 384,237 gas, 0.0391922 MON at 102 gwei, mor
 | Recipient | must have a published key | one `keyOf` / `keyOfAgent` read before sealing |
 | Kill switch | `AGENT_ENABLED` must be exactly `true` | environment |
 
-At 102 gwei a drop costs at most 250,000 × 102 gwei = 0.0255 MON, so on 2026-09-27 the wallet, 0.979596328 MON,
-allowed 9 drops a day. Nine of the largest notes cost 0.2282148 MON, 23% of the wallet: however many IPs ask, a
-day's drops cost at most a quarter of what the wallet held. The allowance counts the day's drops as held, so it does
-not shrink as they go out, and a refill raises it at once. 150 drops a day would take a wallet of 15.3 MON. A
-request refused before anything is signed does not count against its IP.
+At 102 gwei a drop costs at most 250,000 × 102 gwei = 0.0255 MON. Before its top-up on 2026-09-27 the wallet held
+under 1 MON and allowed 10 drops that day. After it, `/health` at 08:50 UTC showed 10.970719268 MON with 6 drops sent
+that day, and allowed 109: a quarter of 11.123719268 MON (the balance, plus the day's 6 drops counted as held) at
+0.0255 MON a drop. However many IPs ask, a day's drops cost at most a quarter of what the wallet held. Counting the
+day's drops as held keeps the allowance from shrinking as they go out, and a refill raises it at once. 150 drops a
+day would take a wallet of 15.3 MON. `/health` reports the figures of the moment (`limits.dailyDrops`: `used` of
+`allowedToday`). A request refused before anything is signed does not count against its IP.
 
 ## Running it during judging
 
