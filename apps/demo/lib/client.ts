@@ -51,7 +51,7 @@ export function usePasskeyHost(): PasskeyHost | null {
 let hostCache: PasskeyHost | undefined;
 const hostSnapshot = (): PasskeyHost => (hostCache ??= passkeyHost(window.location.hostname));
 
-/** This page's origin (https://letterlock-app.vercel.app in production): `null` until the page runs in the browser. */
+/** This page's origin (https://app.letterlock.edycu.dev in production): `null` until the page runs in the browser. */
 export function useOrigin(): string | null {
   return useSyncExternalStore(noop, () => window.location.origin, () => null);
 }

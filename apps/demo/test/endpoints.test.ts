@@ -25,7 +25,7 @@ test("the policy lets the page reach exactly its RPCs, the agent and Sourcify", 
   assert.deepEqual([...CONNECT_SOURCES].sort(), [...new Set(want)].sort());
   if (CHAIN_NAME === "monad") {
     assert.deepEqual([...CONNECT_SOURCES].sort(), [
-      "https://letterlock-agent.vercel.app",
+      "https://agent.letterlock.edycu.dev",
       "https://rpc.monad.xyz",
       "https://rpc1.monad.xyz",
       "https://sourcify-api-monad.blockvision.org",

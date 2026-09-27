@@ -8,7 +8,7 @@
     "url": "git+https://github.com/edycutjong/letterlock.git",
     "directory": "apps/demo"
   },
-  "homepage": "https://letterlock-app.vercel.app",
+  "homepage": "https://app.letterlock.edycu.dev",
   "type": "module",
   "description": "Letterlock app: the postal-register design system and the five routes, live on Monad mainnet (a testnet build for the end-to-end tests), with the gas drip for a first publish and the /kit gallery.",
   "scripts": {

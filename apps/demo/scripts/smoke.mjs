@@ -6,19 +6,33 @@
 // request and a stale signed one, and names the lane of a request for chain 1 (refused before any chain read): the
 // public's without a pass, the judges' with LETTERLOCK_DRIP_JUDGE_PASS set in the environment (never printed); a slip
 // under /seal's h1 keeps axe's heading order. On the production host also: with the register unreadable, the home page offers
-// "Post my key" and "Read the register again", none of a posted key's actions; and /judge, when the agent's answer
-// leaves it open whether a letter went out, says so (the agent's POST is answered inside the browser, never sent).
-// Sends no transaction and makes no passkey. It POSTs to the drip four times: run it at most once in 10 minutes from
-// one IP, or the firewall's per-IP limit (six) answers first.
+// "Post my key" and "Read the register again", none of a posted key's actions; /judge, when the agent's answer leaves
+// it open whether a letter went out, says so (the agent's POST is answered inside the browser, never sent); and the
+// host SDK 0.1.0 pinned (letterlock-app.vercel.app) answers every route, a query and a POST with a 308 to this host.
+// Sends no transaction and makes no passkey. It POSTs to the drip four times, and on the production host a fifth time
+// through the retired host: run it at most once in 10 minutes from one IP, or the firewall's per-IP limit (six)
+// answers first.
 //
-//   set -a; source ~/.config/monad/drip-judge-pass.env; set +a; node scripts/smoke.mjs https://letterlock-app.vercel.app
+//   set -a; source ~/.config/monad/drip-judge-pass.env; set +a; node scripts/smoke.mjs https://app.letterlock.edycu.dev
 //                                                                  (also confirms the deployment's judges' pass)
-//   node scripts/smoke.mjs https://letterlock-app.vercel.app      (production, Monad mainnet)
+//   node scripts/smoke.mjs https://app.letterlock.edycu.dev       (production, Monad mainnet)
 //   node scripts/smoke.mjs http://127.0.0.1:3217                   (a local build)
 import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
+import { registerHooks } from "node:module";
 import { chromium } from "playwright";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+
+// the app's own endpoints (lib/endpoints.ts imports the deployment records as JSON modules) and the SDK's pinned rpId
+registerHooks({
+  load: (url, context, nextLoad) =>
+    url.startsWith("file:") && url.endsWith(".json")
+      ? { format: "module", source: `export default ${readFileSync(new URL(url), "utf8")};`, shortCircuit: true }
+      : nextLoad(url, context),
+});
+const { AGENT_URL } = await import("../lib/endpoints.ts");
+const { LETTERLOCK_RP_ID } = await import("letterlock");
+const { RETIRED_HOST } = await import("../next.config.ts");
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3217").replace(/\/+$/, "");
 const chain = process.env.NEXT_PUBLIC_LETTERLOCK_CHAIN === "monad-testnet" ? "10143" : "143";
@@ -154,15 +168,15 @@ try {
   }
   // Two checks that need the passkey host (production): this device "remembers" the deployer's address, which is public
   // metadata (a made-up credential id, never used: no passkey is made or asked for), and nothing is sent.
-  const onHost = new URL(base).hostname === "letterlock-app.vercel.app";
+  const onHost = new URL(base).hostname === LETTERLOCK_RP_ID;
   const remembering = async () => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    const stored = { v: 1, chainId: record.chainId, rpId: "letterlock-app.vercel.app", credentialId: "AAAAAAAAAAAAAAAAAAAAAA", address: record.deployer };
+    const stored = { v: 1, chainId: record.chainId, rpId: LETTERLOCK_RP_ID, credentialId: "AAAAAAAAAAAAAAAAAAAAAA", address: record.deployer };
     await ctx.addInitScript(([k, v]) => {
       try {
         localStorage.setItem(k, v);
       } catch {}
-    }, [`letterlock:v1:${record.chainId}:letterlock-app.vercel.app`, JSON.stringify(stored)]);
+    }, [`letterlock:v1:${record.chainId}:${LETTERLOCK_RP_ID}`, JSON.stringify(stored)]);
     return ctx;
   };
   if (onHost) {
@@ -187,7 +201,8 @@ try {
     // POST /remember gets the agent's own 500 body, and nothing reaches the agent, so nothing is sent
     const ctx = await remembering();
     let reached = 0;
-    await ctx.route(/letterlock-agent\.vercel\.app/, (r) => {
+    const agentHost = new URL(AGENT_URL).host;
+    await ctx.route((url) => url.host === agentHost, (r) => {
       if (r.request().method() === "POST" && new URL(r.request().url()).pathname === "/remember")
         return r.fulfill({
           status: 500,
@@ -208,6 +223,22 @@ try {
     if (!open || /nothing was sent/i.test(text)) fail(`/judge step 2 after an agent's 500: ${!ready ? "the button never enabled" : open ? "the page says nothing was sent" : "no word that it is not known"}`);
     else pass(`/judge step 2 after an agent's 500: "not known", and the inbox to look at; nothing reached the agent (${reached} other requests refused)`);
     await ctx.close();
+  }
+  if (onHost) {
+    // the host SDK 0.1.0 pinned serves nothing: every route, a query and a POST reach this host by a 308, which keeps
+    // the method and the body (the POST is answered by the redirect, before the drip's route runs: nothing is sent)
+    const moved = [];
+    for (const path of [...ROUTES, "/judge?pass=smoke", "/api/drip"]) {
+      const post = path === "/api/drip";
+      const r = await fetch(`https://${RETIRED_HOST}${path}`, {
+        method: post ? "POST" : "GET",
+        redirect: "manual",
+        ...(post ? { headers: { "content-type": "application/json" }, body: "{}" } : {}),
+      });
+      if (r.status !== 308 || r.headers.get("location") !== `${base}${path}`) moved.push(`${post ? "POST" : "GET"} ${path}: HTTP ${r.status} ${r.headers.get("location")}`);
+    }
+    if (moved.length) fail(`${RETIRED_HOST} does not send everything here: ${moved.join("; ")}`);
+    else pass(`${RETIRED_HOST}: ${ROUTES.length} routes, a query and a POST to /api/drip answer 308 to the same path on ${LETTERLOCK_RP_ID}`);
   }
   for (const [path, type] of [["/og-image.png", "image/png"], ["/icon.svg", "image/svg+xml"]]) {
     const r = await fetch(base + path);

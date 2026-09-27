@@ -15,6 +15,19 @@ const SECURITY_HEADERS = [
   },
 ];
 
+/**
+ * The app's host: the WebAuthn rpId the SDK pins (LETTERLOCK_RP_ID, since SDK 0.1.1), on the owner's own domain.
+ * test/hosts.test.ts keeps it equal to the SDK's constant.
+ */
+export const APP_HOST = "app.letterlock.edycu.dev";
+
+/**
+ * The rpId SDK 0.1.0 pinned, still attached to this Vercel project. Every request to it, any path and any method, is
+ * answered 308 with the same path and query on APP_HOST: no page is served there, so no passkey is made under the old
+ * rpId, and an old link (a judges' link with its pass, a POST to /api/drip) arrives unchanged at the same app.
+ */
+export const RETIRED_HOST = "letterlock-app.vercel.app";
+
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -26,9 +39,13 @@ const config: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   // lib/tokens.ts reads the token sheet when a page renders (every page is rendered per request, for its nonce)
   outputFileTracingIncludes: { "/**": ["./app/tokens.css"] },
-  // the register is also the integrations' verify view: keyOf lookups and the KeyPublished lines, live
   async redirects() {
-    return [{ source: "/integrations/verify", destination: "/register", permanent: false }];
+    return [
+      // first: nothing is served on the retired rpId's host (`has` values are anchored regular expressions)
+      { source: "/:path*", has: [{ type: "host", value: RETIRED_HOST.replaceAll(".", "\\.") }], destination: `https://${APP_HOST}/:path*`, permanent: true },
+      // the register is also the integrations' verify view: keyOf lookups and the KeyPublished lines, live
+      { source: "/integrations/verify", destination: "/register", permanent: false },
+    ];
   },
   async headers() {
     return [

@@ -4,21 +4,25 @@
 //
 //   node scripts/live-mainnet.mjs --spend-the-drip-once [--again]
 //
-// On https://letterlock-app.vercel.app (the production rpId), Chromium's WebAuthn virtual authenticator (with PRF)
-// stands in for the passkey: create -> the drip -> publish; the new line on /register; seal a note and open it pasted;
-// ask the reference agent to write (POST /remember, from the page) and open its envelope from the inbox; clear the
-// storage and let the passkey find the address again. Every chain fact is read back from rpc.monad.xyz.
+// On https://<LETTERLOCK_RP_ID> (the production rpId, app.letterlock.edycu.dev since SDK 0.1.1), Chromium's WebAuthn
+// virtual authenticator (with PRF) stands in for the passkey: create -> the drip -> publish; the new line on /register;
+// seal a note and open it pasted; ask the reference agent to write (POST /remember, from the page, to the agent URL
+// this build names) and open its envelope from the inbox; clear the storage and let the passkey find the address
+// again. Every chain fact is read back from rpc.monad.xyz. The record names the site, its rpId and the agent endpoint
+// the page called: the runs before SDK 0.1.1 were at letterlock-app.vercel.app, the rpId 0.1.0 pinned.
 // The virtual authenticator is deleted when the run ends, so the key it published can never be opened again: the run
 // adds it to lib/known-keys.json, and the register marks its line.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { LETTERLOCK_RP_ID, VERSION } from "letterlock";
 import { chromium } from "playwright";
 import { createPublicClient, formatEther, http } from "viem";
 import { monad } from "viem/chains";
 
 const here = join(import.meta.dirname, "..");
-const BASE = "https://letterlock-app.vercel.app";
+const BASE = `https://${LETTERLOCK_RP_ID}`;
+const STORED = `letterlock:v1:143:${LETTERLOCK_RP_ID}`;
 const RPC = "https://rpc.monad.xyz";
 const record = JSON.parse(readFileSync(join(here, "../../deployments/143.json"), "utf8"));
 const DIRECTORY = record.address;
@@ -29,7 +33,7 @@ if (!process.argv.includes("--spend-the-drip-once")) {
   console.error("this run spends real MON on Monad mainnet: pass --spend-the-drip-once");
   process.exit(2);
 }
-const previous = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : { about: "Live runs of https://letterlock-app.vercel.app on Monad mainnet with a virtual passkey (scripts/live-mainnet.mjs). Each run spends one drip.", runs: [] };
+const previous = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : { about: "Live runs of the production app on Monad mainnet with a virtual passkey (scripts/live-mainnet.mjs), each on the site it names. Each run spends one drip.", runs: [] };
 if (previous.runs.length > 0 && !process.argv.includes("--again")) {
   console.error(`${out} records ${previous.runs.length} live run(s): each spends a drip. Pass --again only on purpose.`);
   process.exit(2);
@@ -41,7 +45,7 @@ const keyOfAbi = [
   { type: "function", name: "keyOf", stateMutability: "view", inputs: [{ name: "who", type: "address" }], outputs: [{ name: "pub", type: "bytes32" }, { name: "epoch", type: "uint32" }, { name: "updatedAt", type: "uint64" }] },
 ];
 const txOf = (href) => /\/tx\/(0x[0-9a-f]{64})/i.exec(href ?? "")?.[1];
-const result = { site: BASE, network: record.network, chainId: record.chainId, directory: DIRECTORY, startedAt: new Date().toISOString(), steps: {} };
+const result = { site: BASE, rpId: LETTERLOCK_RP_ID, sdk: VERSION, network: record.network, chainId: record.chainId, directory: DIRECTORY, startedAt: new Date().toISOString(), steps: {} };
 const step = (name, value) => {
   result.steps[name] = value;
   console.log(`ok   ${name}: ${JSON.stringify(value)}`);
@@ -52,6 +56,10 @@ const problems = [];
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
+  const agentCalls = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && new URL(r.url()).pathname === "/remember") agentCalls.push(r.url());
+  });
   page.on("pageerror", (e) => problems.push(`page error: ${e.message}`));
   page.on("console", (m) => {
     if (m.type() === "error") problems.push(`console: ${m.text()}`);
@@ -73,7 +81,7 @@ try {
   const docket = page.locator('ol[aria-label="Creating your encryption address"] > li');
   await docket.nth(3).and(page.locator('[data-status="done"]')).waitFor({ timeout: 180_000 });
   const seconds = (Date.now() - t0) / 1000;
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("letterlock:v1:143:letterlock-app.vercel.app") ?? "null"));
+  const stored = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "null"), STORED);
   const address = stored?.address;
   assert.match(address ?? "", /^0x[0-9a-fA-F]{40}$/);
   const dripTx = txOf(await docket.nth(2).locator("a").first().getAttribute("href"));
@@ -150,14 +158,15 @@ try {
   await reader.getByRole("button", { name: "Open with passkey" }).waitFor({ timeout: 90_000 });
   await reader.getByRole("button", { name: "Open with passkey" }).click();
   await reader.getByText(agentText).waitFor({ timeout: 30_000 });
-  step("agent writes, inbox opens", { agentDropTx: agentTx, agentDropBlock: Number(agentReceipt.blockNumber), agentWallet: agentReceipt.from, opened: true });
+  assert.equal(agentCalls.length, 1, `the page asked the agent once: ${agentCalls.join(", ")}`);
+  step("agent writes, inbox opens", { agentEndpoint: agentCalls[0], agentDropTx: agentTx, agentDropBlock: Number(agentReceipt.blockNumber), agentWallet: agentReceipt.from, opened: true });
 
   // 5. storage cleared: the passkey finds the address again and opens the agent's letter
   await page.evaluate(() => localStorage.clear());
   await page.goto(`${BASE}/open`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Find my inbox with my passkey" }).click();
   await reader.getByRole("button", { name: "Open with passkey" }).waitFor({ timeout: 90_000 });
-  const again = await page.evaluate(() => JSON.parse(localStorage.getItem("letterlock:v1:143:letterlock-app.vercel.app") ?? "null"));
+  const again = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "null"), STORED);
   assert.equal(again?.address?.toLowerCase(), address.toLowerCase());
   await reader.getByRole("button", { name: "Open with passkey" }).click();
   await reader.getByText(agentText).waitFor({ timeout: 30_000 });

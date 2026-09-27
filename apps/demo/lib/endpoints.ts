@@ -21,7 +21,7 @@ export const SCAN_RPC_URL = CHAIN_NAME === "monad" ? "https://rpc1.monad.xyz" : 
  * NEXT_PUBLIC_LETTERLOCK_AGENT_URL.
  */
 export const AGENT_URL: string | undefined =
-  process.env.NEXT_PUBLIC_LETTERLOCK_AGENT_URL?.replace(/\/+$/, "") || (CHAIN_NAME === "monad" ? "https://letterlock-agent.vercel.app" : undefined);
+  process.env.NEXT_PUBLIC_LETTERLOCK_AGENT_URL?.replace(/\/+$/, "") || (CHAIN_NAME === "monad" ? "https://agent.letterlock.edycu.dev" : undefined);
 
 /** The Sourcify record the register checks the directory's source against. */
 export const SOURCE_CHECK_URL: string = (CHAIN_NAME === "monad" ? mainnet : testnet).verification.check;

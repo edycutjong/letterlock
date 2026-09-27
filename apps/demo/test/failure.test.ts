@@ -128,10 +128,10 @@ test("a directory revert in the page's own gas estimate reads as the SDK's code,
 });
 
 test("a failure that is not the chain's keeps its own words", () => {
-  assert.deepEqual(toFailure(new Error("Passkeys for Letterlock are made only at letterlock-app.vercel.app")), {
+  assert.deepEqual(toFailure(new Error("Passkeys for Letterlock are made only at app.letterlock.edycu.dev")), {
     kind: "message",
     title: "Something went wrong",
-    message: "Passkeys for Letterlock are made only at letterlock-app.vercel.app",
+    message: "Passkeys for Letterlock are made only at app.letterlock.edycu.dev",
   });
   assert.equal(toFailure(new TypeError("Failed to fetch")).kind, "message");
 });
