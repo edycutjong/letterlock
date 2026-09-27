@@ -79,12 +79,13 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
   let recipient: string;
   const keys = standIn(91, 1);
   let dir: string;
+  let publishedBlock: bigint;
 
   beforeAll(async () => {
     if (!ctx.ok) return;
     const account = await fundedAccount();
     recipient = account.address;
-    await client().publish({ account, keys });
+    publishedBlock = (await client().publish({ account, keys })).blockNumber;
     dir = await mkdtemp(join(tmpdir(), "letterlock-cli-"));
   });
   afterAll(async () => { if (dir) await rm(dir, { recursive: true, force: true }); });
@@ -167,6 +168,17 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)\nblocks after \d+ are not final yet/);
     expect((await cli(["inbox", recipient, "--from-block", block!, "--to-block", "soon", ...chain()])).code).toBe(2);
   });
+
+  it.each([["no --to-block", []], ["--to-block finalized", ["--to-block", "finalized"]]])(
+    "inbox with %s reads up to the finalized block, and says nothing about blocks that are not final", async (_, toBlock) => {
+      const argv = ["inbox", recipient, "--from-block", String(publishedBlock), ...toBlock, ...chain()];
+      const j = JSON.parse((await cli([...argv, "--json"])).stdout) as { toBlock: string; finalizedBlock: string };
+      expect(j.toBlock).toBe(j.finalizedBlock);
+      const human = await cli(argv);
+      expect([human.code, human.stderr]).toEqual([0, ""]);
+      expect(human.stdout).toMatch(/^\d+ envelopes? for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ /);
+      expect(human.stdout).not.toContain("not final");
+    });
 
   it("inbox against an address that holds no directory exits 1 instead of printing '0 envelopes'; a bad checksum too", async () => {
     const nowhere = privateKeyToAccount(generatePrivateKey()).address;

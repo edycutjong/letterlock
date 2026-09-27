@@ -4,11 +4,13 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as sdk from "../src/index.ts";
 import {
+  DEPLOYMENTS,
   LETTERLOCK_RP_ID,
   createEncryptionAddress,
   deriveFromPasskey,
   fingerprint,
   isLetterlockError,
+  letterlock,
   letterlockAbi,
   meraAccount,
   open,
@@ -134,6 +136,43 @@ describe.skipIf(noChain)("a directory address that holds no Letterlock directory
       expect(proxy.stats.methods.eth_getCode).toBe(1);
     } finally { await proxy.close(); }
     await rejects(client({ rpcUrl: "http://127.0.0.1:9" }).publish({ account: await fundedAccount(), keys: standIn(42, 1) }), "CHAIN_UNAVAILABLE");
+  });
+
+  it.each(["eth_chainId", "eth_getCode"])("%s failing past viem's retries → CHAIN_UNAVAILABLE, and the same client asks again once the RPC answers", async (method) => {
+    const account = await fundedAccount();
+    await client().publish({ account, keys: standIn(49, 1) });
+    let down = true;
+    const proxy = await rpcProxy(anvil().rpcUrl, { intercept: (req) => (down && req.method === method ? rpcError(req, -32603, "internal error") : undefined) });
+    try {
+      const ll = client({ rpcUrl: proxy.url });
+      await rejects(ll.resolve(account.address), "CHAIN_UNAVAILABLE");
+      const asked = proxy.stats.methods[method] ?? 0;
+      expect(asked).toBeGreaterThan(1); // viem retried it before giving up
+      down = false;
+      expect((await ll.resolve(account.address)).epoch).toBe(1); // a failed check is not kept
+      expect(proxy.stats.methods[method]).toBe(asked + 1);
+    } finally { await proxy.close(); }
+  });
+
+  it("the built-in directory is checked too: on a chain-143 RPC where its address holds no code, publish sends nothing", async () => {
+    const ll = client({ directory: undefined }); // Monad mainnet's directory address, which holds no code on this anvil
+    expect(ll.directory).toBe(DEPLOYMENTS.monad.directory);
+    const account = await fundedAccount();
+    const e = await ll.publish({ account, keys: standIn(50, 1) }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+    expect((e as Error).message).toContain(`${DEPLOYMENTS.monad.directory} is not a Letterlock directory on Monad mainnet: the address has no code`);
+    expect(await nonce(account.address)).toBe(0);
+  });
+});
+
+describe("client.open", () => {
+  it("derives under the client's rpId: a client for another rpId opens a note sealed to that rpId's passkey", async () => {
+    const dev = softAuthenticator();
+    const { keys, credential } = await createEncryptionAddress({ rp: { id: "localhost", name: "Letterlock" }, user: { name: "l", displayName: "L" }, webAuthnClient: dev });
+    const env = await seal({ chainId: 143, directory: DEPLOYMENTS.monad.directory, to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: keys.publicKey, epoch: 1 }, plaintext: utf8("opened on localhost") });
+    const ll = letterlock({ chain: "monad", rpId: "localhost" }); // opening is not pinned (docs/SPEC.md §6), and reads no chain
+    expect(new TextDecoder().decode(await ll.open(env, { credential, webAuthnClient: dev }))).toBe("opened on localhost");
+    expect(dev.calls.get).toBe(1);
   });
 });
 

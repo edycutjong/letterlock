@@ -233,6 +233,13 @@ describe.skipIf(noChain)("inbox", () => {
     expect(r.recipient).toBe("agent:123456789");
   });
 
+  it("agent id 2^256 - 1 (the no-agent marker) or more → INPUT_INVALID, never an empty scan", async () => {
+    for (const id of [NO_AGENT, NO_AGENT + 1n]) {
+      const e = await client().inbox(`agent:${id}`, { fromBlock: first }).then(() => null, (x: unknown) => x);
+      expect(isLetterlockError(e, "INPUT_INVALID"), `agent:${id}: ${String(e)}`).toBe(true);
+    }
+  });
+
   it("bad input → INPUT_INVALID; an RPC that does not answer → CHAIN_UNAVAILABLE", async () => {
     const code = (p: Promise<unknown>) => p.then(() => "no error", (e: unknown) => (isLetterlockError(e) ? e.code : String(e)));
     expect(await code(client().inbox("maya.eth"))).toBe("INPUT_INVALID");
