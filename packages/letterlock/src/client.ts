@@ -148,11 +148,19 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       },
     ));
 
+  /**
+   * Runs `f` alongside the one-time chain check, and reports a failed check before anything `f` threw: on another
+   * chain the directory address usually has no code, and "no directory" would hide that the RPC serves the wrong chain.
+   */
+  const checked = async <T>(f: () => Promise<T>): Promise<T> => {
+    const [chain, value] = await Promise.allSettled([checkChain(), f()]);
+    if (chain.status === "rejected") throw chain.reason;
+    if (value.status === "rejected") throw value.reason;
+    return value.value;
+  };
+
   const read = async <T>(action: string, f: () => Promise<T>): Promise<T> => {
-    try {
-      const [, value] = await Promise.all([checkChain(), f()]);
-      return value;
-    } catch (e) { throw toLetterlockError(e, action); }
+    try { return await checked(f); } catch (e) { throw toLetterlockError(e, action); }
   };
 
   let agentPath: Promise<boolean> | undefined;

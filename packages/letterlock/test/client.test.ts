@@ -60,6 +60,18 @@ describe.skipIf(noChain)("resolve", () => {
     await rejects(client({ chain: "monad-testnet" }).resolve(privateKeyToAccount(generatePrivateKey()).address), "INPUT_INVALID");
   });
 
+  it("an RPC on another chain is named as such, even when the directory read fails first (no directory there)", async () => {
+    // the built-in testnet directory has no code on this chain-143 RPC; eth_chainId is answered last
+    const proxy = await rpcProxy(anvil().rpcUrl, {
+      intercept: async (req, upstream) => (req.method === "eth_chainId" ? new Promise((r) => setTimeout(() => r(upstream()), 300)) : undefined),
+    });
+    try {
+      const e = await client({ chain: "monad-testnet", directory: undefined, rpcUrl: proxy.url }).resolve(zeroAddress.replace(/0$/, "1")).then(() => null, (x: unknown) => x);
+      expect(isLetterlockError(e, "INPUT_INVALID")).toBe(true);
+      expect((e as Error).message).toContain("the RPC serves chain 143, not Monad testnet (10143)");
+    } finally { await proxy.close(); }
+  });
+
   it("an RPC that does not answer → CHAIN_UNAVAILABLE, never NO_KEY_PUBLISHED", async () => {
     await rejects(client({ rpcUrl: "http://127.0.0.1:9" }).resolve(zeroAddress.replace(/0$/, "1")), "CHAIN_UNAVAILABLE");
   });

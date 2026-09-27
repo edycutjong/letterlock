@@ -96,6 +96,9 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
   it("--testnet against a chain-143 RPC exits 1 (INPUT_INVALID): the chain is checked", async () => {
     const r = await cli(["resolve", recipient, "--testnet", ...chain()]);
     expect([r.code, r.stderr]).toEqual([1, expect.stringContaining("INPUT_INVALID")]);
+    // the built-in testnet directory has no code here: the message still names the chain, not a missing directory
+    const builtIn = await cli(["resolve", recipient, "--testnet", "--rpc", ctx.ok ? ctx.rpcUrl : ""]);
+    expect([builtIn.code, builtIn.stderr]).toEqual([1, expect.stringContaining("the RPC serves chain 143, not Monad testnet (10143)")]);
   });
 
   it("seal <file> --out writes a new envelope file that the recipient's key opens, and never overwrites", async () => {
