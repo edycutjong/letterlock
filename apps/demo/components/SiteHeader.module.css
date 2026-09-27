@@ -4,7 +4,7 @@
 
 .bar {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas: "home nav network";
   align-items: center;
   column-gap: clamp(16px, 3vw, 40px);
@@ -59,10 +59,14 @@
   justify-self: end;
 }
 
+/* the routes wrap onto a second row when they do not fit (a larger default font, text-only zoom, WCAG 1.4.12 text
+   spacing), so no route is ever cut off at the screen's edge */
 .nav ul {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: clamp(2px, 1.2vw, 14px);
+  gap: 0 clamp(2px, 1.2vw, 14px);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -125,7 +129,9 @@
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  white-space: nowrap;
+  /* one line at the default text size; at a larger one the chain id takes a line of its own instead of the chip
+     running off the screen */
+  min-width: 0;
   color: var(--ink);
   border: 1px solid color-mix(in srgb, var(--ink) 55%, transparent);
   border-radius: 2px;
@@ -141,6 +147,7 @@
 .chain {
   color: var(--muted);
   letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -150,8 +157,10 @@
   }
 }
 
-/* tablets: the chain id goes to the footer, the routes close up */
-@media (max-width: 1023.98px) {
+/* Breakpoints are in em (of the reader's default text size, 16 px unless they changed it), so a larger default
+   font moves the header to its narrower layouts as the text needs, not at fixed pixel widths.
+   tablets (under 1024 px at 16 px): the chain id goes to the footer, the routes close up */
+@media (max-width: 63.999em) {
   .chain {
     display: none;
   }
@@ -162,10 +171,11 @@
 
 /* phones and tablets held upright: the letterhead on one line, the five routes on the next. On one line the
    wordmark (177 px), the routes (about 354) and the network chip (170) need about 790 px with the gutters, so
-   below 860 px they would crowd the chip past the double rule (scripts/checks/header-fit.mjs sweeps every width). */
-@media (max-width: 859.98px) {
+   below 860 px (53.75em) they would crowd the chip past the double rule (scripts/checks/header-fit.mjs sweeps every
+   width, at 100%, 150% and 200% text). */
+@media (max-width: 53.749em) {
   .bar {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
       "home network"
       "nav nav";
@@ -185,7 +195,7 @@
   }
 }
 
-@media (max-width: 479.98px) {
+@media (max-width: 29.999em) {
   .bar {
     column-gap: 12px;
   }
@@ -203,7 +213,7 @@
 }
 
 /* the narrowest phones (320 px): wordmark and chip share 288 px */
-@media (max-width: 359.98px) {
+@media (max-width: 22.499em) {
   .wordmark {
     height: 24px;
   }
