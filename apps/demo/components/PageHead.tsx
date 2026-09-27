@@ -20,9 +20,14 @@ export function PageHead({ title, lede, example, size = "title", id, children, c
       <h1 id={id} className={styles.title}>
         {title}
       </h1>
-      {lede && <p className={styles.lede}>{lede}</p>}
+      {lede && <PageLede>{lede}</PageLede>}
       {children}
       {example && <ExampleNote className={styles.example}>{example}</ExampleNote>}
     </header>
   );
+}
+
+/** A page head's lede, for a page that lays it out apart from its title (the inbox, on narrow screens). */
+export function PageLede({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={[styles.lede, className].filter(Boolean).join(" ")}>{children}</p>;
 }

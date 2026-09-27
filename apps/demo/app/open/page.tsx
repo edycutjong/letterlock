@@ -3,7 +3,7 @@ import { Envelope, Letter } from "@/components/Envelope";
 import { ErrorSlip } from "@/components/ErrorSlip";
 import { ExampleNote } from "@/components/ExampleBadge";
 import { ExampleAction } from "@/components/ExampleAction";
-import { PageHead } from "@/components/PageHead";
+import { PageHead, PageLede } from "@/components/PageHead";
 import { WaxSeal } from "@/components/WaxSeal";
 import { EXAMPLE_TAMPERED, currentKey, letter, persona } from "@/lib/examples.ts";
 import { addressLine, formatBytes, utf8Bytes } from "@/lib/format.ts";
@@ -18,19 +18,19 @@ export default function Inbox() {
   const sealed = letter("maya-flight");
   const tamperedBytes = utf8Bytes(JSON.stringify(EXAMPLE_TAMPERED.envelope));
   return (
-    // wide screens: the open letter stands beside the page head, so its seal is in the first screen; narrow: under it
+    // wide screens: the open letter stands beside the page head, so its seal is in the first screen; narrow: under the
+    // title, with the lede and the example note after it (they are read before it: the order in the page is unchanged)
     <main id="main" className={`page ${styles.main}`}>
-      <PageHead
-        className={styles.head}
-        title="Inbox"
-        lede={
-          <>
-            Letters addressed to <span className="address-line">{addressLine(maya.address)}</span>. Each opens with one passkey tap, on
-            any device your passkey syncs to, and nothing is stored.
-          </>
-        }
-        example="Example envelopes, sealed by the SDK to an example key. The open letter is the real decryption of the first one."
-      />
+      <PageHead className={styles.head} title="Inbox" />
+      <div className={styles.intro}>
+        <PageLede>
+          Letters addressed to <span className="address-line">{addressLine(maya.address)}</span>. Each opens with one passkey tap, on any
+          device your passkey syncs to, and nothing is stored.
+        </PageLede>
+        <ExampleNote className={styles.introNote}>
+          Example envelopes, sealed by the SDK to an example key. The open letter is the real decryption of the first one.
+        </ExampleNote>
+      </div>
 
       <section className={styles.reader} aria-labelledby="reader-title">
         <h2 id="reader-title" className="visually-hidden">
@@ -71,7 +71,7 @@ export default function Inbox() {
               <p className={styles.detail}>Shown on this page</p>
             </div>
           </li>
-          <li className={styles.item} data-state="sealed">
+          <li className={styles.item} data-state="sealed" data-action="">
             <div className={styles.thumb}>
               <Envelope recipient={maya.address} flap="closed" variant="compact" seal={<WaxSeal state="pressed" decorative />} decorative />
             </div>
@@ -80,6 +80,8 @@ export default function Inbox() {
               <p className={styles.detail}>
                 Epoch {sealed.epoch} · {formatBytes(sealed.bytes)}
               </p>
+            </div>
+            <div className={styles.act}>
               <ExampleAction
                 tone="airmail"
                 passkey

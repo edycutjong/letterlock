@@ -1,20 +1,36 @@
 /* Wide screens: the page head and the inbox on the left, the open letter on the right from the top, level with the
    title, so the cracked seal is in the first screen of a laptop or an iPad on its side (scripts/checks/open-fold.mjs;
-   under the page head it fell below the fold). Narrow screens: the page head, the letter, the inbox. */
+   under the page head it fell below the fold). Narrow screens: the title, the letter, then the lede and the example
+   note (as the inbox's introduction), then the inbox, so the seal is in a phone's first screen too. The page's own
+   order is title, lede, note, letter, inbox at every width: a screen reader meets the example note before the letter. */
 .main {
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  /* the letter spans both rows; the flexible second row takes its extra height, so the page head's row stays its own */
-  grid-template-rows: auto 1fr;
+  /* the letter spans every row; the flexible last row takes its extra height, so the rows on the left stay their own */
+  grid-template-rows: auto auto 1fr;
   grid-template-areas:
     "head reader"
+    "intro reader"
     "inbox reader";
   align-items: start;
   column-gap: clamp(32px, 5.5vw, 80px);
 }
 
-.head {
+/* the page head holds the title alone; the lede and the note follow in .intro, spaced as a page head spaces them */
+.main > .head {
   grid-area: head;
+  padding-bottom: 16px;
+}
+
+.intro {
+  grid-area: intro;
+  display: grid;
+  gap: 16px;
+  padding-bottom: clamp(24px, 3.5vw, 40px);
+}
+
+.introNote {
+  margin-top: 6px;
 }
 
 .reader {
@@ -44,6 +60,7 @@
   letter-spacing: -0.012em;
 }
 
+/* a container: an item narrower than its thumbnail, its facts and its action side by side lays the action under both */
 .list {
   display: grid;
   margin: 0;
@@ -51,14 +68,28 @@
   list-style: none;
   border-top: 1.5px solid var(--ink);
   border-bottom: 1.5px solid var(--ink);
+  container-type: inline-size;
 }
 
 .item {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-areas: "thumb meta";
   align-items: center;
   gap: 20px;
   padding: 16px 0;
+}
+
+/* an item with an action: the action under the facts, the two centred beside the thumbnail as one block */
+.item[data-action] {
+  grid-template-areas:
+    "thumb meta"
+    "thumb act";
+  row-gap: 12px;
+}
+
+.item[data-action] .meta {
+  align-self: end;
 }
 
 .item + .item {
@@ -66,6 +97,7 @@
 }
 
 .thumb {
+  grid-area: thumb;
   position: relative;
   padding: 6px 4px 8px 0;
 }
@@ -90,9 +122,15 @@
 }
 
 .meta {
+  grid-area: meta;
   display: grid;
   justify-items: start;
   gap: 4px;
+}
+
+.act {
+  grid-area: act;
+  align-self: start;
 }
 
 .state {
@@ -113,8 +151,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-.meta > div {
-  margin-top: 8px;
+/* too narrow for "Open with passkey" beside the thumbnail (a phone, or the inbox column at 960-1090 px): the action
+   takes its own line under the item, so its label stays on one line (scripts/checks/label-wrap.mjs) */
+@container (max-width: 399.98px) {
+  .item[data-action] {
+    grid-template-areas:
+      "thumb meta"
+      "act act";
+  }
+  .item[data-action] .meta {
+    align-self: center;
+  }
 }
 
 @media (max-width: 959.98px) {
@@ -124,6 +171,7 @@
     grid-template-areas:
       "head"
       "reader"
+      "intro"
       "inbox";
   }
   .reader {
@@ -132,8 +180,12 @@
     justify-self: center;
     padding-top: 8px;
   }
-  .inbox {
+  .intro {
     margin-top: 56px;
+    padding-bottom: 0;
+  }
+  .inbox {
+    margin-top: 32px;
   }
 }
 
