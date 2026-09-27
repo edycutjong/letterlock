@@ -7,6 +7,7 @@ import { letterlock, type LetterlockClient, type ResolvedKey } from "../client.t
 import { DEPLOYMENTS, type LetterlockChain } from "../deployments.ts";
 import { decodeEnvelope, encodeEnvelope, seal, type Envelope } from "../envelope.ts";
 import { LetterlockError, isLetterlockError } from "../errors.ts";
+import type { InboxBlockTag } from "../inbox.ts";
 import { VERSION } from "../version.ts";
 
 export type CliIo = {
@@ -59,6 +60,12 @@ const keyText = (k: ResolvedKey, ll: LetterlockClient) =>
 
 const blockNumber = (v: string): bigint => {
   if (!/^(0|[1-9][0-9]{0,19})$/.test(v)) throw new InvalidArgumentError("expected a block number");
+  return BigInt(v);
+};
+
+const toBlockOption = (v: string): bigint | InboxBlockTag => {
+  if (v === "latest" || v === "safe" || v === "finalized") return v;
+  if (!/^(0|[1-9][0-9]{0,19})$/.test(v)) throw new InvalidArgumentError("expected a block number, latest, safe or finalized");
   return BigInt(v);
 };
 
@@ -149,9 +156,9 @@ export const buildProgram = (io: CliIo): Command => {
     .description("list the envelopes dropped for a recipient (Dropped logs of the directory)")
     .argument("<to>", "0x address or agent:<id>")
     .option("--from-block <n>", "first block to scan (default: the directory's deploy block)", blockNumber)
-    .option("--to-block <n>", "last block to scan (default: the chain head)", blockNumber)
+    .option("--to-block <n>", "last block to scan: a number, latest, safe or finalized (default: finalized, blocks that never change)", toBlockOption)
     .option("--json", "print JSON, envelopes included")
-    .action(async (to: string, o: ChainOptions & { fromBlock?: bigint; toBlock?: bigint; json?: boolean }) => {
+    .action(async (to: string, o: ChainOptions & { fromBlock?: bigint; toBlock?: bigint | InboxBlockTag; json?: boolean }) => {
       const ll = clientFor(o);
       const r = await ll.inbox(to, {
         ...(o.fromBlock !== undefined ? { fromBlock: o.fromBlock } : {}),
@@ -160,6 +167,7 @@ export const buildProgram = (io: CliIo): Command => {
       if (o.json) { out(json(r)); return; }
       const n = r.envelopes.length;
       out(`${n} envelope${n === 1 ? "" : "s"} for ${r.recipient} on ${where(ll)}, blocks ${r.fromBlock}..${r.toBlock} (${r.requests} eth_getLogs request${r.requests === 1 ? "" : "s"}, up to ${r.blockRange} blocks each)\n`);
+      if (r.toBlock > r.finalizedBlock) out(`blocks after ${r.finalizedBlock} are not final yet: a drop there can still vanish or move\n`);
       for (const e of r.envelopes)
         out(`  block ${e.blockNumber}  tx ${e.transactionHash}  epoch ${e.envelope.epoch}  kid ${e.envelope.kid}  ${e.bytes} bytes\n`);
       if (r.rejected.length) {

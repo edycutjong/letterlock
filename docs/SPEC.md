@@ -82,7 +82,7 @@ either. It sends one JSON-RPC request per HTTP request, never a batch: some Mona
 | `rotate({ account, credential })` | 1 | reads the account's epoch e, derives e + 1 (§2), publishes it, wipes `sk` |
 | `publishForAgent({ account, agentId, keys })` | none | `publishForAgent`; the epoch follows the agent's record across owners (§8) |
 | `drop({ account, envelope })` | none | sends the §3 wire form to the envelope's own recipient; chain and directory must be the client's |
-| `inbox(to, { fromBlock?, toBlock? })` | none | `Dropped` logs for `(to, NO_AGENT)` or `(address(0), agentId)`, from the deploy block by default, in pages the RPC accepts; bytes that are not an envelope for `to` on this chain and directory are returned as `rejected`, never as envelopes |
+| `inbox(to, { fromBlock?, toBlock? })` | none | `Dropped` logs for `(to, NO_AGENT)` or `(address(0), agentId)`, from the deploy block by default, in pages the RPC accepts; bytes that are not an envelope for `to` on this chain and directory are returned as `rejected`, never as envelopes. `toBlock` defaults to the `finalized` block: a Finalized block is never replaced, so a poll resumed from `toBlock + 1` misses nothing. `"latest"` (Monad's Proposed block) and `"safe"` (Voted) reach closer to the head, where a drop can still vanish or move; the result's `finalizedBlock` says how far a scan is final |
 | `meraAccount({ rpId, credential })` | 1 | the passkey's EVM account (§7) as a viem account backed by a mera signing session |
 
 A first publish therefore takes two prompts, one per PRF salt: the key (§2) and the account (§7).

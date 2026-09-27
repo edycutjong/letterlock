@@ -36,6 +36,8 @@ export type AnvilContext =
       readonly deployBlock: string;
       /** keccak256 of the compiled Letterlock creation code (no constructor argument). */
       readonly creationCodeHash: Hex;
+      /** The compiled Letterlock creation code, for a directory on a chain of a test's own (context.ts, privateChain). */
+      readonly creationCode: Hex;
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -49,11 +51,16 @@ const run = promisify(execFile);
 const CONTRACTS = fileURLToPath(new URL("../../../../contracts/", import.meta.url));
 /** The ERC-8004 IdentityRegistry address on Monad mainnet; on anvil a test double is placed there. */
 export const REGISTRY: Address = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
-const DEPLOYER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+export const DEPLOYER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-const startAnvil = (): Promise<{ proc: ChildProcess; url: string }> =>
+/**
+ * anvil with chain id 143. One slot per epoch makes its "safe" block the head - 1 and its "finalized" block the head - 2,
+ * as on Monad, where a Proposed block is Voted one block later and Finalized two blocks later (anvil's default puts
+ * finalized 64 blocks back).
+ */
+export const startAnvil = (): Promise<{ proc: ChildProcess; url: string }> =>
   new Promise((resolve, reject) => {
-    const proc = spawn("anvil", ["--port", "0", "--chain-id", "143"], { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn("anvil", ["--port", "0", "--chain-id", "143", "--slots-in-an-epoch", "1"], { stdio: ["ignore", "pipe", "pipe"] });
     let seen = "";
     const timer = setTimeout(() => { proc.kill(); reject(new Error(`anvil did not start: ${seen.slice(-400)}`)); }, 20_000);
     proc.on("error", (e) => { clearTimeout(timer); reject(e); });
@@ -116,6 +123,7 @@ export default async function setup(project: TestProject) {
       faultyRegistry: faulty.address,
       deployBlock: receipt.blockNumber.toString(),
       creationCodeHash: keccak256(artifact.bytecode.object),
+      creationCode: artifact.bytecode.object,
     });
   } catch (e) {
     proc.kill();

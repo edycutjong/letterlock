@@ -8,5 +8,5 @@ export { DEPLOYMENTS, LETTERLOCK_RP_ID, NO_AGENT, MAX_ENVELOPE_BYTES, type Deplo
 export { letterlock, toAgentId, type LetterlockClient, type LetterlockConfig, type ResolvedKey, type PublishableKey, type PublishResult, type DropResult, type WriteResult, type Signer } from "./client.ts";
 export { meraAccount, MERA_ACCOUNT_PATH, type MeraAccount, type MeraAccountOptions } from "./account.ts";
 export { toLetterlockError } from "./chain-errors.ts";
-export type { InboxOptions, InboxResult, InboxEnvelope, RejectedDrop } from "./inbox.ts";
+export type { InboxOptions, InboxResult, InboxEnvelope, RejectedDrop, InboxBlockTag } from "./inbox.ts";
 export { VERSION } from "./version.ts";

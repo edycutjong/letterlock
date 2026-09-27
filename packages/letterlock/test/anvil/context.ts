@@ -1,9 +1,10 @@
 // Shared helpers for the chain tests: the anvil chain from global-setup.ts, fresh funded accounts (every test signs
 // with its own random key, so test files can run in parallel on one chain), and the test-double registries.
-import { createPublicClient, createTestClient, createWalletClient, http, parseAbi, parseEther, type Address, type Hex } from "viem";
+import { createPublicClient, createTestClient, createWalletClient, http, parseAbi, parseEther, zeroAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { inject } from "vitest";
-import { letterlock, type LetterlockConfig } from "../../src/index.ts";
+import { letterlock, letterlockAbi, type LetterlockConfig } from "../../src/index.ts";
+import { DEPLOYER, startAnvil } from "./global-setup.ts";
 
 export const ctx = inject("anvil");
 /** For describe.skipIf: why the chain tests cannot run here, or false. */
@@ -63,3 +64,35 @@ export const sendAs = async (address: Address, abi: readonly unknown[], function
 
 /** A random agent id, so parallel tests never share one. */
 export const newAgentId = () => BigInt(Math.floor(Math.random() * 2 ** 48)) + 1_000_000n;
+
+/**
+ * A chain of the test's own: a new anvil (chain id 143, Monad's finality lag) with a directory without a registry,
+ * deployed from the same creation code. For tests that stop mining or revert blocks, which must never happen on the
+ * shared chain: other test files send transactions to it in parallel.
+ */
+export const privateChain = async () => {
+  const { proc, url } = await startAnvil();
+  try {
+    const chain = { ...anvilChain(), rpcUrls: { default: { http: [url] } } } as const;
+    const pub = createPublicClient({ chain, transport: http(url) });
+    const test = createTestClient({ mode: "anvil", chain, transport: http(url) });
+    const deployer = createWalletClient({ account: DEPLOYER, chain, transport: http(url) });
+    const hash = await deployer.deployContract({ abi: letterlockAbi, bytecode: must().creationCode, args: [zeroAddress] });
+    const receipt = await pub.waitForTransactionReceipt({ hash, pollingInterval: 50 });
+    const directory = receipt.contractAddress!;
+    return {
+      rpcUrl: url,
+      directory,
+      publicClient: pub,
+      testClient: test,
+      client: (over: Partial<LetterlockConfig> = {}) =>
+        letterlock({ chain: "monad", rpcUrl: url, directory, deployBlock: receipt.blockNumber, pollingInterval: 50, ...over }),
+      fundedAccount: async (mon = "10"): Promise<PrivateKeyAccount> => {
+        const account = privateKeyToAccount(generatePrivateKey());
+        await test.setBalance({ address: account.address, value: parseEther(mon) });
+        return account;
+      },
+      close: () => { proc.kill(); },
+    };
+  } catch (e) { proc.kill(); throw e; }
+};

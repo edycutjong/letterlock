@@ -48,7 +48,7 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
 | `letterlock({ chain, rpcUrl?, directory?, rpId? })` | 0 | client for `"monad"` (143) or `"monad-testnet"` (10143); the directory addresses are built in, and a `directory` you pass is checked once (EIP-55 checksum, code, `NO_AGENT()`) before anything is read or sent |
 | `resolve(to)` | 0 | one `keyOf` / `keyOfAgent` read → `{ recipient, publicKey, epoch, kid, updatedAt }` |
 | `sealTo(to, bytes)` | 0 | `resolve` + `seal`: an envelope bound to this chain, directory, recipient and epoch |
-| `inbox(to, { fromBlock?, toBlock? })` | 0 | the envelopes dropped for a recipient (`Dropped` logs), in pages the RPC accepts |
+| `inbox(to, { fromBlock?, toBlock? })` | 0 | the envelopes dropped for a recipient (`Dropped` logs), in pages the RPC accepts, up to the finalized block by default (two blocks behind the head on Monad): a poll resumed from `toBlock + 1` misses nothing. `toBlock: "latest"` reads to the head, where a block can still be replaced |
 | `drop({ account, envelope })` | 0 | a transaction that emits the envelope for its recipient (the demo transport; ≤ 16 KiB) |
 | `publish({ account, keys })` | 0 | a transaction that publishes the account's key; `keys.epoch` must be the current epoch + 1 |
 | `publishForAgent({ account, agentId, keys })` | 0 | the same for an ERC-8004 agent the account owns (mainnet only) |

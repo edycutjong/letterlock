@@ -145,12 +145,14 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     expect(r.stdout + r.stderr).not.toContain(senderKey.slice(2));
     const tx = /tx +(0x[0-9a-f]{64})/.exec(r.stdout)?.[1];
     const block = /block +(\d+)/.exec(r.stdout)?.[1];
-    const inbox = await cli(["inbox", recipient, "--from-block", block!, "--json", ...chain()]);
+    // by default inbox reads up to the finalized block, two blocks behind the one the drop is in: name the block
+    const inbox = await cli(["inbox", recipient, "--from-block", block!, "--to-block", block!, "--json", ...chain()]);
     const j = JSON.parse(inbox.stdout) as { envelopes: { transactionHash: string; envelope: unknown }[] };
     expect(j.envelopes.map((e) => e.transactionHash)).toEqual([tx]);
     expect(text(await open(decodeEnvelope(JSON.stringify(j.envelopes[0]!.envelope)), keys))).toBe("dropped by the CLI");
-    const human = await cli(["inbox", recipient, "--from-block", block!, ...chain()]);
-    expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)/);
+    const human = await cli(["inbox", recipient, "--from-block", block!, "--to-block", "latest", ...chain()]);
+    expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)\nblocks after \d+ are not final yet/);
+    expect((await cli(["inbox", recipient, "--from-block", block!, "--to-block", "soon", ...chain()])).code).toBe(2);
   });
 
   it("inbox against an address that holds no directory exits 1 instead of printing '0 envelopes'; a bad checksum too", async () => {

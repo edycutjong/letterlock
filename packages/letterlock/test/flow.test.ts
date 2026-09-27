@@ -8,7 +8,7 @@
 import { parseEventLogs } from "viem";
 import { describe, expect, it } from "vitest";
 import { LETTERLOCK_RP_ID, createEncryptionAddress, fingerprint, letterlockAbi, meraAccount, toHex } from "../src/index.ts";
-import { client, fund, fundedAccount, noChain, publicClient } from "./anvil/context.ts";
+import { client, fund, fundedAccount, noChain, publicClient, testClient } from "./anvil/context.ts";
 import { softAuthenticator } from "./soft-authenticator.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
@@ -41,7 +41,9 @@ describe.skipIf(noChain)("publish → resolve → seal → drop → inbox → op
     const dropped = await agent.drop({ account: sender, envelope });
     expect(dropped.recipient).toBe(account.address.toLowerCase());
 
-    // Maya's iPad: the same passkey, synced; nothing stored on it
+    // Maya's iPad: the same passkey, synced; nothing stored on it. inbox() reads up to the finalized block, and on
+    // Monad a block is finalized two blocks after it is proposed
+    await testClient().mine({ blocks: 2 });
     const ipad = mac.syncedTo();
     const inbox = await client().inbox(account.address, { fromBlock: published.blockNumber });
     expect(inbox.rejected).toEqual([]);
@@ -62,6 +64,7 @@ describe.skipIf(noChain)("publish → resolve → seal → drop → inbox → op
     expect(newer.epoch).toBe(2);
     await agent.drop({ account: sender, envelope: newer });
     ipadAccount.end();
+    await testClient().mine({ blocks: 2 });
 
     const all = await client().inbox(account.address, { fromBlock: published.blockNumber });
     expect(all.envelopes.map((e) => e.envelope.epoch)).toEqual([1, 2]);
@@ -85,6 +88,7 @@ describe.skipIf(noChain)("publish → resolve → seal → drop → inbox → op
     const sender = await fundedAccount("1");
     const env = await client().sealTo(`agent:${agentId}`, utf8("summarise the 10:40 call"));
     await client().drop({ account: sender, envelope: env });
+    await testClient().mine({ blocks: 2 }); // finalized
     const inbox = await client().inbox(`agent:${agentId}`, { fromBlock: r.blockNumber });
     expect(inbox.envelopes).toHaveLength(1);
     expect(text(await client().open(inbox.envelopes[0]!.envelope, { credential, webAuthnClient: dev }))).toBe("summarise the 10:40 call");

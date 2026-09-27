@@ -6,7 +6,7 @@ import { toHex, type Address } from "viem";
 import { beforeAll, describe, expect, it } from "vitest";
 import { NO_AGENT, deriveKeyPair, isLetterlockError, letterlockAbi, seal, type Envelope } from "../src/index.ts";
 import { narrowRange } from "../src/inbox.ts";
-import { anvil, client, ctx, fundedAccount, noChain, publicClient, sendAs, testClient } from "./anvil/context.ts";
+import { anvil, client, ctx, fundedAccount, noChain, privateChain, publicClient, sendAs, testClient } from "./anvil/context.ts";
 import { rpcError, rpcProxy } from "./anvil/proxy.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
@@ -48,11 +48,53 @@ const rangeLimitedProxy = async (upstream: string, limit: number, refusal: Refus
   return { ...proxy, stats };
 };
 
+describe.skipIf(noChain)("inbox and blocks that are not final yet (a chain of the test's own: a block is replaced)", () => {
+  it("by default the scan ends at the finalized block, so a poll resumed from toBlock + 1 never skips a replaced block", async () => {
+    const chain = await privateChain();
+    try {
+      const ll = chain.client();
+      const account = await chain.fundedAccount();
+      const published = await ll.publish({ account, keys: deriveKeyPair(new Uint8Array(32).fill(80), 1) });
+      const snapshot = await chain.testClient.snapshot();
+      await chain.testClient.mine({ blocks: 1 }); // the head: Proposed, and about to be replaced
+      const head = await chain.publicClient.getBlockNumber({ cacheTime: 0 });
+      const first = await ll.inbox(account.address, { fromBlock: published.blockNumber });
+      expect(first.envelopes).toEqual([]);
+      expect(first.toBlock).toBe(head - 2n); // Finalized, as on Monad: two blocks behind the Proposed head
+      expect(first.finalizedBlock).toBe(first.toBlock);
+      await chain.testClient.revert({ id: snapshot }); // the head block is replaced...
+      const dropped = await ll.drop({ account, envelope: await ll.sealTo(account.address, utf8("in the replacement block")) });
+      expect(dropped.blockNumber).toBe(head); // ...by one at the same height that holds a drop
+      await chain.testClient.mine({ blocks: 2 }); // until that block is finalized
+      const next = await ll.inbox(account.address, { fromBlock: first.toBlock + 1n });
+      expect(next.envelopes.map((e) => e.transactionHash)).toEqual([dropped.transactionHash]);
+    } finally { chain.close(); }
+  });
+
+  it("toBlock 'latest' reaches the head, a number is clamped to it, and finalizedBlock says how far the scan is final", async () => {
+    const chain = await privateChain();
+    try {
+      const ll = chain.client();
+      const account = await chain.fundedAccount();
+      const published = await ll.publish({ account, keys: deriveKeyPair(new Uint8Array(32).fill(81), 1) });
+      const dropped = await ll.drop({ account, envelope: await ll.sealTo(account.address, utf8("fresh")) });
+      const head = await chain.publicClient.getBlockNumber({ cacheTime: 0 });
+      expect((await ll.inbox(account.address, { fromBlock: published.blockNumber })).envelopes).toEqual([]); // not final yet
+      for (const toBlock of ["latest", head + 100n] as const) {
+        const r = await ll.inbox(account.address, { fromBlock: published.blockNumber, toBlock });
+        expect([r.toBlock, r.finalizedBlock, r.envelopes.map((e) => e.transactionHash)]).toEqual([head, head - 2n, [dropped.transactionHash]]);
+      }
+      expect((await ll.inbox(account.address, { fromBlock: published.blockNumber, toBlock: "safe" })).toBlock).toBe(head - 1n);
+    } finally { chain.close(); }
+  });
+});
+
 describe.skipIf(noChain)("inbox", () => {
   let recipient: Address;
   let keys: ReturnType<typeof deriveKeyPair>;
   let first: bigint;
   const sent: string[] = [];
+  let lastDrop: bigint;
   let last: bigint;
 
   beforeAll(async () => {
@@ -64,17 +106,21 @@ describe.skipIf(noChain)("inbox", () => {
     const sender = await fundedAccount();
     for (const [i, note] of ["one", "two", "three"].entries()) {
       if (i > 0) await testClient().mine({ blocks: 150 }); // spread the drops over more than one page
-      sent.push((await client().drop({ account: sender, envelope: await client().sealTo(recipient, utf8(note)) })).transactionHash);
+      const r = await client().drop({ account: sender, envelope: await client().sealTo(recipient, utf8(note)) });
+      sent.push(r.transactionHash);
+      lastDrop = r.blockNumber;
     }
-    last = await publicClient().getBlockNumber();
+    await testClient().mine({ blocks: 2 }); // the last drop is finalized two blocks later, as on Monad
+    last = await publicClient().getBlockNumber({ cacheTime: 0 });
   });
 
-  it("returns every drop for the recipient, oldest first", async () => {
+  it("returns every drop for the recipient, oldest first, up to the finalized block", async () => {
     const r = await client().inbox(recipient, { fromBlock: first });
     expect(r.envelopes.map((e) => e.transactionHash)).toEqual(sent);
     expect(r.rejected).toEqual([]);
     expect(r.recipient).toBe(recipient.toLowerCase());
-    expect(r.toBlock).toBeGreaterThanOrEqual(last);
+    expect(r.toBlock).toBe(r.finalizedBlock);
+    expect(r.toBlock).toBeGreaterThanOrEqual(lastDrop);
   });
 
   it("defaults to the directory's deploy block", async () => {
@@ -122,7 +168,7 @@ describe.skipIf(noChain)("inbox", () => {
     await raw(utf8(JSON.stringify(elsewhere)));
     await raw(utf8(JSON.stringify({ ...forOther, recipient: account.address.toLowerCase(), ct: "not base64!" })));
     const good = await client().drop({ account: other, envelope: await client().sealTo(account.address, utf8("for you")) });
-    const r = await client().inbox(account.address, { fromBlock: from });
+    const r = await client().inbox(account.address, { fromBlock: from, toBlock: good.blockNumber });
     expect(r.envelopes.map((e) => e.transactionHash)).toEqual([good.transactionHash]);
     expect(r.rejected.map((x) => x.reason)).toEqual([
       "envelope is not JSON",

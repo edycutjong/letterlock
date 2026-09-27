@@ -5,11 +5,19 @@ import { NO_AGENT } from "./deployments.ts";
 import { canonicalRecipient, decodeEnvelope, type Envelope, type Recipient } from "./envelope.ts";
 import { LetterlockError, isLetterlockError } from "./errors.ts";
 
+/** The block tags inbox() takes as toBlock. On Monad "latest" is the Proposed block, "safe" Voted, "finalized" Finalized. */
+export type InboxBlockTag = "latest" | "safe" | "finalized";
+
 export type InboxOptions = {
   /** First block to scan (inclusive). Default: the directory's deploy block. */
   readonly fromBlock?: bigint | number;
-  /** Last block to scan (inclusive). Default, and upper bound: the chain head when the scan starts. */
-  readonly toBlock?: bigint | number;
+  /**
+   * Last block to scan (inclusive). Default "finalized": a Finalized block is never replaced, so a poll that resumes
+   * from `toBlock + 1` misses nothing. "latest" (Proposed: speculatively executed, no vote yet) and "safe" (Voted)
+   * are closer to the head, but a drop in a block after the finalized one can still vanish or move to another block;
+   * resume a poll from `finalizedBlock + 1` then. A number is clamped to the head ("latest").
+   */
+  readonly toBlock?: bigint | number | InboxBlockTag;
   /**
    * Blocks per eth_getLogs request to start with (default 10,000). When the RPC refuses the range, the scan
    * retries the same window with the limit the error names ("limited to a 100 range" → 100), or a tenth of the
@@ -46,7 +54,13 @@ export type InboxResult = {
   readonly envelopes: InboxEnvelope[];
   readonly rejected: RejectedDrop[];
   readonly fromBlock: bigint;
+  /** The last block scanned. With the default toBlock it is finalizedBlock. */
   readonly toBlock: bigint;
+  /**
+   * The chain's finalized block when the scan started: what the scan found up to here never changes. A poll resumes
+   * from `min(toBlock, finalizedBlock) + 1n` (and from fromBlock again when that is lower).
+   */
+  readonly finalizedBlock: bigint;
   /** eth_getLogs requests made, refused ones included. */
   readonly requests: number;
   /** The block range the last request used. */
@@ -70,11 +84,14 @@ const messageOf = (e: unknown): string => {
   return parts.join(" | ");
 };
 
+const TAGS: readonly InboxBlockTag[] = ["latest", "safe", "finalized"];
+
 /** A block number option: a non-negative safe integer or bigint. Anything else is INPUT_INVALID, never a RangeError. */
 const blockNumberOf = (name: string, v: unknown): bigint => {
   if (typeof v === "bigint" && v >= 0n) return v;
   if (typeof v === "number" && Number.isSafeInteger(v) && v >= 0) return BigInt(v);
-  throw new LetterlockError("INPUT_INVALID", `${name} must be a non-negative integer (a safe integer or a bigint), got ${typeof v === "string" ? JSON.stringify(v) : String(v)}`);
+  const tags = name === "toBlock" ? ` or ${TAGS.map((t) => `"${t}"`).join(", ")}` : "";
+  throw new LetterlockError("INPUT_INVALID", `${name} must be a non-negative integer (a safe integer or a bigint)${tags}, got ${typeof v === "string" ? JSON.stringify(v) : String(v)}`);
 };
 
 /** The next range to try after a refusal: the limit the RPC named, else a tenth. */
@@ -103,7 +120,8 @@ export const readInbox = async (
   if (start === undefined)
     throw new LetterlockError("INPUT_INVALID", "inbox() needs fromBlock for a directory whose deploy block the client does not know (pass deployBlock to letterlock())");
   const fromBlock = blockNumberOf("fromBlock", start);
-  const until = o.toBlock === undefined ? undefined : blockNumberOf("toBlock", o.toBlock);
+  const tag: InboxBlockTag | undefined = o.toBlock === undefined ? "finalized" : TAGS.find((t) => t === o.toBlock);
+  const until = tag === undefined ? blockNumberOf("toBlock", o.toBlock) : undefined;
   let range = o.blockRange ?? 10_000;
   if (!Number.isSafeInteger(range) || range < 1) throw new LetterlockError("INPUT_INVALID", `blockRange must be a positive integer, got ${range}`);
   const concurrency = o.concurrency ?? 4;
@@ -114,8 +132,15 @@ export const readInbox = async (
   const call = async <T>(what: string, f: () => Promise<T>): Promise<T> => {
     try { return await f(); } catch (e) { throw toLetterlockError(e, what); }
   };
-  const head = await call("inbox: eth_blockNumber", () => client.getBlockNumber({ cacheTime: 0 }));
-  const toBlock = until === undefined || until > head ? head : until;
+  const numberOf = (t: "safe" | "finalized") =>
+    call(`inbox: eth_getBlockByNumber(${t})`, () => client.getBlock({ blockTag: t, includeTransactions: false })).then((b) => b.number);
+  const [finalizedBlock, bound] = await Promise.all([
+    numberOf("finalized"),
+    tag === "finalized" ? Promise.resolve(undefined)
+      : tag === "safe" ? numberOf("safe")
+      : call("inbox: eth_blockNumber", () => client.getBlockNumber({ cacheTime: 0 })), // "latest", or a number clamped to it
+  ]);
+  const toBlock = bound === undefined ? finalizedBlock : until !== undefined && until < bound ? until : bound;
 
   const args = agentId === undefined
     ? { to: recipient as `0x${string}`, toAgent: NO_AGENT }
@@ -159,7 +184,10 @@ export const readInbox = async (
       }
       throw toLetterlockError(r.reason, `inbox: eth_getLogs ${lo}..${hi}`);
     }
-    // a load-balanced RPC may answer from a node behind the head read above: wait for it (never skip blocks)
+    // A load-balanced RPC may answer from a node behind the block read above. rpc1.monad.xyz refuses such a range
+    // ("block range extends beyond current head block"): wait and ask again, up to 10 times. rpc.monad.xyz, rpc3 and
+    // monadinfra answer it with the logs they have and no error, which a scan cannot tell apart from no logs; a scan
+    // that ends at the finalized block (the default) stays two blocks behind the head, which such a node rarely lags.
     if (wait) await new Promise((res) => setTimeout(res, 400));
     o.onProgress?.({ scannedBlocks: scanned, totalBlocks });
   }
@@ -180,5 +208,5 @@ export const readInbox = async (
       rejected.push({ reason: e.message.replace(/^[A-Z_]+: /, ""), ...where });
     }
   }
-  return { recipient, envelopes, rejected, fromBlock, toBlock, requests, blockRange: range };
+  return { recipient, envelopes, rejected, fromBlock, toBlock, finalizedBlock, requests, blockRange: range };
 };
