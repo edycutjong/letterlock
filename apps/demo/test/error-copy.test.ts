@@ -36,3 +36,11 @@ test("the tick-box lines are distinct, so the ticked one is unambiguous", () => 
   const boxes = SLIP_CODES.map((c) => SLIP_COPY[c].box);
   assert.equal(new Set(boxes).size, boxes.length);
 });
+
+test("no slip sends the reader to the sender: an envelope cannot say who sealed it, and the inbox never names one", () => {
+  for (const code of SLIP_CODES)
+    for (const v of [{}, { envelopeEpoch: 1, keyEpoch: 2, sealedTo: "6b5286d1ad2708a1", derived: "593013e05c26c52f" }]) {
+      const text = `${SLIP_COPY[code].meaning(v)} ${SLIP_COPY[code].recovery(v)}`;
+      assert.doesNotMatch(text, /\bthe sender\b/i, `${code} relies on a sender the app cannot know`);
+    }
+});

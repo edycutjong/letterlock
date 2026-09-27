@@ -92,6 +92,6 @@ export const SLIP_COPY: Record<SlipCode, SlipCopy> = {
     box: "Damaged in transit",
     meaning: () =>
       "The envelope failed its authentication check: it was changed after it was sealed. No part of it was decrypted.",
-    recovery: () => "Don’t trust this copy. Ask the sender to seal the note again.",
+    recovery: () => "Don’t trust this copy. If you know who sent it, ask them to seal the note again.",
   },
 };
