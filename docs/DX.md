@@ -100,7 +100,7 @@ Every failure is a `LetterlockError` with a `code` (`isLetterlockError(e, "NO_KE
 | `NO_KEY_PUBLISHED` | the recipient has no key that resolves now | ask them to create their address; never fall back to sending in the clear |
 | `EPOCH_MISMATCH` | an envelope and a key name different epochs, or a publish skipped an epoch | derive the key for `envelope.epoch` (`open` does this) |
 | `WRONG_KEY` | decryption failed and the `kid` names another key | the wrong passkey answered: try the passkey that made the address |
-| `TAMPERED` | authentication failed | the envelope was altered, or re-addressed to another chain, directory, recipient or epoch |
+| `TAMPERED` | authentication failed | the envelope was altered, or re-addressed to another chain, directory or recipient (an edited epoch shows as `EPOCH_MISMATCH`, or as `WRONG_KEY` through `openWithPasskey`) |
 | `PRF_UNSUPPORTED` | the authenticator returns no PRF output | use a passkey provider with the WebAuthn PRF extension: not every password manager has it |
 | `PASSKEY_FAILED` | the prompt was cancelled, timed out, or found no passkey for this site | ask again |
 | `NOT_AGENT_OWNER` | the account is not the agent's ERC-8004 owner | publish from the owner |
