@@ -153,6 +153,15 @@ describe.skipIf(noChain)("letterlock CLI on the anvil directory", () => {
     expect(human.stdout).toMatch(/^1 envelope for 0x[0-9a-f]{40} on Monad mainnet \(143\), blocks \d+\.\.\d+ \(1 eth_getLogs request, up to 10000 blocks each\)/);
   });
 
+  it("inbox against an address that holds no directory exits 1 instead of printing '0 envelopes'; a bad checksum too", async () => {
+    const nowhere = privateKeyToAccount(generatePrivateKey()).address;
+    const rpc = ["--rpc", ctx.ok ? ctx.rpcUrl : ""];
+    const r = await cli(["inbox", recipient, "--from-block", "1", "--directory", nowhere, ...rpc]);
+    expect([r.code, r.stdout, r.stderr]).toEqual([1, "", expect.stringContaining(`INPUT_INVALID: ${nowhere} is not a Letterlock directory`)]);
+    const typo = await cli(["inbox", recipient, "--from-block", "1", "--directory", "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7F", ...rpc]);
+    expect([typo.code, typo.stderr]).toEqual([1, expect.stringContaining("EIP-55 checksum")]);
+  });
+
   it("drop refuses an envelope for another chain before sending", async () => {
     const envFile = join(dir, "other-chain.json");
     await writeFile(envFile, (await cli(["seal", recipient, "-", ...chain()], { stdin: "x" })).stdout.replace('"chainId": 143', '"chainId": 10143'));

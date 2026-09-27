@@ -35,6 +35,15 @@ describe("built-in deployments", () => {
     expect(() => letterlock({ chain: "monad", directory: "0x1234" })).toThrow(/INPUT_INVALID/);
   });
 
+  it("checks the directory's EIP-55 checksum: a one-digit typo is INPUT_INVALID; checksummed or lower-case is accepted", () => {
+    const typo = "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7F"; // the mainnet directory with its last digit changed
+    expect(() => letterlock({ chain: "monad", directory: typo })).toThrow(/INPUT_INVALID: directory/);
+    expect(() => letterlock({ chain: "monad", directory: typo.toUpperCase().replace("0X", "0x") as `0x${string}` })).toThrow(/INPUT_INVALID/);
+    const d = DEPLOYMENTS.monad.directory;
+    expect(letterlock({ chain: "monad", directory: d }).directory).toBe(d);
+    expect(letterlock({ chain: "monad", directory: d.toLowerCase() as `0x${string}` }).directory).toBe(d);
+  });
+
   it("LETTERLOCK_RP_ID is a bare hostname (an rpId has no scheme, port or path)", () => {
     expect(LETTERLOCK_RP_ID).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/);
     expect(letterlock({ chain: "monad" }).rpId).toBe(LETTERLOCK_RP_ID);

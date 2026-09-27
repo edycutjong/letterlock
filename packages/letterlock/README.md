@@ -45,7 +45,7 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
 
 | Call | Passkey prompts | What it does |
 |---|---|---|
-| `letterlock({ chain, rpcUrl?, directory?, rpId? })` | 0 | client for `"monad"` (143) or `"monad-testnet"` (10143); the directory addresses are built in |
+| `letterlock({ chain, rpcUrl?, directory?, rpId? })` | 0 | client for `"monad"` (143) or `"monad-testnet"` (10143); the directory addresses are built in, and a `directory` you pass is checked once (EIP-55 checksum, code, `NO_AGENT()`) before anything is read or sent |
 | `resolve(to)` | 0 | one `keyOf` / `keyOfAgent` read → `{ recipient, publicKey, epoch, kid, updatedAt }` |
 | `sealTo(to, bytes)` | 0 | `resolve` + `seal`: an envelope bound to this chain, directory, recipient and epoch |
 | `inbox(to, { fromBlock?, toBlock? })` | 0 | the envelopes dropped for a recipient (`Dropped` logs), in pages the RPC accepts |
@@ -69,7 +69,7 @@ const bytes = await ll.open(envelopes[0].envelope, { credential }); // one promp
 | `NOT_AGENT_OWNER` | the account does not own that ERC-8004 agent |
 | `INSUFFICIENT_FUNDS` | the account cannot pay for gas |
 | `CHAIN_UNAVAILABLE` | the RPC or the ERC-8004 registry gave no answer: unknown, never "no key" |
-| `INPUT_INVALID` | a malformed recipient, key, envelope or option, the wrong chain behind `rpcUrl`, or a publish under another rpId |
+| `INPUT_INVALID` | a malformed recipient, key, envelope or option, the wrong chain behind `rpcUrl`, a `directory` with a bad checksum or no Letterlock directory at it, or a publish under another rpId |
 
 ## Honest limits
 

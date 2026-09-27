@@ -1,5 +1,7 @@
 import { isMeraError } from "@category-labs/mera";
 import {
+  AbiDecodingDataSizeTooSmallError,
+  AbiDecodingZeroDataError,
   BaseError,
   ContractFunctionRevertedError,
   ContractFunctionZeroDataError,
@@ -23,16 +25,25 @@ import { LetterlockError } from "./errors.ts";
  * | NoKeyPublished(to, toAgent)                    | NO_KEY_PUBLISHED  |
  * | RegistryCallFailed(agentId), no revert data    | CHAIN_UNAVAILABLE |
  */
+/** The first error in `e`'s cause chain (e included) that `match` accepts. */
+export const findCause = <T>(e: unknown, match: (x: unknown) => x is T): T | undefined => {
+  let x: unknown = e;
+  for (let depth = 0; x !== undefined && x !== null && depth < 32; depth++) {
+    if (match(x)) return x;
+    x = typeof x === "object" && "cause" in x ? (x as { cause?: unknown }).cause : undefined;
+  }
+  return undefined;
+};
+
+/** True when a contract call failed because of what the code at the address answered (a revert, no data, or data that does not decode), not because the RPC failed. */
+export const answeredByCode = (e: unknown): boolean =>
+  findCause(e, (x): x is Error =>
+    x instanceof ContractFunctionRevertedError || x instanceof ContractFunctionZeroDataError ||
+    x instanceof AbiDecodingDataSizeTooSmallError || x instanceof AbiDecodingZeroDataError) !== undefined;
+
 export const toLetterlockError = (e: unknown, action: string): LetterlockError => {
   if (e instanceof LetterlockError) return e;
-  const find = <T>(match: (x: unknown) => x is T): T | undefined => {
-    let x: unknown = e;
-    for (let depth = 0; x !== undefined && x !== null && depth < 32; depth++) {
-      if (match(x)) return x;
-      x = typeof x === "object" && "cause" in x ? (x as { cause?: unknown }).cause : undefined;
-    }
-    return undefined;
-  };
+  const find = <T>(match: (x: unknown) => x is T): T | undefined => findCause(e, match);
   const brief = e instanceof BaseError ? e.shortMessage : e instanceof Error ? e.message : String(e);
 
   const mera = find((x): x is { code: string; message: string } => isMeraError(x));

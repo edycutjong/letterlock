@@ -79,7 +79,13 @@ export const narrowRange = (range: number, message: string): number => {
 
 export const readInbox = async (
   client: PublicClient,
-  ctx: { readonly chainId: number; readonly directory: `0x${string}`; readonly deployBlock?: bigint },
+  ctx: {
+    readonly chainId: number;
+    readonly directory: `0x${string}`;
+    readonly deployBlock?: bigint;
+    /** The client's one-time checks (chain, directory): run after the options are validated, before the scan. */
+    readonly ready?: () => Promise<void>;
+  },
   to: string,
   o: InboxOptions = {},
 ): Promise<InboxResult> => {
@@ -93,6 +99,9 @@ export const readInbox = async (
   let range = o.blockRange ?? 10_000;
   if (!Number.isSafeInteger(range) || range < 1) throw new LetterlockError("INPUT_INVALID", `blockRange must be a positive integer, got ${range}`);
   if (fromBlock < 0n) throw new LetterlockError("INPUT_INVALID", "fromBlock must not be negative");
+  const concurrency = o.concurrency ?? 4;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new LetterlockError("INPUT_INVALID", `concurrency must be a positive integer, got ${concurrency}`);
+  await ctx.ready?.();
 
   let requests = 0;
   const call = async <T>(what: string, f: () => Promise<T>): Promise<T> => {
@@ -107,8 +116,6 @@ export const readInbox = async (
   const envelopes: InboxEnvelope[] = [];
   const rejected: RejectedDrop[] = [];
 
-  const concurrency = o.concurrency ?? 4;
-  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new LetterlockError("INPUT_INVALID", `concurrency must be a positive integer, got ${concurrency}`);
   type Window = readonly [bigint, bigint];
   type DroppedLog = Awaited<ReturnType<typeof getPage>>[number];
   const getPage = ([lo, hi]: Window) =>

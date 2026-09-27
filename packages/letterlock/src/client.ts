@@ -15,7 +15,7 @@ import {
 } from "viem";
 import { monad, monadTestnet } from "viem/chains";
 import { letterlockAbi } from "./abi.ts";
-import { toLetterlockError } from "./chain-errors.ts";
+import { answeredByCode, toLetterlockError } from "./chain-errors.ts";
 import { DEPLOYMENTS, LETTERLOCK_RP_ID, MAX_ENVELOPE_BYTES, NO_AGENT, type LetterlockChain } from "./deployments.ts";
 import { MAX_EPOCH, fingerprint } from "./derive.ts";
 import { canonicalRecipient, encodeEnvelope, seal, type Envelope, type Recipient, type RecipientKey } from "./envelope.ts";
@@ -117,8 +117,9 @@ export const toAgentId = (agent: bigint | number | string): bigint => {
 export const letterlock = (config: LetterlockConfig): LetterlockClient => {
   const deployment = DEPLOYMENTS[config.chain];
   if (!deployment) throw new LetterlockError("INPUT_INVALID", `chain must be "monad" or "monad-testnet", got ${JSON.stringify(config.chain)}`);
-  if (config.directory !== undefined && !isAddress(config.directory, { strict: false }))
-    throw new LetterlockError("INPUT_INVALID", `directory must be a 0x address, got ${JSON.stringify(config.directory)}`);
+  // strict: a mixed-case address must carry a valid EIP-55 checksum, so a one-digit typo is refused here
+  if (config.directory !== undefined && (typeof config.directory !== "string" || !isAddress(config.directory)))
+    throw new LetterlockError("INPUT_INVALID", `directory must be a 0x address with a valid EIP-55 checksum (or all lower-case), got ${JSON.stringify(config.directory)}`);
   const { chainId, network } = deployment;
   const directory = getAddress(config.directory ?? deployment.directory);
   const builtIn = directory === getAddress(deployment.directory);
@@ -148,16 +149,42 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       },
     ));
 
+  // One check per client that the address holds a Letterlock directory: code, and NO_AGENT() answering the marker.
+  // Without it a codeless or mistyped directory takes publish and drop transactions (an address without code accepts
+  // any call, and the gas is spent) and reads as an empty inbox. A failure is INPUT_INVALID (docs/SPEC.md §5); an RPC
+  // that fails is CHAIN_UNAVAILABLE, and is asked again next time.
+  const notADirectory = (why: string, cause?: unknown) =>
+    new LetterlockError("INPUT_INVALID", `${directory} is not a Letterlock directory on ${network}: ${why}`, cause === undefined ? undefined : { cause });
+  const verifyDirectory = async (): Promise<void> => {
+    const [code, marker] = await Promise.allSettled([
+      publicClient.getCode({ address: directory }),
+      publicClient.readContract({ address: directory, abi: letterlockAbi, functionName: "NO_AGENT" }),
+    ]);
+    if (code.status === "rejected") throw toLetterlockError(code.reason, `eth_getCode(${directory})`);
+    if (!code.value || code.value === "0x") throw notADirectory("the address has no code");
+    if (marker.status === "rejected") {
+      if (answeredByCode(marker.reason)) throw notADirectory("its code does not answer NO_AGENT()", marker.reason);
+      throw toLetterlockError(marker.reason, `NO_AGENT() at ${directory}`);
+    }
+    if (marker.value !== NO_AGENT) throw notADirectory(`NO_AGENT() returned ${marker.value}, not 2^256 - 1`);
+  };
+  let directoryChecked: Promise<void> | undefined;
+  const checkDirectory = (): Promise<void> =>
+    (directoryChecked ??= verifyDirectory().catch((e: unknown) => { directoryChecked = undefined; throw e; }));
+
   /**
-   * Runs `f` alongside the one-time chain check, and reports a failed check before anything `f` threw: on another
-   * chain the directory address usually has no code, and "no directory" would hide that the RPC serves the wrong chain.
+   * Runs `f` alongside the one-time checks, and reports a failed check before anything `f` threw: first the chain (on
+   * another chain the directory address usually has no code, and "no directory" would hide that the RPC serves the
+   * wrong chain), then the directory.
    */
   const checked = async <T>(f: () => Promise<T>): Promise<T> => {
-    const [chain, value] = await Promise.allSettled([checkChain(), f()]);
+    const [chain, dir, value] = await Promise.allSettled([checkChain(), checkDirectory(), f()]);
     if (chain.status === "rejected") throw chain.reason;
+    if (dir.status === "rejected") throw dir.reason;
     if (value.status === "rejected") throw value.reason;
     return value.value;
   };
+  const ready = (): Promise<void> => checked(async () => undefined);
 
   const read = async <T>(action: string, f: () => Promise<T>): Promise<T> => {
     try { return await checked(f); } catch (e) { throw toLetterlockError(e, action); }
@@ -198,7 +225,7 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
   const send = async (account: Signer, functionName: Write, args: readonly unknown[], action: string): Promise<TransactionReceipt> => {
     const call = { account, address: directory, abi: letterlockAbi, functionName, args } as never;
     try {
-      await checkChain();
+      await ready(); // the chain and the directory, before anything is signed
       // simulate first: a call the directory would refuse costs no gas, and its error names the reason
       const { request } = await publicClient.simulateContract(call);
       const wallet = createWalletClient({ account, chain: viemChain, transport });
@@ -300,10 +327,7 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       return { ...written(r), recipient, bytes: bytes.length };
     },
 
-    async inbox(to, o) {
-      await checkChain();
-      return readInbox(publicClient, { chainId, directory, ...(deployBlock !== undefined ? { deployBlock } : {}) }, to, o);
-    },
+    inbox: (to, o) => readInbox(publicClient, { chainId, directory, ...(deployBlock !== undefined ? { deployBlock } : {}), ready }, to, o),
   };
   return client;
 };

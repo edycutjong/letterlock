@@ -4,6 +4,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   LETTERLOCK_RP_ID,
+  createEncryptionAddress,
   deriveKeyPair,
   fingerprint,
   isLetterlockError,
@@ -16,6 +17,7 @@ import {
 } from "../src/index.ts";
 import { Fault, anvil, client, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs } from "./anvil/context.ts";
 import { rpcProxy } from "./anvil/proxy.ts";
+import { softAuthenticator } from "./soft-authenticator.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 const prf = (n: number) => new Uint8Array(32).fill(n);
@@ -78,6 +80,48 @@ describe.skipIf(noChain)("resolve", () => {
 
   it("no directory at the address → INPUT_INVALID", async () => {
     await rejects(client({ directory: "0x000000000000000000000000000000000000dEaD" }).resolve(zeroAddress.replace(/0$/, "1")), "INPUT_INVALID");
+  });
+});
+
+describe.skipIf(noChain)("a directory address that holds no Letterlock directory → INPUT_INVALID, and no transaction", () => {
+  const state = async (address: Address) => [await nonce(address), await publicClient().getBalance({ address })];
+  const notADirectory = async (p: Promise<unknown>) => {
+    const e = await p.then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
+    expect((e as Error).message).toMatch(/is not a Letterlock directory on Monad mainnet/);
+  };
+
+  it.each([
+    ["an address with no code (a typo, or the other network's directory)", () => privateKeyToAccount(generatePrivateKey()).address],
+    ["a contract that is not a directory (the registry)", () => anvil().registry],
+  ])("%s: publish, rotate, drop, inbox and resolve refuse it; the account's nonce and balance are unchanged", async (_, where) => {
+    const directory = where();
+    const ll = client({ directory });
+    const account = await fundedAccount();
+    const before = await state(account.address);
+    await notADirectory(ll.publish({ account, keys: deriveKeyPair(prf(41), 1) }));
+    const env = await seal({ chainId: 143, directory, to: { recipient: account.address, publicKey: deriveKeyPair(prf(41), 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
+    await notADirectory(ll.drop({ account, envelope: env }));
+    await notADirectory(ll.inbox(account.address, { fromBlock: 0n }));
+    await notADirectory(ll.resolve(account.address));
+    const dev = softAuthenticator();
+    const { credential } = await createEncryptionAddress({ rp: { id: LETTERLOCK_RP_ID, name: "Letterlock" }, user: { name: "a", displayName: "A" }, webAuthnClient: dev });
+    await notADirectory(ll.rotate({ account, credential, webAuthnClient: dev }));
+    expect(dev.calls.get).toBe(0); // refused before the passkey prompt
+    expect(await state(account.address)).toEqual(before);
+  });
+
+  it("the check is made once per client, and a failed RPC is CHAIN_UNAVAILABLE, not 'no directory'", async () => {
+    const proxy = await rpcProxy(anvil().rpcUrl);
+    try {
+      const ll = client({ rpcUrl: proxy.url });
+      const account = await fundedAccount();
+      await ll.publish({ account, keys: deriveKeyPair(prf(42), 1) });
+      await ll.resolve(account.address);
+      await ll.inbox(account.address, { fromBlock: 0n, toBlock: 1n });
+      expect(proxy.stats.methods.eth_getCode).toBe(1);
+    } finally { await proxy.close(); }
+    await rejects(client({ rpcUrl: "http://127.0.0.1:9" }).publish({ account: await fundedAccount(), keys: deriveKeyPair(prf(42), 1) }), "CHAIN_UNAVAILABLE");
   });
 });
 

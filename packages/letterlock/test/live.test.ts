@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createPublicClient, http, keccak256 } from "viem";
 import { monad } from "viem/chains";
 import { describe, expect, it } from "vitest";
-import { letterlock } from "../src/index.ts";
+import { DEPLOYMENTS, isLetterlockError, letterlock } from "../src/index.ts";
 import { anvil, noChain, publicClient } from "./anvil/context.ts";
 
 const live = process.env.LIVE === "1";
@@ -36,6 +36,12 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
   it("inbox(deployer) at the drop block finds the smoke test's envelope", async () => {
     const box = await ll.inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock });
     expect(box.envelopes.map((e) => [e.transactionHash, e.bytes, e.envelope.kid])).toEqual([[r.dropTx, r.smokeTest.envelopeBytes, r.smokeTest.kid]]);
+  });
+
+  it("the testnet directory's address on mainnet (no code there) → INPUT_INVALID, not an empty inbox", async () => {
+    const other = letterlock({ chain: "monad", directory: DEPLOYMENTS["monad-testnet"].directory });
+    const e = await other.inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID"), String(e)).toBe(true);
   });
 
   it.skipIf(noChain)("the mainnet directory runs the bytecode the anvil tests run", async () => {

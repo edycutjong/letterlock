@@ -68,7 +68,11 @@ lp(x) = u16(len(x)) ‖ x;  integers big-endian;  recipient = lower-cased 0x-add
 | `openWithPasskey(envelope)` | 1 | validates the envelope first (no prompt wasted), derives `envelope.epoch`, opens, wipes its `sk` copy |
 
 The chain client, `letterlock({ chain: "monad" | "monad-testnet", rpcUrl?, directory?, rpId? })`, carries the §8
-directory addresses as constants and checks once, with `eth_chainId`, that the RPC serves the chain it names.
+directory addresses as constants. A `directory` passed in must carry a valid EIP-55 checksum (or be all lower-case).
+Once per client, before its first read, write or inbox scan, it checks that the RPC serves the chain it names
+(`eth_chainId`) and that the directory address holds a Letterlock directory: code, and `NO_AGENT()` returning
+2^256 − 1. A failed chain check is reported first, a failed directory check next, and nothing is signed or sent after
+either. It sends one JSON-RPC request per HTTP request, never a batch: some Monad RPCs refuse batches.
 
 | Call | Passkey prompt | Notes |
 |---|---|---|
@@ -104,8 +108,9 @@ Chain client (§4), in the separate union `ChainErrorCode`; the directory's cust
 
 `ZeroKey`, `LowOrderKey`, `NonCanonicalKey`, `AgentPathDisabled`, `AgentIdReserved`, `InvalidRecipient`,
 `EmptyEnvelope` and `EnvelopeTooLarge` are `INPUT_INVALID`; `EpochNotNext` is `EPOCH_MISMATCH`; `NoKeyPublished` is
-`NO_KEY_PUBLISHED`. An RPC that serves another chain than the client's, and an address with no directory, are
-`INPUT_INVALID` too.
+`NO_KEY_PUBLISHED`. An RPC that serves another chain than the client's, a directory address with a bad checksum, and
+an address that holds no Letterlock directory (no code, or no `NO_AGENT()` answering 2^256 − 1) are `INPUT_INVALID`
+too.
 
 ## 6. Threat model
 **Protects:** the content of an envelope against everyone except holders of the recipient's passkey. This
