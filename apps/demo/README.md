@@ -52,7 +52,7 @@ its first key. The drip sends it enough for **one publish**, once. The rules are
 - **Kill switch:** `DRIP_ENABLED=true` turns it on; anything else, or no key, turns it off.
 - **The key** is the Vercel environment variable `LETTERLOCK_DRIP_PRIVATE_KEY` (production, sensitive), read in the
   route handler only. No client module imports `lib/drip-server.ts` (a test checks), and a scan of the 19 scripts
-  the production pages load (1,167,757 bytes) found neither the key nor its name.
+  the production pages load (1,167,767 bytes, on the deployment of commit b424f0f) found neither the key nor its name.
 
 The drip pays for a first key only: a rotation and a posted letter are paid from the account's own MON, and the page
 says how much to send, before any passkey prompt, when the account holds too little.
