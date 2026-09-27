@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import { ButtonLink } from "@/components/Button";
 import { ArrowRightIcon, ReturnIcon } from "@/components/Icons";
 import styles from "./not-found.module.css";
+
+// the tab, the history and a screen reader name the missing page, not the home page (scripts/checks/page-titles.mjs)
+export const metadata: Metadata = { title: "No page at this address" };
 
 export default function NotFound() {
   return (
