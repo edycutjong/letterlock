@@ -285,7 +285,7 @@ site/                 the landing page and the pitch deck, at letterlock-site.ve
 
 - **Landing page:** <https://letterlock-site.vercel.app>, and the pitch deck at <https://letterlock-site.vercel.app/pitch/> (both in [site/](site))
 - **Live app:** <https://letterlock-app.vercel.app>, and the judges' route at <https://letterlock-app.vercel.app/judge>
-- **The judge's script:** [DEMO.md](DEMO.md): two paths, every mainnet transaction, and how to reproduce the numbers
+- **The judge's script:** [DEMO.md](DEMO.md): two paths, the mainnet transactions behind each claim (every directory event among them), and how to reproduce the numbers
 - **Reference agent:** <https://letterlock-agent.vercel.app>
 - **Benchmark:** [bench/RESULTS.md](bench/RESULTS.md)
 

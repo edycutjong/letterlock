@@ -24,11 +24,12 @@ Its ERC-8004 registration file (the agent's `tokenURI`) is
 | `POST /remember` to `0xFa72…02b3` (its epoch-1 DEMO KEY) | [`0x00fdfadc…fbcd`](https://monadvision.com/tx/0x00fdfadca4afca918ac9ef3a648c491c407e945c2a949041cb24bfe65a4dfbcd) | 108,355,044 | 45,248 | a 478-byte envelope, read back from the recipient's inbox, identical to the one the agent returned; opened with the demo key's stand-in, the text matched |
 | `POST /task` from `0xFa72…02b3`: the task sealed to `agent:10260` through `resolve()` → `keyOfAgent`, epoch 2 | [`0x59d435ff…2640`](https://monadvision.com/tx/0x59d435ff0295a3e64af43ad9ab2454bca985fb37571bbd194fae7c29d83e2640) (the answer's drop) | 108,355,072 | 68,543 | a 1,102-byte answer in the sender's inbox; opened, it names the task's nonce (`62b87a52786381027af838949c070585`), quotes the task in full (the answer quoted whole tasks then) and names the key it was sealed to (`e5b30e2e52ec0dec`) |
 | `POST /remember` to `0xFa72…02b3`, after the wallet began to check each drop as it signs it (`src/spend.ts`) | [`0x7d349cf0…2177`](https://monadvision.com/tx/0x7d349cf09186f503dba730b06dbdfef182ff643114de0a00cb1a957ad1862177) | 108,371,264 | 44,162 | a 420-byte envelope, read back from the recipient's inbox, identical to the one the agent returned; opened, the text matched. It paid 102 gwei under a 182.4 gwei fee cap: 0.004504524 MON |
+| `setAgentURI(10260, the same card URL)` from its owner (`scripts/set-agent-uri.ts --send`), so that indexers fetch the edited card | [`0x92789014…5719`](https://monadvision.com/tx/0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719) | 108,391,548 | 71,772 | the registry emitted `URIUpdated` and `MetadataUpdate(10260)`; `tokenURI(10260)` is unchanged, and trust8004 now shows the live card (`deployments/143.json`, `agent.indexStatus`) |
 
 The first two drops came from the agent's wallet, [`0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4`](https://monadvision.com/address/0xDE8a4A3c3bE2802bf9Be78cfC1de1a5a0A4c47a4),
 at 102 gwei: 0.004615296 and 0.006991386 MON. After them it held 0.988393318 MON at nonce 2, and `/health` counted
-2 of the day's 150 drops. After the last row it held 0.975091804 MON at nonce 5, and `/health` counted 5 of the 10
-drops the wallet allowed itself that day. The recipient, the deployer's address, holds the deploy smoke test's DEMO KEY
+2 of the day's 150 drops. After the last drop (`0x7d349cf0…2177`) it held 0.975091804 MON at nonce 5, and `/health`
+counted 5 of the 10 drops the wallet allowed itself that day. The recipient, the deployer's address, holds the deploy smoke test's DEMO KEY
 (`deployments/143.json`), whose stand-in the deployer's operator keeps outside this repository; that is what made
 both envelopes openable for this check.
 
@@ -304,6 +305,8 @@ vercel firewall publish --yes
 node scripts/build.mjs && vercel deploy --prebuilt --prod
 ```
 
-The card's URL is the agent's `tokenURI` in the IdentityRegistry, so its content changes in place. A new URL would
-take a `setAgentURI` transaction from the agent's owner. Preview deployments get none of the production variables
-(`AGENT_ENABLED` included), so their POST endpoints answer 503 `AGENT_DISABLED`.
+The card's URL is the agent's `tokenURI` in the IdentityRegistry, so its content changes in place. Indexers fetch it
+again only on a registry event, so after an edit the owner sends `setAgentURI` with the same URL
+(`scripts/set-agent-uri.ts`, simulate first, then `--send`); a new URL takes the same transaction. Preview
+deployments get none of the production variables (`AGENT_ENABLED` included), so their POST endpoints answer 503
+`AGENT_DISABLED`.

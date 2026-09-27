@@ -154,8 +154,11 @@ and the agent's HTTP errors are listed in [its README](../examples/agent-memory/
     has no owner. Any other failure, gas starvation included, reverts `RegistryCallFailed`, so `keyOfAgent` never
     returns a false "no key"; the fork tests measured the gas a reading contract must forward (SPEC §8).
 11. **An ERC-8004 index refreshes on events only.** trust8004 fetched the agent's card at registration and fetches
-    it again only after an onchain `URIUpdated`, `MetadataSet` or `Registered` event, so its page still shows the
-    card as it was then; `deployments/143.json` records it as stale.
+    it again only after an onchain `URIUpdated`, `MetadataSet` or `Registered` event, so for a day it showed the
+    card as it was then ("not live yet"). A card edited in place at the same URL needs one `setAgentURI` from the
+    agent's owner with that same URL (`examples/agent-memory/scripts/set-agent-uri.ts`); after
+    [that transaction](https://monadvision.com/tx/0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719)
+    trust8004 showed the live card (`deployments/143.json`, `agent.indexStatus`).
 12. **A preview SDK.** mera 0.2.0 declares Node 24 or later; the CLI never touches a passkey and runs on Node 20.19
     or later. mera's types use `Symbol.dispose`, so TypeScript needs `lib: esnext` or `skipLibCheck`.
 

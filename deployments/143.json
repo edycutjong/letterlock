@@ -29,10 +29,10 @@
     "registerCall": "register(string agentURI) on the IdentityRegistry; agentId read from its Registered(agentId, agentURI, owner) event",
     "registerBlock": 108289775,
     "tokenURI": "https://letterlock-agent.vercel.app/.well-known/agent-card.json",
-    "card": "ERC-8004 registration-v1 file with A2A-style skills (seal-a-memory, answer-a-sealed-task), served with HTTP 200 by the Vercel project letterlock-agent from examples/agent-memory, which also serves the agent's endpoints POST /remember, POST /task and GET /health. The card URL is unchanged since registration (no setAgentURI); since 2026-09-27 it says active: true",
+    "card": "ERC-8004 registration-v1 file with A2A-style skills (seal-a-memory, answer-a-sealed-task), served with HTTP 200 by the Vercel project letterlock-agent from examples/agent-memory, which also serves the agent's endpoints POST /remember, POST /task and GET /health. The card URL is unchanged since registration; since 2026-09-27 the card says active: true, and the owner set the same URL again with setAgentURI (agent.setAgentURI) so that indexers fetch it again",
     "cardSource": "examples/agent-memory/public/.well-known/agent-card.json",
     "indexedBy": "https://trust8004.xyz/agents/143:10260",
-    "indexStatus": "stale, and no evidence that the agent is live: on 2026-09-27 at 03:55 UTC trust8004 still showed the card as it fetched it at registration (metadataUpdatedAt 1790459115000, block 108289775), which says 'Status: not live yet'. It fetches a card again only on an onchain Registered, MetadataSet or URIUpdated event, and its page's refresh button reads its own index again; no such event has been emitted since registration. examples/agent-memory/scripts/set-agent-uri.ts simulates setAgentURI(10260, the same URL) from the owner (71,772 gas); sending it takes the owner's key",
+    "indexStatus": "current: on 2026-09-27 at 13:34 UTC trust8004's agent API (https://trust8004.xyz/api/app/agents/143%3A10260) reported metadataUpdatedAt 1790489844000 and metadataEventBlock 108391548, the setAgentURI transaction's block and time, with active: true, and its page shows the live card's description. Before that transaction it still showed the card as fetched at registration (metadataUpdatedAt 1790459115000, block 108289775), which said 'Status: not live yet': it fetches a card again only on an onchain Registered, MetadataSet or URIUpdated event",
     "service": {
       "url": "https://letterlock-agent.vercel.app",
       "source": "examples/agent-memory",
@@ -58,7 +58,21 @@
         "gasUsed": 74652,
         "what": "the reference agent's own key: deriveAgentKeyPair() (the agent formula) over a WebAuthn-style PRF of a 32-byte seed held by the agent's host and the operator, outside this repository (examples/agent-memory/src/agent-key.ts). Published by the agent's owner with examples/agent-memory/scripts/publish-agent-key.ts; keyOfAgent(10260) returned it at epoch 2 after the transaction"
       }
-    ]
+    ],
+    "setAgentURI": {
+      "call": "setAgentURI(10260, \"https://letterlock-agent.vercel.app/.well-known/agent-card.json\") on the IdentityRegistry, from the agent's owner, with examples/agent-memory/scripts/set-agent-uri.ts --send: the same URL as registered, sent for its events",
+      "tx": "0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719",
+      "from": "0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3",
+      "nonce": 8,
+      "block": 108391548,
+      "blockTime": "2026-09-27T06:17:24Z",
+      "gasUsed": 71772,
+      "effectiveGasPriceGwei": 102,
+      "costMON": 0.007320744,
+      "status": 1,
+      "events": "URIUpdated(10260, the card URL, the owner) and ERC-4906 MetadataUpdate(10260), both from the IdentityRegistry",
+      "tokenURIAfter": "https://letterlock-agent.vercel.app/.well-known/agent-card.json"
+    }
   },
   "publishTx": "0x35b8330e768a6c7529c0c9c4151d945ed83e3ef596c0c6ddca3486efe11ae233",
   "publishForAgentTx": "0x3a5be1d8643029ded9158bf36d73cd1cac4f4a9f24296ac55518539237e80c26",
@@ -112,6 +126,7 @@
     "publishForAgentTx": "https://monadvision.com/tx/0x3a5be1d8643029ded9158bf36d73cd1cac4f4a9f24296ac55518539237e80c26",
     "dropTx": "https://monadvision.com/tx/0x616fe1a946d1b90461ffd8284be4881f8650799166526c2d22523053bff93659",
     "identityRegistry": "https://monadvision.com/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
-    "monadscan": "https://monadscan.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"
+    "monadscan": "https://monadscan.com/address/0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e",
+    "setAgentURITx": "https://monadvision.com/tx/0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719"
   }
 }

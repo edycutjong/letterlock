@@ -58,8 +58,8 @@ may seal to a published key, so the inbox never claims who wrote a note.
 Every row is a Monad mainnet transaction whose receipt was read back (status 1) on 2026-09-27. Together they are
 every transaction that emitted an event from the directory up to block 108,422,676 (4 `KeyPublished` and 7
 `Dropped`, read with `eth_getLogs` from the deploy block), the directory's deploy, the agent's ERC-8004
-registration, and the two gas drips the drip wallet sent that day. Left out: the transfers that funded the
-project's own wallets.
+registration and its owner's one `setAgentURI`, and the two gas drips the drip wallet sent that day. Left out: the
+transfers that funded the project's own wallets.
 
 | What | Transaction | Block | From |
 |---|---|---|---|
@@ -77,6 +77,7 @@ project's own wallets.
 | The app's second live check, 1 of 3: the gas drip to a new passkey account | [`0x2d9646ea…2acb`](https://monadvision.com/tx/0x2d9646ea1c6d9833ae2642f184016dda9b1dbb0e93ab723eb08318c480a62acb) | 108,386,048 | drip wallet |
 | 2 of 3: that account publishes its own key (the first the deployer did not post) | [`0xd49f8811…7ddf`](https://monadvision.com/tx/0xd49f881173dc3d3c2ab9cb8bb50b58dd090b3e13300715169d171844f2187ddf) | 108,386,054 | the passkey account |
 | 3 of 3: the agent writes to it; the note opened from the inbox, and again with storage cleared | [`0x44428957…02d9`](https://monadvision.com/tx/0x44428957ac2831cc02792d212e5adc802310e73f7b989b7822eb2c793d0602d9) | 108,386,081 | agent wallet |
+| The agent's owner sets its card URL again, the same URL, so ERC-8004 indexers fetch the live card | [`0x92789014…5719`](https://monadvision.com/tx/0x9278901488bb444d7b09ebaf9746d02fd49568d6298dc7d2c8106e6b56a65719) | 108,391,548 | the agent's owner |
 
 The live checks drove the production site in Chromium with a WebAuthn virtual authenticator that supports PRF, so
 mera's own client ran every ceremony. Their record is [apps/demo/e2e-results/mainnet-live.json](apps/demo/e2e-results/mainnet-live.json);
