@@ -2,16 +2,18 @@
 // lib/drip.ts. Imported by app/api/drip/route.ts alone (test/drip.test.ts fails if a client module imports it).
 //
 // Memory here is per serverless instance: Vercel may run several instances, each with its own maps, and a new one starts
-// empty. So the in-memory limits (per IP, per address) only slow a caller down. What cannot be bypassed is read from the
-// chain on every request: the account's key, nonce and balance, and the drip wallet's own balance and nonce now and a
-// day ago (the daily cap).
+// empty. So the in-memory limits (per IP, per address) only slow a caller down; Vercel's firewall counts POSTs to the
+// route per IP for every instance (apps/demo/vercel-firewall.json). What cannot be bypassed is read from the chain on
+// every request: the account's key, nonce and balance, and the drip wallet's own balance and nonce now, an hour ago
+// (the hourly cap) and a day ago (the daily cap).
 import { createPublicClient, createWalletClient, http, type Address, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { monad, monadTestnet } from "viem/chains";
 import { letterlockAbi } from "letterlock";
 import { CHAIN, DEPLOYMENT, SCAN_RPC } from "./chain.ts";
-import { DAY_SECONDS, TRANSFER_GAS, type DripObservation, type DripRequest } from "./drip.ts";
+import { DAY_SECONDS, HOUR_SECONDS, TRANSFER_GAS, type DripObservation, type DripRequest } from "./drip.ts";
 import { walletBidFeePerGas } from "./fees.ts";
+import { blocksAgo } from "./past-blocks.ts";
 
 const VIEM_CHAIN = CHAIN === "monad" ? monad : monadTestnet;
 
@@ -73,27 +75,14 @@ export const dripAccount = () => {
   return privateKeyToAccount(key as Hex);
 };
 
-let dayAgoCache: { at: number; block: bigint } | undefined;
+let pastCache: { at: number; day: bigint; hour: bigint } | undefined;
 
-/**
- * The first block at least DAY_SECONDS old, found from block timestamps (Monad's block time is not a constant). A few
- * hundred blocks of margin make the window a little longer than a day, never shorter. Cached for a minute.
- */
-const blockADayAgo = async (): Promise<bigint> => {
-  if (dayAgoCache && Date.now() - dayAgoCache.at < MINUTE) return dayAgoCache.block;
-  const head = await main.getBlock({ blockTag: "latest" });
-  const span = 100_000n < head.number ? 100_000n : head.number;
-  const sample = await main.getBlock({ blockNumber: head.number - span });
-  const perSecond = Number(span) / Math.max(1, Number(head.timestamp - sample.timestamp));
-  const target = head.timestamp - BigInt(DAY_SECONDS);
-  let guess = head.number - BigInt(Math.round(DAY_SECONDS * perSecond));
-  if (guess < 0n) guess = 0n;
-  const at = await main.getBlock({ blockNumber: guess });
-  guess -= BigInt(Math.round(Number(at.timestamp - target) * perSecond)); // a block later than the target moves back
-  guess -= 600n;
-  const block = guess < 0n ? 0n : guess;
-  dayAgoCache = { at: Date.now(), block };
-  return block;
+/** The first blocks at least DAY_SECONDS and HOUR_SECONDS old (lib/past-blocks.ts), cached for a minute. */
+const pastBlocks = async (): Promise<{ day: bigint; hour: bigint }> => {
+  if (pastCache && Date.now() - pastCache.at < MINUTE) return pastCache;
+  const [day, hour] = await blocksAgo(main, [DAY_SECONDS, HOUR_SECONDS]);
+  pastCache = { at: Date.now(), day: day!, hour: hour! };
+  return pastCache;
 };
 
 /** Balance and nonce at a past block; the fallback RPC if the main one no longer holds it; undefined if neither does. */
@@ -113,7 +102,7 @@ export type ChainState = Pick<DripObservation, "account" | "gasPrice" | "maxFeeP
 
 /** Everything decideDrip() needs from the chain, read in parallel. Throws when the RPC fails (CHAIN_UNAVAILABLE). */
 export const readChainState = async (request: DripRequest, wallet: Address): Promise<ChainState> => {
-  const [key, balance, nonce, gasPrice, fees, bidFeePerGas, head, walletBalance, walletNonce, walletPending, dayAgoBlock] = await Promise.all([
+  const [key, balance, nonce, gasPrice, fees, bidFeePerGas, head, walletBalance, walletNonce, walletPending, past] = await Promise.all([
     main.readContract({ address: DEPLOYMENT.directory, abi: letterlockAbi, functionName: "keyOf", args: [request.address] }),
     main.getBalance({ address: request.address }),
     main.getTransactionCount({ address: request.address }),
@@ -124,11 +113,12 @@ export const readChainState = async (request: DripRequest, wallet: Address): Pro
     main.getBalance({ address: wallet }),
     main.getTransactionCount({ address: wallet }),
     main.getTransactionCount({ address: wallet, blockTag: "pending" }),
-    blockADayAgo(),
+    pastBlocks(),
   ]);
-  const [recentNonce, dayAgo] = await Promise.all([
+  const [recentNonce, dayAgo, hourAgo] = await Promise.all([
     main.getTransactionCount({ address: wallet, blockNumber: head > 4n ? head - 4n : 0n }),
-    historical(wallet, dayAgoBlock),
+    historical(wallet, past.day),
+    historical(wallet, past.hour),
   ]);
   const [pub, epoch] = key;
   return {
@@ -136,19 +126,20 @@ export const readChainState = async (request: DripRequest, wallet: Address): Pro
     gasPrice,
     maxFeePerGas: fees.maxFeePerGas,
     bidFeePerGas,
-    wallet: { balance: walletBalance, nonce: walletNonce, pendingNonce: walletPending, recentNonce, ...(dayAgo ? { dayAgo } : {}) },
+    wallet: { balance: walletBalance, nonce: walletNonce, pendingNonce: walletPending, recentNonce, ...(dayAgo ? { dayAgo } : {}), ...(hourAgo ? { hourAgo } : {}) },
   };
 };
 
-export type SentDrip = { transactionHash: Hex; blockNumber: bigint; status: "success" | "reverted" };
-
-/** Sends `amount` to `to` from the drip wallet with the nonce it read (so two instances can never both spend it). */
-export const sendDrip = async (to: Address, amount: bigint, nonce: number, maxFeePerGas: bigint): Promise<SentDrip> => {
+/**
+ * Broadcasts `amount` to `to` from the drip wallet with the nonce it read (so two instances can never both spend it),
+ * and returns the transaction's hash as soon as the RPC has taken it.
+ */
+export const broadcastDrip = async (to: Address, amount: bigint, nonce: number, maxFeePerGas: bigint): Promise<Hex> => {
   const account = dripAccount();
   if (!account) throw new Error("no drip key configured");
   const wallet = createWalletClient({ account, chain: VIEM_CHAIN, transport: http(DEPLOYMENT.rpcUrl, { timeout: 12_000 }) });
   const fees = await main.estimateFeesPerGas();
-  const hash = await wallet.sendTransaction({
+  return wallet.sendTransaction({
     to,
     value: amount,
     gas: TRANSFER_GAS,
@@ -156,6 +147,10 @@ export const sendDrip = async (to: Address, amount: bigint, nonce: number, maxFe
     maxFeePerGas: maxFeePerGas > fees.maxFeePerGas ? maxFeePerGas : fees.maxFeePerGas,
     maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
   });
+};
+
+/** Waits up to 30 s for a broadcast drip's receipt. */
+export const waitForDrip = async (hash: Hex): Promise<{ status: "success" | "reverted"; blockNumber: bigint }> => {
   const receipt = await main.waitForTransactionReceipt({ hash, timeout: 30_000, pollingInterval: 400 });
-  return { transactionHash: hash, blockNumber: receipt.blockNumber, status: receipt.status };
+  return { status: receipt.status, blockNumber: receipt.blockNumber };
 };

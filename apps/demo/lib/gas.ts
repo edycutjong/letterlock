@@ -10,6 +10,7 @@ import { publicClient } from "./client.ts";
 import { PUBLISH_GAS, dripMessage, unixMinute } from "./drip.ts";
 import { walletBidFeePerGas } from "./fees.ts";
 import { DripRefused, asChainError } from "./failure.ts";
+import { readJudgePass } from "./session.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -49,10 +50,12 @@ type Signer = { readonly address: Address; signMessage(a: { message: string }): 
 
 /**
  * Asks the gas drip to fund `account` for one publish: the account signs "letterlock-drip:<address>:<chainId>:<minute>"
- * (no prompt: the passkey account's session signs) and the server checks everything else (app/api/drip). Returns the
- * drip's transaction, or undefined when the server found the account already funded. A busy drip is asked again.
+ * (no prompt: the passkey account's session signs) and the server checks everything else (app/api/drip). The judges'
+ * pass goes with it when this tab has one (lib/session.ts). Returns the drip's transaction (sent, and maybe not yet
+ * confirmed: a 202), or undefined when the server found the account already funded. A busy drip is asked again.
  */
 export const requestDrip = async (account: Signer): Promise<DripReceipt | undefined> => {
+  const pass = readJudgePass();
   for (let attempt = 0; ; attempt++) {
     const minute = unixMinute(Date.now());
     const signature = await account.signMessage({ message: dripMessage(account.address, DEPLOYMENT.chainId, minute) });
@@ -61,12 +64,12 @@ export const requestDrip = async (account: Signer): Promise<DripReceipt | undefi
       res = await fetch("/api/drip", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ address: account.address, chainId: DEPLOYMENT.chainId, minute, signature }),
+        body: JSON.stringify({ address: account.address, chainId: DEPLOYMENT.chainId, minute, signature, ...(pass ? { pass } : {}) }),
       });
     } catch {
       throw new DripRefused("UNREACHABLE", "the drip could not be reached");
     }
-    let body: { dripped?: boolean; transactionHash?: Hex; amount?: string; explorer?: string; error?: string; message?: string } = {};
+    let body: { dripped?: boolean; transactionHash?: Hex; amount?: string; explorer?: string; error?: unknown; message?: unknown } = {};
     try {
       body = (await res.json()) as typeof body;
     } catch {
@@ -77,7 +80,12 @@ export const requestDrip = async (account: Signer): Promise<DripReceipt | undefi
       await sleep(1_500);
       continue;
     }
-    throw new DripRefused(body.error ?? `HTTP_${res.status}`, body.message ?? `the drip answered HTTP ${res.status}`, body.transactionHash);
+    // the drip's own refusals are { error: CODE, message }; Vercel's firewall answers its per-IP limit with a 429 of
+    // its own, { error: { code: "429", message } }
+    if (typeof body.error === "string")
+      throw new DripRefused(body.error, typeof body.message === "string" ? body.message : `the drip answered HTTP ${res.status}`, body.transactionHash);
+    if (res.status === 429) throw new DripRefused("RATE_LIMITED", "too many drip requests from this network in the last few minutes; try again in 10 minutes");
+    throw new DripRefused(`HTTP_${res.status}`, `the drip answered HTTP ${res.status}`);
   }
 };
 

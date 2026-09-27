@@ -130,7 +130,7 @@ before(async () => {
   if (!process.argv.includes("--no-build")) execFileSync(next, ["build"], { cwd: here, env: { ...clean, ...APP_ENV }, stdio: ["ignore", "ignore", "inherit"] });
   server = spawn(next, ["start", "-p", String(PORT), "-H", "localhost"], {
     cwd: here,
-    env: { ...clean, ...APP_ENV, DRIP_ENABLED: "true", LETTERLOCK_DRIP_PRIVATE_KEY: KEY, DRIP_DAILY_CAP_MON: "2" },
+    env: { ...clean, ...APP_ENV, DRIP_ENABLED: "true", LETTERLOCK_DRIP_PRIVATE_KEY: KEY, DRIP_DAILY_CAP_MON: "2", DRIP_HOURLY_CAP_MON: "2" },
     stdio: ["ignore", "ignore", "ignore"],
   });
   await waitForServer();

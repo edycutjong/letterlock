@@ -7,23 +7,35 @@ import { formatEther, parseEther, parseGwei } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   DAILY_CAP_WEI,
+  DAY_SECONDS,
   DRIP_CAP_WEI,
+  HOURLY_CAP_WEI,
+  HOUR_SECONDS,
+  JUDGE_RESERVE_PERCENT,
   MAX_OUT_PER_DRIP,
   MIN_OUT_PER_DRIP,
   PUBLISH_GAS,
   TRANSFER_GAS,
   WINDOW_MINUTES,
   checkMinute,
+  configuredPass,
   dailyCapFrom,
   decideDrip,
   dripAmount,
   dripMessage,
+  dripReply,
+  hourlyCapFrom,
+  laneFor,
   parseDripRequest,
+  passMatches,
+  publicDailyCap,
   publishNeeds,
+  settleDrip,
   spentInWindow,
   unixMinute,
   verifyDripSignature,
   walletBid,
+  type DripLane,
   type DripObservation,
   type DripRequest,
 } from "../lib/drip.ts";
@@ -59,8 +71,18 @@ const observation = async (over: Partial<DripObservation> = {}): Promise<DripObs
   gasPrice: GAS_PRICE,
   maxFeePerGas: MAX_FEE,
   bidFeePerGas: BID,
-  wallet: { balance: parseEther("1"), nonce: 0, pendingNonce: 0, recentNonce: 0, dayAgo: { balance: parseEther("1"), nonce: 0 } },
+  wallet: {
+    balance: parseEther("1"),
+    nonce: 0,
+    pendingNonce: 0,
+    recentNonce: 0,
+    dayAgo: { balance: parseEther("1"), nonce: 0 },
+    hourAgo: { balance: parseEther("1"), nonce: 0 },
+  },
   dailyCap: DAILY_CAP_WEI,
+  hourlyCap: HOURLY_CAP_WEI,
+  lane: "public",
+  reserve: false,
   ...over,
 });
 
@@ -197,11 +219,19 @@ test("the daily cap counts every drip of the last 24 hours, fees included", asyn
   const next = dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * MAX_FEE;
   // spent so far: exactly what leaves room for one more drip, then one wei more
   const room = DAILY_CAP_WEI - next;
-  const wallet = (spent: bigint, drips: number) => ({ balance: one - spent, nonce: drips, pendingNonce: drips, recentNonce: drips, dayAgo: { balance: one, nonce: 0 } });
+  // the day's drips were all more than an hour ago: only the daily cap is in play here
+  const wallet = (spent: bigint, drips: number) => ({
+    balance: one - spent,
+    nonce: drips,
+    pendingNonce: drips,
+    recentNonce: drips,
+    dayAgo: { balance: one, nonce: 0 },
+    hourAgo: { balance: one - spent, nonce: drips },
+  });
   assert.equal(decideDrip(await observation({ wallet: wallet(room, 28) })).ok, true);
   await refused({ wallet: wallet(room + 1n, 28) }, "DAILY_CAP");
   // a top-up inside the window cannot buy more drips than the cap allows at their maximum cost
-  const topped = { balance: one + one, nonce: 13, pendingNonce: 13, recentNonce: 13, dayAgo: { balance: one, nonce: 0 } };
+  const topped = { balance: one + one, nonce: 13, pendingNonce: 13, recentNonce: 13, dayAgo: { balance: one, nonce: 0 }, hourAgo: { balance: one + one, nonce: 13 } };
   await refused({ wallet: topped }, "DAILY_CAP");
 });
 
@@ -236,4 +266,191 @@ test("only the drip route imports the server module that holds the drip key", ()
     }
   }
   assert.deepEqual(importers.sort(), ["app/api/drip/route.ts"]);
+});
+
+// ---- one scripted caller, many fresh accounts ------------------------------------------------------------------------
+// Any fresh key passes every per-account rule, and the per-IP limits are per instance or per region, so what bounds a
+// script that makes accounts in a loop is what the chain shows of the drip wallet: its spend over the last hour and the
+// last day. Below, a script asks for a drip every second for a whole day, each time with the wallet's real history
+// (every drip it got moved the balance and the nonce), and a judge comes last.
+
+type Snapshot = { readonly t: number; readonly balance: bigint; readonly nonce: number };
+
+/** The wallet's history, as the drip reads it: its state now, an hour ago and a day ago (seconds from the start). */
+const ledger = (balance: bigint) => {
+  const history: Snapshot[] = [{ t: -DAY_SECONDS * 2, balance, nonce: 0 }];
+  const at = (t: number) => history.filter((h) => h.t <= t).at(-1)!;
+  const state = (now: number): DripObservation["wallet"] => {
+    const cur = history.at(-1)!;
+    const day = at(now - DAY_SECONDS);
+    const hour = at(now - HOUR_SECONDS);
+    return {
+      balance: cur.balance,
+      nonce: cur.nonce,
+      pendingNonce: cur.nonce,
+      recentNonce: cur.nonce,
+      dayAgo: { balance: day.balance, nonce: day.nonce },
+      hourAgo: { balance: hour.balance, nonce: hour.nonce },
+    };
+  };
+  const ask = async (now: number, lane: DripLane, reserve: boolean) => {
+    const d = decideDrip(await observation({ lane, reserve, wallet: state(now) }));
+    if (d.ok && !("funded" in d)) {
+      const cur = history.at(-1)!;
+      history.push({ t: now, balance: cur.balance - d.amount - d.fee, nonce: cur.nonce + 1 });
+      return "dripped";
+    }
+    return d.ok ? "funded" : d.code;
+  };
+  return { ask };
+};
+
+const PER_DRIP = dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * MAX_FEE; // what one drip takes out of the wallet today
+
+test("a script asking with fresh accounts all day gets at most the hour's limit each hour, and a judge still gets a drip", async () => {
+  const wallet = ledger(parseEther("1"));
+  const perHour: number[] = [];
+  const refusals = new Set<string>();
+  for (let hour = 0; hour < 24; hour++) {
+    let got = 0;
+    for (let s = 0; s < 120; s++) {
+      const r = await wallet.ask(hour * HOUR_SECONDS + s * 30, "public", true);
+      if (r === "dripped") got++;
+      else refusals.add(r);
+    }
+    perHour.push(got);
+  }
+  const hourMax = Number(HOURLY_CAP_WEI / PER_DRIP);
+  const dayMax = Number(publicDailyCap(DAILY_CAP_WEI, true) / PER_DRIP);
+  assert.ok(perHour.every((n) => n <= hourMax), `at most ${hourMax} drips an hour: ${perHour.join(",")}`);
+  assert.equal(perHour.reduce((a, b) => a + b, 0), dayMax, "the public lane stops at 70% of the day's cap");
+  assert.ok(perHour[0]! < Number(DAILY_CAP_WEI / PER_DRIP), "the first hour's burst does not take the day");
+  assert.deepEqual([...refusals].sort(), ["DAILY_CAP", "HOURLY_CAP"]);
+  // the script has spent all the public may; the judges' link still gets a drip, and then as many as the reserve holds
+  const end = 24 * HOUR_SECONDS - 60;
+  assert.equal(await wallet.ask(end, "public", true), "DAILY_CAP");
+  let judges = 0;
+  while ((await wallet.ask(end + judges, "judge", true)) === "dripped") judges++;
+  assert.equal(judges, Number(DAILY_CAP_WEI / PER_DRIP) - dayMax, "the reserve pays the rest of the day's cap to judges only");
+  assert.ok(judges >= 8, `${judges} judges' drips are kept`);
+});
+
+test("without a judges' pass configured, the public lane may spend the whole day's cap, an hour's limit at a time", async () => {
+  const wallet = ledger(parseEther("1"));
+  let got = 0;
+  for (let hour = 0; hour < 24; hour++) for (let s = 0; s < 60; s++) if ((await wallet.ask(hour * HOUR_SECONDS + s * 60, "public", false)) === "dripped") got++;
+  assert.equal(got, Number(DAILY_CAP_WEI / PER_DRIP));
+});
+
+test("the judges' lane is bound by the daily cap, not by the hour's limit", async () => {
+  const wallet = ledger(parseEther("1"));
+  let got = 0;
+  for (let s = 0; s < 60; s++) if ((await wallet.ask(s, "judge", true)) === "dripped") got++;
+  assert.equal(got, Number(DAILY_CAP_WEI / PER_DRIP), "a burst of judges' requests is not held to the hour");
+  assert.ok(got > Number(HOURLY_CAP_WEI / PER_DRIP));
+  assert.equal(await wallet.ask(61, "judge", true), "DAILY_CAP");
+});
+
+test("the hour's limit is read from the chain: no hour-old state, no public drip; the judges' lane does not need it", async () => {
+  const good = await observation();
+  const { hourAgo: _, ...noHour } = good.wallet;
+  await refused({ wallet: noHour }, "CAP_UNVERIFIABLE");
+  const judge = decideDrip(await observation({ wallet: noHour, lane: "judge", reserve: true }));
+  assert.equal(judge.ok, true);
+  // an hour that already spent its limit refuses the next public drip, whatever the day's spend
+  const one = parseEther("1");
+  await refused({ wallet: { ...good.wallet, balance: one - HOURLY_CAP_WEI, nonce: 6, pendingNonce: 6, recentNonce: 6, hourAgo: { balance: one, nonce: 0 } } }, "HOURLY_CAP");
+});
+
+test("the judges' pass: long enough to reserve anything, compared whole, and anything else is the public's lane", () => {
+  const pass = "Jd7mQ2xLp9Rt4Vw8Zb3Nc6";
+  assert.equal(configuredPass(undefined), undefined);
+  assert.equal(configuredPass(""), undefined);
+  assert.equal(configuredPass("short-pass"), undefined, "under 16 characters reserves nothing");
+  assert.equal(configuredPass(`  ${pass}\n`), pass);
+  assert.equal(laneFor(pass, pass), "judge");
+  for (const wrong of [undefined, "", pass.slice(0, -1), `${pass}x`, pass.toLowerCase(), pass.replace("J", "K")]) {
+    assert.equal(passMatches(wrong, pass), false, JSON.stringify(wrong));
+    assert.equal(laneFor(wrong, pass), "public");
+  }
+  assert.equal(laneFor(pass, undefined), "public", "no pass configured: everyone is the public");
+  assert.equal(publicDailyCap(DAILY_CAP_WEI, false), DAILY_CAP_WEI);
+  assert.equal(publicDailyCap(DAILY_CAP_WEI, true), (DAILY_CAP_WEI * (100n - JUDGE_RESERVE_PERCENT)) / 100n);
+  assert.equal(formatEther(publicDailyCap(DAILY_CAP_WEI, true)), "0.35");
+});
+
+test("a request may carry the judges' pass, a string of at most 128 characters", async () => {
+  const good = await signed();
+  const ok = parseDripRequest({ ...good, pass: "Jd7mQ2xLp9Rt4Vw8Zb3Nc6" });
+  assert.equal(ok.ok && ok.request.pass, "Jd7mQ2xLp9Rt4Vw8Zb3Nc6");
+  const none = parseDripRequest(good);
+  assert.equal(none.ok && "pass" in none.request, false);
+  for (const pass of [42, null, { p: 1 }, "x".repeat(129)]) {
+    const r = parseDripRequest({ ...good, pass });
+    assert.equal(r.ok ? "ok" : r.code, "BAD_REQUEST", JSON.stringify(pass));
+  }
+});
+
+test("the hour's limit is 0.1 MON; an environment variable can only lower it on mainnet", () => {
+  assert.equal(formatEther(HOURLY_CAP_WEI), "0.1");
+  assert.equal(hourlyCapFrom(undefined, 143), HOURLY_CAP_WEI);
+  assert.equal(hourlyCapFrom("0.05", 143), parseEther("0.05"));
+  assert.equal(hourlyCapFrom("5", 143), HOURLY_CAP_WEI);
+  assert.equal(hourlyCapFrom("nope", 143), HOURLY_CAP_WEI);
+  assert.equal(hourlyCapFrom("2", 10143), parseEther("2"));
+});
+
+// ---- a sent drip is never reported as not sent ------------------------------------------------------------------------
+
+const HASH = `0x${"ab".repeat(32)}` as const;
+const explorer = (h: string) => `https://monadvision.com/tx/${h}`;
+
+test("a drip whose broadcast failed sent nothing, and says so", async () => {
+  const s = await settleDrip(() => Promise.reject(new Error("rpc refused: insufficient funds")), () => assert.fail("no wait after a failed broadcast"));
+  assert.deepEqual(s, { sent: false });
+  const r = dripReply(s, parseEther("0.014"), explorer);
+  assert.equal(r.status, 502);
+  assert.equal(r.body.error, "SEND_FAILED");
+  assert.match(String(r.body.message), /nothing was sent/);
+});
+
+test("a drip broadcast whose receipt could not be read answers 202 with its hash, never 'nothing was sent'", async () => {
+  const s = await settleDrip(() => Promise.resolve(HASH), () => Promise.reject(new Error("timed out waiting for the receipt")));
+  assert.deepEqual(s, { sent: true, transactionHash: HASH });
+  const r = dripReply(s, parseEther("0.01421795232"), explorer);
+  assert.equal(r.status, 202);
+  assert.equal(r.body.dripped, true, "the page waits for the MON, as after a 200");
+  assert.equal(r.body.transactionHash, HASH);
+  assert.equal(r.body.explorer, explorer(HASH));
+  assert.equal(r.body.amount, "0.01421795232");
+  assert.doesNotMatch(JSON.stringify(r.body), /nothing was sent/);
+});
+
+test("a drip that landed answers 200 with its block; one that reverted answers 502 with its hash", async () => {
+  const ok = dripReply(await settleDrip(() => Promise.resolve(HASH), () => Promise.resolve({ status: "success", blockNumber: 108_359_720n })), parseEther("0.014"), explorer);
+  assert.deepEqual([ok.status, ok.body.dripped, ok.body.blockNumber, ok.body.transactionHash], [200, true, 108_359_720, HASH]);
+  const reverted = dripReply(await settleDrip(() => Promise.resolve(HASH), () => Promise.resolve({ status: "reverted", blockNumber: 1n })), parseEther("0.014"), explorer);
+  assert.deepEqual([reverted.status, reverted.body.error, reverted.body.transactionHash], [502, "SEND_FAILED", HASH]);
+});
+
+// ---- the firewall -------------------------------------------------------------------------------------------------
+
+test("Vercel's firewall limits POST /api/drip per IP for every instance, and lets one create's retries through", () => {
+  const config = JSON.parse(readFileSync(new URL("../vercel-firewall.json", import.meta.url), "utf8")) as {
+    firewallEnabled: boolean;
+    rules: { active: boolean; conditionGroup: { conditions: { type: string; op: string; value: string }[] }[]; action: { mitigate: { action: string; rateLimit: { algo: string; window: number; limit: number; keys: string[] } } } }[];
+  };
+  assert.equal(config.firewallEnabled, true);
+  const limits = config.rules.filter((r) => r.active && r.action.mitigate.action === "rate_limit");
+  assert.equal(limits.length, 1, "the Hobby plan allows one rate-limit rule per project");
+  const [rule] = limits;
+  const conditions = rule!.conditionGroup.flatMap((g) => g.conditions);
+  assert.deepEqual(conditions.map((c) => `${c.type} ${c.op} ${c.value}`).sort(), ["method eq POST", "path eq /api/drip"]);
+  const { rateLimit } = rule!.action.mitigate;
+  assert.deepEqual(rateLimit.keys, ["ip"]);
+  assert.ok(rateLimit.window <= 600, "the Hobby plan's longest window is 10 minutes");
+  // lib/gas.ts asks a busy drip again up to 5 times: one create sends at most 6 POSTs
+  const gas = readFileSync(new URL("../lib/gas.ts", import.meta.url), "utf8");
+  const retries = Number(/body\.error === "DRIP_BUSY" && attempt < (\d+)/.exec(gas)?.[1]);
+  assert.equal(rateLimit.limit, retries + 1, "the limit is one create's worth of requests");
 });

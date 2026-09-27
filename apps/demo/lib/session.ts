@@ -5,7 +5,7 @@
 // lives in localStorage under one key per chain and rpId, and every read and write is guarded, because storage can be
 // missing, full, or blocked (private windows, cleared site data). Without it the app still works: your passkey finds
 // your address again ("Find my inbox with my passkey").
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { DEPLOYMENT } from "./chain.ts";
 
 export type StoredPasskey = {
@@ -96,4 +96,41 @@ const snapshot = (rpId: string): StoredPasskey | undefined => {
 export function useStoredPasskey(rpId: string | undefined): StoredPasskey | undefined | null {
   const get = useCallback(() => (rpId ? snapshot(rpId) : undefined), [rpId]);
   return useSyncExternalStore(subscribe, get, () => null);
+}
+
+// ---- the judges' pass ---------------------------------------------------------------------------------------------
+// The judges' link carries ?pass=…: the gas drip keeps the last 30% of each day's budget for requests with it
+// (lib/drip.ts, JUDGE_RESERVE_PERCENT). It is the hackathon's access code, not a secret of the person's: no key, no
+// seed. This tab keeps it in sessionStorage, and the address bar loses it, so a copied link or a screenshot does not.
+
+const PASS_KEY = "letterlock:judge-pass";
+const PASS = /^[A-Za-z0-9_-]{16,128}$/;
+
+/** The judges' pass this tab was opened with, if any. */
+export const readJudgePass = (): string | undefined => {
+  try {
+    const p = window.sessionStorage.getItem(PASS_KEY);
+    return p !== null && PASS.test(p) ? p : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** Moves ?pass=… from the address bar into this tab's storage. */
+export const takeJudgePassFromUrl = (): void => {
+  try {
+    const url = new URL(window.location.href);
+    const p = url.searchParams.get("pass");
+    if (p === null) return;
+    if (PASS.test(p)) window.sessionStorage.setItem(PASS_KEY, p);
+    url.searchParams.delete("pass");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // no storage: the drip then treats this tab's requests as the public's
+  }
+};
+
+/** Takes the judges' pass off the address bar when the page loads (the pages where an address is created). */
+export function useJudgePassFromUrl(): void {
+  useEffect(() => takeJudgePassFromUrl(), []);
 }

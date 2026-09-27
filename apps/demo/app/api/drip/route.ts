@@ -1,18 +1,32 @@
 // POST /api/drip — funds a new passkey account with just enough MON for its first publish() (lib/drip.ts has the rules).
 //
-//   request  { address, chainId, minute, signature }   signature: EIP-191 by `address` over
-//            "letterlock-drip:<address, lower-case>:<chainId>:<unix minute>", made within 5 minutes of the server's clock
+//   request  { address, chainId, minute, signature, pass? }   signature: EIP-191 by `address` over
+//            "letterlock-drip:<address, lower-case>:<chainId>:<unix minute>", made within 5 minutes of the server's clock;
+//            pass: the judges' pass, when the page was opened with the judges' link
 //   200      { dripped: true, transactionHash, amount, blockNumber, explorer } | { dripped: false, reason: "FUNDED" }
+//   202      { dripped: true, pending: true, transactionHash, amount, explorer }: sent, its receipt not read yet
 //   4xx/5xx  { error: <code>, message }                   codes: lib/drip.ts, DripRefusalCode
 //
 // The drip wallet's key is read from LETTERLOCK_DRIP_PRIVATE_KEY (a Vercel environment variable) inside this handler
 // only; it is never logged or returned, and no client module imports lib/drip-server.ts. DRIP_ENABLED=true turns the
-// drip on; anything else (or no key) turns it off.
+// drip on; anything else (or no key) turns it off. DRIP_JUDGE_PASS, when set, keeps the last 30% of each day's cap for
+// requests that carry it (lib/drip.ts, JUDGE_RESERVE_PERCENT).
 import { NextResponse, type NextRequest } from "next/server";
-import { formatEther } from "viem";
 import { DEPLOYMENT, explorerTx } from "@/lib/chain.ts";
-import { dailyCapFrom, decideDrip, parseDripRequest, precheckDrip, verifyDripSignature, type Refusal } from "@/lib/drip.ts";
-import { allowIp, dripAccount, readChainState, recordDrip, sendDrip, wasDripped } from "@/lib/drip-server.ts";
+import {
+  configuredPass,
+  dailyCapFrom,
+  decideDrip,
+  dripReply,
+  hourlyCapFrom,
+  laneFor,
+  parseDripRequest,
+  precheckDrip,
+  settleDrip,
+  verifyDripSignature,
+  type Refusal,
+} from "@/lib/drip.ts";
+import { allowIp, broadcastDrip, dripAccount, readChainState, recordDrip, waitForDrip, wasDripped } from "@/lib/drip-server.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,38 +77,29 @@ export async function POST(req: NextRequest) {
     } catch {
       return json(502, { error: "CHAIN_UNAVAILABLE", message: "the Monad RPC did not answer; nothing was sent" });
     }
+    const judgePass = configuredPass(process.env.DRIP_JUDGE_PASS);
     const decision = decideDrip({
       ...pre,
       nowMs: Date.now(),
       alreadyDripped: wasDripped(request.address),
       ...state,
       dailyCap: dailyCapFrom(process.env.DRIP_DAILY_CAP_MON, DEPLOYMENT.chainId),
+      hourlyCap: hourlyCapFrom(process.env.DRIP_HOURLY_CAP_MON, DEPLOYMENT.chainId),
+      lane: laneFor(request.pass, judgePass),
+      reserve: judgePass !== undefined,
     });
     if (!decision.ok) return refusal(decision);
     if ("funded" in decision) return json(200, { dripped: false, reason: "FUNDED" });
 
-    let sent;
-    try {
-      sent = await sendDrip(request.address, decision.amount, state.wallet.nonce, state.maxFeePerGas);
-    } catch {
-      // the error text can carry RPC details; the reason is enough for the caller
-      return json(502, { error: "SEND_FAILED", message: "the drip transfer was not accepted by the RPC; nothing was sent" });
-    }
-    if (sent.status !== "success")
-      return json(502, {
-        error: "SEND_FAILED",
-        message: "the drip transfer was included but reverted; try again in a few seconds",
-        transactionHash: sent.transactionHash,
-        explorer: explorerTx(sent.transactionHash),
-      });
-    recordDrip(request.address, ip);
-    return json(200, {
-      dripped: true,
-      transactionHash: sent.transactionHash,
-      blockNumber: Number(sent.blockNumber),
-      amount: formatEther(decision.amount),
-      explorer: explorerTx(sent.transactionHash),
-    });
+    // a failed broadcast sent nothing; a failed wait for the receipt did send, and says so with the hash (202). The
+    // errors themselves can carry RPC details, so only the outcome is answered.
+    const settled = await settleDrip(
+      () => broadcastDrip(request.address, decision.amount, state.wallet.nonce, state.maxFeePerGas),
+      waitForDrip,
+    );
+    if (settled.sent && settled.receipt?.status !== "reverted") recordDrip(request.address, ip);
+    const reply = dripReply(settled, decision.amount, explorerTx);
+    return json(reply.status, reply.body);
   });
 }
 

@@ -18,7 +18,7 @@ import { toFailure, type Failure } from "@/lib/failure.ts";
 import { addressLine, formatBytes, formatCount } from "@/lib/format.ts";
 import { groupFingerprint } from "@/lib/keystrip.ts";
 import { useKeyOf, usePoll } from "@/lib/hooks.ts";
-import { useStoredPasskey } from "@/lib/session.ts";
+import { useJudgePassFromUrl, useStoredPasskey } from "@/lib/session.ts";
 import styles from "./judge.module.css";
 
 type Status = "done" | "next" | "todo";
@@ -46,6 +46,7 @@ const CREATE_STEPS: { name: StepName; title: string }[] = [
 export function JudgeRoute() {
   const host = usePasskeyHost();
   const stored = useStoredPasskey(host?.ok ? host.rpId : undefined);
+  useJudgePassFromUrl();
   const address = stored?.address;
   const { state: onchain, refresh } = useKeyOf(address);
   const hasKey = address !== undefined && onchain.status === "found";

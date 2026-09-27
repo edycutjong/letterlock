@@ -17,7 +17,7 @@ import type { ExampleKey } from "@/lib/examples.ts";
 import { toFailure, type Failure } from "@/lib/failure.ts";
 import { postmarkDate } from "@/lib/format.ts";
 import { useKeyOf } from "@/lib/hooks.ts";
-import { forgetStored, useStoredPasskey } from "@/lib/session.ts";
+import { forgetStored, useJudgePassFromUrl, useStoredPasskey } from "@/lib/session.ts";
 import styles from "./home.module.css";
 
 type Flow = "create" | "post" | "rotate";
@@ -62,6 +62,7 @@ export function AddressDesk({ intro, example }: AddressDeskProps) {
   const host = usePasskeyHost();
   const rpId = host?.ok ? host.rpId : undefined;
   const stored = useStoredPasskey(rpId);
+  useJudgePassFromUrl();
   const address = stored?.address;
   const { state: onchain, refresh } = useKeyOf(address);
   const [running, setRunning] = useState<Flow | undefined>(undefined);
