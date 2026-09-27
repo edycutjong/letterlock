@@ -8,8 +8,9 @@
 // can open them; they are never published to a directory. `pnpm verify` replays each one with no network
 // (scripts/verify_offline.ts) and checks the outcome is still the one recorded here, so a change to the envelope
 // format, the HPKE binding or the error codes shows up as a failed replay.
-// "seed": what scripts/seed.ts sends to real persona addresses. Those envelopes are sealed to keys derived from real
-// passkeys on real devices, so only those passkeys open them; they are described here, not replayed.
+// "seed": what scripts/seed.ts sends to persona addresses. Each envelope is sealed to the key the persona published (from
+// a passkey on the persona's own device, as intended: the script cannot check where a key came from), so only the holder
+// of that key opens it; they are described here, not replayed.
 //
 // Every outcome below was produced by the SDK while writing the file, and the script refuses to write a case whose
 // outcome is not the one it was built to show. Sealing is randomized (a fresh HPKE ephemeral key per envelope), so a
@@ -43,6 +44,31 @@ import {
 } from "./lib/plan.ts";
 
 export const FIXTURE_FILE = join(ROOT, "fixtures/envelopes.json");
+
+/**
+ * Every offline case fixtures/envelopes.json holds, in this order, with the outcome it is built to show. main() refuses
+ * to write a file that differs, and scripts/verify_offline.ts refuses to replay one that differs: a case, a negative one
+ * above all, cannot quietly drop out of `pnpm verify`.
+ */
+export const FIXTURE_CASES = [
+  { id: "opens", want: "OPENS" },
+  { id: "tampered-ct", want: "TAMPERED" },
+  { id: "tampered-enc", want: "TAMPERED" },
+  { id: "readdressed", want: "TAMPERED" },
+  { id: "other-chain", want: "TAMPERED" },
+  { id: "other-directory", want: "TAMPERED" },
+  { id: "wrong-key", want: "WRONG_KEY" },
+  { id: "kid-edited", want: "OPENS" },
+  { id: "old-epoch-current-key", want: "EPOCH_MISMATCH" },
+  { id: "old-epoch-rederived", want: "OPENS" },
+  { id: "agent-opens", want: "OPENS" },
+  { id: "agent-owner-key", want: "WRONG_KEY" },
+  { id: "non-canonical-base64url", want: "TAMPERED" },
+  { id: "kid-not-wire-form", want: "INPUT_INVALID" },
+] as const;
+
+/** The outcomes the replay must show at least once each. */
+export const REQUIRED_OUTCOMES = [...new Set(FIXTURE_CASES.map((c) => c.want))];
 
 /** The chain and directory every fixture envelope is bound to: the live Monad mainnet directory. */
 export const FIXTURE_CHAIN = { chainId: DEPLOYMENTS.monad.chainId, directory: DEPLOYMENTS.monad.directory } as const;
@@ -179,6 +205,8 @@ const main = async () => {
     },
   ];
 
+  const shape = (cases: readonly { id: string; want: string }[]) => JSON.stringify(cases.map(({ id, want }) => ({ id, want })));
+  if (shape(planned) !== shape(FIXTURE_CASES)) throw new Error("the cases built here differ from FIXTURE_CASES: change both together");
   const offline: Case[] = [];
   for (const { want, text, ...c } of planned) {
     const got = await replay(c.envelope, keyFor(c.open));
@@ -191,7 +219,7 @@ const main = async () => {
     about: [
       "Envelope fixtures, each with the outcome the SDK gives it. Written by scripts/fixtures.ts (pnpm fixtures --write).",
       "offline: sealed to SOFTWARE keys (a SHA-256 of a public label stands in for a passkey's PRF output). Anyone can open them, and they are never published to a directory. pnpm verify replays every case with the network switched off (scripts/verify_offline.ts).",
-      "seed: what scripts/seed.ts sends to real persona addresses. Those are sealed to keys derived from real passkeys, so only those passkeys open them: they are described here, not replayed. A run records its transactions in fixtures/seeded/<chainId>.json.",
+      "seed: what scripts/seed.ts sends to persona addresses. Each is sealed to the key the persona published (from a passkey on the persona's own device, as intended: the script cannot check where a key came from), so only the holder of that key opens it: they are described here, not replayed. A run records its transactions in fixtures/seeded/<chainId>.json.",
     ],
     chain: { chainId: FIXTURE_CHAIN.chainId, directory: FIXTURE_CHAIN.directory, network: DEPLOYMENTS.monad.network },
     keys,

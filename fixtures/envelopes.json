@@ -2,7 +2,7 @@
   "about": [
     "Envelope fixtures, each with the outcome the SDK gives it. Written by scripts/fixtures.ts (pnpm fixtures --write).",
     "offline: sealed to SOFTWARE keys (a SHA-256 of a public label stands in for a passkey's PRF output). Anyone can open them, and they are never published to a directory. pnpm verify replays every case with the network switched off (scripts/verify_offline.ts).",
-    "seed: what scripts/seed.ts sends to real persona addresses. Those are sealed to keys derived from real passkeys, so only those passkeys open them: they are described here, not replayed. A run records its transactions in fixtures/seeded/<chainId>.json."
+    "seed: what scripts/seed.ts sends to persona addresses. Each is sealed to the key the persona published (from a passkey on the persona's own device, as intended: the script cannot check where a key came from), so only the holder of that key opens it: they are described here, not replayed. A run records its transactions in fixtures/seeded/<chainId>.json."
   ],
   "chain": {
     "chainId": 143,
