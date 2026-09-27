@@ -1,6 +1,12 @@
 {
   "name": "prf-browser-spike",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edycutjong/letterlock.git",
+    "directory": "spikes/prf-browser"
+  },
   "type": "module",
   "description": "Day-1 spike: real WebAuthn PRF in a browser → Letterlock key; optional P256 binding checked against Monad's 0x0100 precompile",
   "scripts": {

@@ -1,6 +1,16 @@
 {
   "name": "letterlock-monorepo",
   "private": true,
+  "description": "Letterlock: a passkey becomes an encryption address on Monad. The SDK and CLI, the directory contract, the app, the reference ERC-8004 agent and the proof scripts.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edycutjong/letterlock.git"
+  },
+  "homepage": "https://github.com/edycutjong/letterlock#readme",
+  "bugs": {
+    "url": "https://github.com/edycutjong/letterlock/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@10.34.5",
   "engines": {

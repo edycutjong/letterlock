@@ -2,6 +2,12 @@
   "name": "letterlock-agent-memory",
   "version": "1.0.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edycutjong/letterlock.git",
+    "directory": "examples/agent-memory"
+  },
+  "homepage": "https://letterlock-agent.vercel.app",
   "type": "module",
   "description": "The Letterlock reference agent (ERC-8004 agent #10260 on Monad): POST /remember seals a note to a Letterlock address and drops it on the directory; POST /task opens a task sealed to agent:10260 and answers with a note sealed to the sender.",
   "license": "MIT",
