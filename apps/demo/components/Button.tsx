@@ -29,6 +29,12 @@ export type ButtonProps = Common &
     status?: ButtonStatus;
     /** replaces the label while waiting, e.g. "Waiting for your passkey…" */
     waitingLabel?: string;
+    /**
+     * While disabled, stay in the Tab order and keep the focus (aria-disabled, presses ignored) instead of the native
+     * disabled attribute, which drops the focus to the page. For a control that stops applying the moment it is
+     * pressed, such as the kit's replay buttons.
+     */
+    keepFocus?: boolean;
   };
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
@@ -41,6 +47,7 @@ export function Button({
   force,
   status = "idle",
   waitingLabel,
+  keepFocus,
   children,
   className,
   type = "button",
@@ -48,20 +55,22 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const waiting = status === "waiting";
+  // disabled, but focusable: announced as unavailable, and a press does nothing
+  const held = status === "disabled" && keepFocus === true;
   return (
     <button
       {...rest}
-      // while waiting, a second press must neither submit a form nor start a second prompt
-      type={waiting ? "button" : type}
+      // while waiting (or held), a second press must neither submit a form nor start a second prompt
+      type={waiting || held ? "button" : type}
       className={cx(styles.button, block && styles.block, className)}
       data-tone={tone}
       data-size={size}
       data-status={status}
       data-force={force}
-      disabled={status === "disabled"}
-      aria-disabled={waiting || undefined}
+      disabled={status === "disabled" && !held}
+      aria-disabled={waiting || held || undefined}
       aria-busy={waiting || undefined}
-      onClick={waiting ? undefined : onClick}
+      onClick={waiting || held ? undefined : onClick}
     >
       {(icon || waiting) && (
         <span className={styles.icon} aria-hidden="true">

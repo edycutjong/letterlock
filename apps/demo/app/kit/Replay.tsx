@@ -70,13 +70,16 @@ export function EnvelopeReplay({ recipient, epoch, fingerprint, text }: ReplayPr
           ) : undefined}
         </Envelope>
       </div>
+      {/* a control that stops applying when pressed keeps the focus (keepFocus), so the keyboard does not lose its
+          place (scripts/checks/replay-focus.mjs) */}
       <div className={styles.replayControls}>
-        <Button tone="outline" size="md" status={stage === "open" ? "idle" : "disabled"} onClick={sealIt}>
+        <Button tone="outline" size="md" keepFocus status={stage === "open" ? "idle" : "disabled"} onClick={sealIt}>
           Seal it
         </Button>
         <Button
           tone="outline"
           size="md"
+          keepFocus
           status={stage === "sealed" ? "idle" : "disabled"}
           onClick={() => {
             setStage("cracking");
@@ -88,6 +91,7 @@ export function EnvelopeReplay({ recipient, epoch, fingerprint, text }: ReplayPr
         <Button
           tone="outline"
           size="md"
+          keepFocus
           status={stage === "sealed" || stage === "opened" ? "idle" : "disabled"}
           onClick={() => {
             window.clearTimeout(timer.current);
@@ -128,6 +132,7 @@ export function SealReplay() {
         <Button
           tone="outline"
           size="md"
+          keepFocus
           status={state === "pressed" ? "idle" : "disabled"}
           onClick={() => {
             setRun((r) => r + 1);

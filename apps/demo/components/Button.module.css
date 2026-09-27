@@ -81,11 +81,11 @@
 
 /* pointer states; data-force draws the same states in the gallery */
 @media (hover: hover) {
-  .button:hover:not(:disabled):not([aria-busy="true"]) {
+  .button:hover:not(:disabled):not([aria-disabled="true"]) {
     background-color: var(--btn-hover);
     color: var(--btn-fg);
   }
-  .button[data-tone="outline"]:hover:not(:disabled):not([aria-busy="true"]) .label {
+  .button[data-tone="outline"]:hover:not(:disabled):not([aria-disabled="true"]) .label {
     text-decoration-line: underline;
   }
 }
@@ -104,7 +104,7 @@
   outline-offset: 3px;
 }
 
-.button:active:not(:disabled):not([aria-busy="true"]),
+.button:active:not(:disabled):not([aria-disabled="true"]),
 .button[data-force="active"] {
   transform: translateY(1px);
   box-shadow:
@@ -112,7 +112,7 @@
     0 0 0 color-mix(in srgb, var(--ink) 0%, transparent);
 }
 
-.button[data-tone="outline"]:active:not(:disabled),
+.button[data-tone="outline"]:active:not(:disabled):not([aria-disabled="true"]),
 .button[data-tone="outline"][data-force="active"] {
   box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 22%, transparent);
 }
@@ -142,7 +142,9 @@
   }
 }
 
-.button:disabled {
+/* disabled, natively or held (keepFocus: it keeps the focus, and its focus ring shows) */
+.button:disabled,
+.button[data-status="disabled"] {
   cursor: not-allowed;
   color: var(--muted);
   background-color: var(--bg-sunk);
