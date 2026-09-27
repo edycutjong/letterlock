@@ -17,8 +17,8 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { isLetterlockError, letterlock, open } from "letterlock";
-import { createPublicClient, createTestClient, http, parseEther, type Address, type Hex } from "viem";
+import { isLetterlockError, letterlock, letterlockAbi, open } from "letterlock";
+import { createPublicClient, createTestClient, createWalletClient, http, parseEther, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "viem/chains";
 import { SEED_NOTES, SEED_OLD_EPOCH, SEED_TAMPER, fixtureKeys } from "../lib/plan.ts";
@@ -107,6 +107,12 @@ test("--mainnet without --confirm-mainnet is refused before anything is read or 
   assert.match(r.err, /--confirm-mainnet/);
 });
 
+test("--directory with --mainnet is refused before anything is read or sent: mainnet notes go to the recorded directory", { skip }, async () => {
+  const r = await seedAs(sender, "--mainnet", "--confirm-mainnet", "--to", maya.address, "--rpc", "http://127.0.0.1:9");
+  assert.equal(r.code, 2, r.err);
+  assert.match(r.err, /--directory is for a local test deploy/);
+});
+
 test("the plan reaches the personas: the notes open, the copy is TAMPERED, the old-epoch note opens only at its own epoch", { skip }, async () => {
   const before = await nonce();
   const r = await seed("--to", maya.address, "--old-epoch-to", kai.address);
@@ -166,6 +172,20 @@ test("a persona with no published key is NO_KEY_PUBLISHED, and nothing is sent",
   const r = await seed("--to", nobody, "--again");
   assert.equal(r.code, 1, r.err);
   assert.match(r.err, /NO_KEY_PUBLISHED/);
+  assert.equal(await nonce(), before);
+});
+
+test("a recipient holding the deploy smoke test's key is refused, and nothing is sent: its stand-in is the operator's, not a persona's", { skip }, async () => {
+  const record = JSON.parse(readFileSync(join(ROOT, "deployments/10143.json"), "utf8")) as { smokeTest: { publishedKey: Hex } };
+  const holder = privateKeyToAccount(generatePrivateKey());
+  await createTestClient({ mode: "anvil", chain: chain(), transport: http(url) }).setBalance({ address: holder.address, value: parseEther("1") });
+  const wallet = createWalletClient({ account: holder, chain: chain(), transport: http(url) });
+  const hash = await wallet.writeContract({ address: directory, abi: letterlockAbi, functionName: "publish", args: [record.smokeTest.publishedKey, 1] });
+  await createPublicClient({ chain: chain(), transport: http(url) }).waitForTransactionReceipt({ hash });
+  const before = await nonce();
+  const r = await seed("--to", holder.address, "--again");
+  assert.equal(r.code, 2, r.err);
+  assert.match(r.err, /epoch-1 key is the deploy smoke test's key \(deployments\/10143\.json\)/);
   assert.equal(await nonce(), before);
 });
 

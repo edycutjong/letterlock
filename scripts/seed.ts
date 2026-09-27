@@ -4,10 +4,12 @@
 //   pnpm seed --to 0xMAYA --old-epoch-to 0xKAI --dry-run                   resolve, seal and simulate; send nothing
 //   pnpm seed --mainnet --confirm-mainnet --to 0xMAYA --old-epoch-to 0xKAI Monad mainnet: real transactions, real MON
 //
-// A persona's key comes from a passkey a person created on a real device, and was published from it. This script
-// never creates, derives or holds a persona key: it reads each persona's key from the directory and seals to it, so
-// only that persona's passkey opens what it sends. The plan is fixed (scripts/lib/plan.ts, described in
-// fixtures/envelopes.json), and so is its order:
+// A persona is meant to be an address whose owner published a key from a passkey on their own device. The script cannot
+// tell where a published key came from: it reads each persona's key from the directory and seals to it, so whoever
+// holds that key (the persona's passkey, used as intended) opens what it sends; it never creates, derives or holds a
+// persona key. It refuses the keys the deploy smoke tests published (deployments/<chainId>.json), whose stand-ins the
+// deployer's operator holds. The plan is fixed (scripts/lib/plan.ts, described in fixtures/envelopes.json), and so is
+// its order:
 //   --to            the 4 notes, then a copy of the first with one ciphertext byte changed, which opens as TAMPERED
 //   --old-epoch-to  1 note sealed to the persona's PREVIOUS epoch key, which the passkey still opens after a rotation.
 //                   The persona must have rotated at least once; the key is read from the directory's KeyPublished
@@ -58,7 +60,7 @@ const USAGE = `usage: pnpm seed --to <address> [--old-epoch-to <address>] [optio
   --private-key-env <NAME>    environment variable holding the sender's key
                               (default: MONAD_TESTNET_PRIVATE_KEY on testnet, LETTERLOCK_AGENT_PRIVATE_KEY on mainnet)
   --rpc <url>                 JSON-RPC endpoint (default: the chain's public RPC)
-  --directory <address>       another Letterlock directory (a local test deploy); needs --from-block
+  --directory <address>       another Letterlock directory (a local test deploy, never with --mainnet); needs --from-block
   --from-block <n>            first block of KeyPublished history to search (default: the directory's deploy block)
   --record <file>             where to record the run (default: fixtures/seeded/<chainId>.json)
   --again                     send even though the record has a run to this persona and directory
@@ -106,6 +108,8 @@ const main = async (): Promise<number> => {
   const oldTo = o["old-epoch-to"] === undefined ? undefined : address("--old-epoch-to", o["old-epoch-to"]);
   if (o.mainnet && !o["confirm-mainnet"] && !o["dry-run"])
     usage("--mainnet sends real transactions that spend MON: add --confirm-mainnet to send, or --dry-run to only simulate");
+  if (o.directory !== undefined && o.mainnet)
+    usage("--directory is for a local test deploy: on --mainnet the notes go to the SDK's mainnet directory, the one deployments/143.json records");
   if (o.directory !== undefined && o["from-block"] === undefined)
     usage("--directory needs --from-block: the script knows the deploy block of the built-in directories only");
 
@@ -134,15 +138,26 @@ const main = async (): Promise<number> => {
   type Run = { at: string; chainId: number; network: string; directory: string; sender: string; status: string; drops: Drop[] };
   const record: { about: string; runs: Run[] } = existsSync(recordFile)
     ? JSON.parse(readFileSync(recordFile, "utf8"))
-    : { about: `Envelopes scripts/seed.ts dropped on ${deployment.network}. Each is sealed to a persona's key from a real passkey, so only that passkey opens it; "expect" is what it shows then.`, runs: [] };
+    : { about: `Envelopes scripts/seed.ts dropped on ${deployment.network}. Each is sealed to the key the persona published in the directory, so only the holder of that key opens it (the persona's passkey, when the persona published from one: the script cannot check that); "expect" is what that key shows then.`, runs: [] };
   const already = record.runs.find((r) => r.chainId === deployment.chainId && r.directory.toLowerCase() === directory.toLowerCase() &&
     r.drops.some((d) => d.recipient.toLowerCase() === to.toLowerCase()));
   if (already && !o.again && !o["dry-run"])
     refuse(`${shown(recordFile)} already has a run to ${to} on this directory (${already.at}); pass --again to send the notes a second time`);
 
+  // The deploy smoke tests' keys: software keys whose stand-ins the deployer's operator holds, never a persona's.
+  const smoke = (JSON.parse(readFileSync(join(ROOT, `deployments/${deployment.chainId}.json`), "utf8")) as {
+    smokeTest?: { publishedKey?: string; agentKey?: { publishedKey?: string } };
+  }).smokeTest;
+  const smokeKeys = [smoke?.publishedKey, smoke?.agentKey?.publishedKey].filter((k): k is string => typeof k === "string").map((k) => k.toLowerCase());
+  const notSmokeKey = (who: Address, publicKey: Uint8Array, epoch: number) => {
+    if (smokeKeys.includes(bytesToHex(publicKey)))
+      refuse(`${who}'s epoch-${epoch} key is the deploy smoke test's key (deployments/${deployment.chainId}.json): the deployer's operator holds its stand-in, so it is no persona's key`);
+  };
+
   // 1. Keys: one keyOf read for --to; for --old-epoch-to its current key and the KeyPublished log of the one before.
   const key = await ll.resolve(to);
   console.log(`  ${to}  epoch ${key.epoch}  kid ${key.kid}  (keyOf)`);
+  notSmokeKey(to, key.publicKey, key.epoch);
   const plaintext = (s: string) => new TextEncoder().encode(s);
   const planned: Planned[] = [];
   const add = (id: string, envelope: Envelope, expect: string) =>
@@ -165,6 +180,8 @@ const main = async (): Promise<number> => {
     if (!now || bytesToHex(now.publicKey) !== bytesToHex(current.publicKey))
       refuse(`the KeyPublished log of ${oldTo}'s epoch ${current.epoch} ${now ? "does not carry the key keyOf returns" : `is not between block ${fromBlock} and the head`}`);
     if (!previous) return refuse(`no KeyPublished log of ${oldTo}'s epoch ${want} between block ${fromBlock} and the head`);
+    notSmokeKey(oldTo, current.publicKey, current.epoch);
+    notSmokeKey(oldTo, previous.publicKey, want);
     const kid = fingerprint(previous.publicKey);
     console.log(`  ${oldTo}  epoch ${current.epoch}  kid ${current.kid}  (keyOf); epoch ${want}  kid ${kid}  (KeyPublished in block ${previous.block})`);
     add(SEED_OLD_EPOCH.id, await seal({ chainId: ll.chainId, directory: ll.directory, to: { recipient: oldTo, publicKey: previous.publicKey, epoch: want }, plaintext: plaintext(SEED_OLD_EPOCH.text) }),
