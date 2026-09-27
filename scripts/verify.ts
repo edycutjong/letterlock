@@ -42,7 +42,8 @@ const tap = (output: string): Counts => {
     return Number(m[1]);
   };
   const skippedNames = [...output.matchAll(/^\s*ok \d+ - (.+?) # SKIP(?: (.*))?$/gm)].map((m) => `${m[1]}${m[2] ? `: ${m[2]}` : ""}`);
-  const failedNames = [...output.matchAll(/^\s*not ok \d+ - (.+?)(?: # (?:TODO|SKIP).*)?$/gm)].map((m) => m[1]!);
+  // a "not ok" line with a todo directive is not a failure (TAP 13)
+  const failedNames = [...output.matchAll(/^\s*not ok \d+ - (.+?)( # (?:todo|skip)\b.*)?$/gim)].filter((m) => m[2] === undefined).map((m) => m[1]!);
   const passed = n("pass");
   const failed = n("fail") + n("cancelled");
   const skipped = n("skipped") + n("todo");
