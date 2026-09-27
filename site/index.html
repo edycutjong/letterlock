@@ -30,15 +30,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Public+Sans:ital,wght@0,400..700;1,400&family=Sometype+Mono:wght@400..600&display=swap">
 <!--
-  Letterlock's landing page: one file, no build step. World: a post office register and the sealed letter.
-  Colour law: the wax is the only red. Every number on this page is copied from a file in this repository
-  (bench/results.json, deployments/143.json, apps/demo/e2e-results/mainnet-live.json) or from a command whose
-  output is printed here with its date. Inline scripts are allowed by hash in vercel.json's Content-Security-Policy:
-  after editing one, put its new sha256 there (the browser console prints the hash it expected).
+  Letterlock's landing page: one file, no build step. Design: a post office register and a sealed letter; red is
+  used for the wax seal. Every number on this page is copied from a file in this repository (bench/results.json,
+  deployments/143.json, apps/demo/e2e-results/mainnet-live.json) or from a command whose output is printed here
+  with its date. Inline scripts are allowed by hash in vercel.json's Content-Security-Policy: after editing one,
+  put its new sha256 there (the browser console prints the hash it expected).
 -->
 <style>
 :root{
-  /* the direction's tokens, verbatim */
+  /* colours and faces */
   --bg:#F3EEE3;      /* manila envelope stock */
   --ink:#1E1B16;     /* iron-gall ink */
   --muted:#6E6556;   /* register-book pencil */
@@ -90,7 +90,7 @@ code,kbd,pre,.data{font-family:var(--font-data);font-variant-numeric:tabular-num
 .status[data-state="live"] .lamp{border-color:var(--before);background:var(--before);box-shadow:0 0 0 3px color-mix(in srgb,var(--before) 18%,transparent)}
 .status[data-state="down"] .lamp{background:transparent;border-style:dashed}
 .status b{font-weight:600;color:var(--ink)}
-.status .data{font-size:12px}
+.status .data{font-size:12px;white-space:nowrap}
 .status a{white-space:nowrap}
 
 /* ---- nav ---- */
@@ -121,7 +121,7 @@ code,kbd,pre,.data{font-family:var(--font-data);font-variant-numeric:tabular-num
   -webkit-mask:linear-gradient(transparent,#000 14%,#000 70%,transparent);mask:linear-gradient(transparent,#000 14%,#000 70%,transparent)}
 .postline{display:flex;align-items:center;gap:12px;font:600 11.5px/1.4 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
 .postline svg{flex:none;width:38px;height:38px}
-h1{font-size:clamp(44px,5.6vw,80px);line-height:.97;letter-spacing:-.024em;margin:16px 0 14px;font-weight:400}
+h1{font-size:clamp(44px,min(5.6vw,12vh),80px);line-height:.97;letter-spacing:-.024em;margin:16px 0 14px;font-weight:400}
 h1 em{font-weight:400}
 .excl{font:italic 400 clamp(19px,1.7vw,23px)/1.36 var(--font-display);color:var(--muted);max-width:30em;margin-bottom:18px}
 .sub{max-width:36em;font-size:18px;line-height:1.62;color:var(--ink-2);text-wrap:pretty}
@@ -236,8 +236,17 @@ h2{font-size:clamp(32px,3.9vw,54px);line-height:1.04;letter-spacing:-.018em;max-
 .panel .meta{font-size:12.5px;line-height:1.45;color:var(--muted);margin-bottom:12px}
 .panel .meta b{color:var(--ink-2);font-weight:600}
 pre.tty{position:relative;margin:0;font-size:12px;line-height:1.62;color:var(--ink);overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2;scrollbar-width:thin;scrollbar-color:var(--rule) transparent;padding-bottom:4px}
-pre.tty.table{white-space:pre;overflow-wrap:normal;word-break:normal;font-size:11.5px}
+pre.tty.table{white-space:pre;overflow-wrap:normal;word-break:normal;font-size:11.5px;
+  /* a table wider than its box: a shadow on the side that scrolls, gone at either end */
+  background:
+    linear-gradient(to right,var(--sheet) 40%,rgba(248,244,235,0)) left/36px 100% no-repeat local,
+    linear-gradient(to left,var(--sheet) 40%,rgba(248,244,235,0)) right/36px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%,rgba(30,27,22,.22),rgba(30,27,22,0)) left/14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%,rgba(30,27,22,.22),rgba(30,27,22,0)) right/14px 100% no-repeat scroll}
+.panel .swipe{display:none}
+.panel.wide .swipe{display:inline}
 pre.tty.brk{word-break:normal}
+pre.tty .nb{white-space:nowrap}
 pre.tty .ln.wr{white-space:pre-wrap;overflow-wrap:anywhere;padding-left:2ch;text-indent:-2ch}
 #p-bench pre.tty{font-size:11px}
 pre.tty .p{color:var(--before)}
@@ -327,7 +336,7 @@ pre.tty .ln{display:block}
 /* FAQ */
 .faq{margin-top:36px;border-top:1px solid var(--ink);max-width:980px}
 .faq details{border-bottom:1px solid var(--rule)}
-.faq summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:16px;padding:20px 0;font:400 clamp(20px,2vw,25px)/1.3 var(--font-display);transition:color .15s}
+.faq summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:16px;padding:20px 0;font:400 clamp(20px,2vw,25px)/1.3 var(--font-display);text-wrap:balance;transition:color .15s}
 .faq summary::-webkit-details-marker{display:none}
 .faq summary:hover{color:var(--before)}
 .faq summary .pm{width:28px;height:28px;border:1.5px solid currentColor;border-radius:50%;position:relative;transition:transform .3s var(--ease-out)}
@@ -360,6 +369,17 @@ pre.tty .ln{display:block}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation:none!important;transition:none!important}
+}
+/* a laptop browser's short viewport (1366 x 657 on a 1366 x 768 screen, 1536 x 730 on a 1920 x 1080 screen at 125%,
+   1280 x 690): the three buttons come up under the one-line subhead so they stay in view, and the paragraph and the
+   proof row follow them. The paragraph holds no link or control, so the keyboard order is unchanged. */
+@media (min-width:901px) and (max-height:819px){
+  .hero-copy{display:flex;flex-direction:column}
+  .hero-copy .sub,.hero-copy .proof{order:1}
+  .hero-copy .excl{margin-bottom:0}
+  .hero-copy .ctas{margin:24px 0 22px;animation-delay:.2s}
+  .hero-copy .sub{animation-delay:.26s}
+  .hero-copy .proof{margin-top:18px}
 }
 @media (max-width:1080px){
   .nav a.lk.opt{display:none}
@@ -402,6 +422,13 @@ pre.tty .ln{display:block}
   .status .w2{display:none}
   .try{padding:26px 20px}
   .try::after{inset:5px}
+  /* the replay keeps a 42-character address and its comma on one line */
+  .panel{padding:14px 12px 16px}
+  pre.tty.brk{font-size:11.5px}
+}
+@media (max-width:400px){
+  /* the command wraps at a space rather than hiding its end behind a sideways scroll */
+  .cmd code{white-space:normal;overflow:visible}
 }
 @media print{
   body::after,body::before,.status,.skip{display:none}
@@ -495,7 +522,7 @@ pre.tty .ln{display:block}
 <main id="main">
 <div class="wrap">
   <section class="hero" aria-labelledby="h1">
-    <div>
+    <div class="hero-copy">
       <p class="postline">
         <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15.5" fill="none" stroke="#6E6556" stroke-width="1.5"/><circle cx="17" cy="17" r="10.5" fill="none" stroke="#6E6556" stroke-width="1"/><path d="M1 13.5h32M1 20.5h32" stroke="#6E6556" stroke-width="1"/></svg>
         Register 143 · Monad mainnet · Track 04: Trust, Identity &amp; AI
@@ -565,25 +592,25 @@ pre.tty .ln{display:block}
         <h3>Tests</h3>
         <span class="n"><span data-count="705">705</span></span>
         <p>pass in a fresh clone with <code class="data">pnpm verify</code>: 0 failed, 12 skipped, 8 suites.</p>
-        <a class="src" href="https://github.com/edycutjong/letterlock/blob/main/DEMO.md#reproduce-the-proof"><span>DEMO.md · Reproduce the proof</span></a>
+        <a class="src" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/DEMO.md#reproduce-the-proof"><span>DEMO.md · Reproduce the proof</span></a>
       </div>
       <div class="col">
         <h3>Look up and seal</h3>
         <span class="n"><span data-count="25.578" data-dp="3">25.578</span><small>ms</small></span>
         <p>p50 on Monad mainnet, N = 1,000, 0 failed calls; p95 29.636 ms.</p>
-        <a class="src" href="https://github.com/edycutjong/letterlock/blob/main/bench/RESULTS.md"><span>bench/results.json</span></a>
+        <a class="src" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/bench/RESULTS.md"><span>bench/RESULTS.md</span></a>
       </div>
       <div class="col">
         <h3>Post a key</h3>
         <span class="n"><span data-count="70863" data-group="1">70,863</span><small>gas</small></span>
         <p>once per person, 0.007228026 MON at 102 gwei. Sealing sends no transaction.</p>
-        <a class="src" href="https://github.com/edycutjong/letterlock/blob/main/deployments/143.json"><span>deployments/143.json</span></a>
+        <a class="src" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/deployments/143.json"><span>deployments/143.json</span></a>
       </div>
       <div class="col">
         <h3>New passkey to key on chain</h3>
         <span class="n"><span data-count="3.423" data-dp="3">3.423</span><small>s</small></span>
         <p>create, gas drip and publish, on mainnet, in the app's live check with a virtual passkey.</p>
-        <a class="src" href="https://github.com/edycutjong/letterlock/blob/main/apps/demo/e2e-results/mainnet-live.json"><span>e2e-results/mainnet-live.json</span></a>
+        <a class="src" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/apps/demo/e2e-results/mainnet-live.json"><span>e2e-results/mainnet-live.json</span></a>
       </div>
     </div>
   </section>
@@ -596,9 +623,9 @@ pre.tty .ln{display:block}
       <figure class="shot">
         <a href="assets/screens/seal.webp" aria-label="Open the full-size screenshot of the live app's /seal page">
           <div class="bar"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="#6E6556" stroke-width="1.3"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg><span class="where">letterlock-app.vercel.app/seal</span><span class="when">27 Sep 2026</span></div>
-          <img src="assets/screens/seal.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The live app's /seal page: agent:10260 found by keyOf at epoch 2, key e5b3 0e2e 52ec 0dec, and an envelope sealed to it under a red wax seal.">
+          <img src="assets/screens/seal.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The live app's /seal page: agent:10260 found in the register at epoch 2, key e5b3 0e2e 52ec 0dec, and an envelope sealed to it under a red wax seal.">
         </a>
-        <figcaption>The production app on Monad mainnet: <code class="data">agent:10260</code> found by <code class="data">keyOf</code> at epoch 2, a note sealed in the page, never sent.</figcaption>
+        <figcaption>The production app on Monad mainnet: <code class="data">agent:10260</code> found by <code class="data">keyOfAgent</code> at epoch 2, a note sealed in the page, never sent.</figcaption>
       </figure>
 
       <div class="term" id="term">
@@ -609,14 +636,14 @@ pre.tty .ln{display:block}
         </div>
         <div class="panel" id="p-cli" role="tabpanel" aria-labelledby="t-cli" tabindex="0">
           <p class="meta"><b>letterlock@0.1.0 from npm</b>, against Monad mainnet · 27 Sep 2026, 10:43 UTC · verbatim</p>
-<pre class="tty brk"><span class="ln cmdl" style="--d:0s"><span class="p">$</span> npx letterlock resolve agent:10260</span><span class="ln" style="--d:0.80s">agent:10260 has a key on Monad mainnet (143)</span><span class="ln" style="--d:0.86s">  key        0xa38ed883578ddcf912a3d20f2f698ea3f15c00339c1656714402594db6324806</span><span class="ln" style="--d:0.92s">  kid        e5b30e2e52ec0dec</span><span class="ln" style="--d:0.98s">  epoch      2</span><span class="ln" style="--d:1.04s">  published  2026-09-27T03:09:53.000Z (block time)</span><span class="ln" style="--d:1.10s">  directory  0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e</span><span class="ln" style="--d:1.16s"> </span><span class="ln cmdl" style="--d:1.21s"><span class="p">$</span> echo "the dentist moved to Thursday 10:40" | npx letterlock seal agent:10260 -</span><span class="ln dim" style="--d:2.01s">{</span><span class="ln dim" style="--d:2.06s">  &quot;v&quot;: 1,</span><span class="ln dim" style="--d:2.11s">  &quot;chainId&quot;: 143,</span><span class="ln dim" style="--d:2.16s">  &quot;directory&quot;: &quot;0xa25bbacab3fd2e71da1aa002e54965b488d64b7e&quot;,</span><span class="ln dim" style="--d:2.21s">  &quot;recipient&quot;: &quot;agent:10260&quot;,</span><span class="ln dim" style="--d:2.26s">  &quot;epoch&quot;: 2,</span><span class="ln dim" style="--d:2.31s">  &quot;kid&quot;: &quot;e5b30e2e52ec0dec&quot;,</span><span class="ln dim" style="--d:2.36s">  &quot;enc&quot;: &quot;l6l7vwUiNY-dkyQxlRi12OWvGO3GNt1iq8vTnLY7OhM&quot;,</span><span class="ln dim" style="--d:2.41s">  &quot;ct&quot;: &quot;pNVxwOyddi293OWDceF0QAl-dl3UiqZkCrx7Fp-eB80SE1H9Km7YNAbuX3adbZDmFEGlWw&quot;</span><span class="ln dim" style="--d:2.46s">}</span><span class="ln ok" style="--d:2.51s">sealed 36 bytes to agent:10260 (epoch 2, kid e5b30e2e52ec0dec) on Monad mainnet (143): a 269-byte envelope</span></pre>
+<pre class="tty brk"><span class="ln cmdl" style="--d:0s"><span class="p">$</span> npx letterlock resolve agent:10260</span><span class="ln" style="--d:0.80s">agent:10260 has a key on Monad mainnet (143)</span><span class="ln" style="--d:0.86s">  key        0xa38ed883578ddcf912a3d20f2f698ea3f15c00339c1656714402594db6324806</span><span class="ln" style="--d:0.92s">  kid        e5b30e2e52ec0dec</span><span class="ln" style="--d:0.98s">  epoch      2</span><span class="ln" style="--d:1.04s">  published  2026-09-27T03:09:53.000Z (block time)</span><span class="ln" style="--d:1.10s">  directory  0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e</span><span class="ln" style="--d:1.16s"> </span><span class="ln cmdl" style="--d:1.21s"><span class="p">$</span> echo "the dentist moved to Thursday 10:40" | npx letterlock seal agent:10260 -</span><span class="ln dim" style="--d:2.01s">{</span><span class="ln dim" style="--d:2.06s">  &quot;v&quot;: 1,</span><span class="ln dim" style="--d:2.11s">  &quot;chainId&quot;: 143,</span><span class="ln dim" style="--d:2.16s">  &quot;directory&quot;: &quot;0xa25bbacab3fd2e71da1aa002e54965b488d64b<span class="nb">7e&quot;,</span></span><span class="ln dim" style="--d:2.21s">  &quot;recipient&quot;: &quot;agent:10260&quot;,</span><span class="ln dim" style="--d:2.26s">  &quot;epoch&quot;: 2,</span><span class="ln dim" style="--d:2.31s">  &quot;kid&quot;: &quot;e5b30e2e52ec0dec&quot;,</span><span class="ln dim" style="--d:2.36s">  &quot;enc&quot;: &quot;l6l7vwUiNY-dkyQxlRi12OWvGO3GNt1iq8vTnLY7OhM&quot;,</span><span class="ln dim" style="--d:2.41s">  &quot;ct&quot;: &quot;pNVxwOyddi293OWDceF0QAl-dl3UiqZkCrx7Fp-eB80SE1H9Km7YNAbuX3adbZDmFEGlWw&quot;</span><span class="ln dim" style="--d:2.46s">}</span><span class="ln ok" style="--d:2.51s">sealed 36 bytes to agent:10260 (epoch 2, kid e5b30e2e52ec0dec) on Monad mainnet (143): a 269-byte envelope</span></pre>
         </div>
         <div class="panel" id="p-verify" role="tabpanel" aria-labelledby="t-verify" tabindex="0">
-          <p class="meta"><b>pnpm verify</b> in a fresh clone of v0.1.0 (<span class="data">1c149e1</span>) · 27 Sep 2026, 10:43 UTC · 61.8 s · its closing summary, verbatim</p>
+          <p class="meta"><b>pnpm verify</b> in a fresh clone of v0.1.0 (<span class="data">1c149e1</span>) · 27 Sep 2026, 10:43 UTC · 61.8 s · its closing summary, verbatim<span class="swipe"> · wider than this screen: scroll it sideways</span></p>
 <pre class="tty table"><span class="ln cmdl" style="--d:0s"><span class="p">$</span> pnpm verify</span><span class="ln" style="--d:.8s">Letterlock verify · 2026-09-27 10:43 UTC · node v22.22.0 · forge 1.8.3 · 1c149e1</span><span class="ln" style="--d:.85s"> </span><span class="ln dim" style="--d:.9s">  step                               result passed failed   skip  total    time</span><span class="ln" style="--d:.98s">  SDK: unit + anvil (vitest)         PASS      222      0      9    231   13.7s</span><span class="ln" style="--d:1.06s">  Contracts (forge test)             PASS      111      0      0    111   24.1s</span><span class="ln" style="--d:1.14s">  PRF spike: unit (node:test)        PASS       27      0      3     30    1.1s</span><span class="ln" style="--d:1.22s">  Demo app (node:test)               PASS       99      0      0     99    2.2s</span><span class="ln" style="--d:1.3s">  Reference agent (vitest)           PASS       95      0      0     95    4.2s</span><span class="ln" style="--d:1.38s">  Offline seal/open, no network      PASS       73      0      0     73    1.7s</span><span class="ln" style="--d:1.46s">  Scripts: seed, guards (node:test)  PASS       32      0      0     32   12.7s</span><span class="ln" style="--d:1.54s">  Readiness checks (unittest)        PASS       46      0      0     46    2.1s</span><span class="ln dim" style="--d:1.62s">  ---------------------------------- ------ ------ ------ ------ ------ -------</span><span class="ln ok" style="--d:1.75s">  all steps                          PASS      705      0     12    717   61.8s</span></pre>
         </div>
         <div class="panel" id="p-bench" role="tabpanel" aria-labelledby="t-bench" tabindex="0">
-          <p class="meta"><b>pnpm bench</b>, 5 runs of 200 against rpc.monad.xyz · 27 Sep 2026, 07:44 UTC · the lines it prints, rebuilt from <a href="https://github.com/edycutjong/letterlock/blob/main/bench/results.json">bench/results.json</a> in <a href="https://github.com/edycutjong/letterlock/blob/main/scripts/bench.ts">scripts/bench.ts</a>'s own format, unchanged since that run</p>
+          <p class="meta"><b>pnpm bench</b>, 5 runs of 200 against rpc.monad.xyz · 27 Sep 2026, 07:44 UTC · the lines it prints, rebuilt from <a href="https://github.com/edycutjong/letterlock/blob/v0.1.0/bench/results.json">bench/results.json</a> in <a href="https://github.com/edycutjong/letterlock/blob/v0.1.0/scripts/bench.ts">scripts/bench.ts</a>'s own format, unchanged since that run<span class="swipe"> · wider than this screen: scroll it sideways</span></p>
 <pre class="tty table"><span class="ln cmdl" style="--d:0s"><span class="p">$</span> pnpm bench</span><span class="ln wr" style="--d:0.80s">bench: 5 run(s) of N=200 (+5 warm-up rounds each) against https://rpc.monad.xyz, recipient 0xFa72dA61400f345d85BF3d0d55395bDbebDB02b3 (db9784b7c246deb1), a 85-byte note</span><span class="ln wr" style="--d:0.85s">  run 1/5: resolve+seal p50 25.577 ms, cold first resolve 130.267 ms, 0 failed calls</span><span class="ln wr" style="--d:0.90s">  run 2/5: resolve+seal p50 25.504 ms, cold first resolve 82.431 ms, 0 failed calls</span><span class="ln wr" style="--d:0.95s">  run 3/5: resolve+seal p50 25.489 ms, cold first resolve 83.254 ms, 0 failed calls</span><span class="ln wr" style="--d:1.00s">  run 4/5: resolve+seal p50 25.789 ms, cold first resolve 80.377 ms, 0 failed calls</span><span class="ln wr" style="--d:1.05s">  run 5/5: resolve+seal p50 25.582 ms, cold first resolve 77.184 ms, 0 failed calls</span><span class="ln" style="--d:1.10s">  resolve          n=1000  p50    21.969  p95    23.826  p99    29.091 ms</span><span class="ln" style="--d:1.15s">  seal             n=1000  p50     3.534  p95     5.471  p99     6.338 ms</span><span class="ln ok" style="--d:1.20s">  resolve+seal     n=1000  p50    25.578  p95    29.636  p99    32.436 ms</span><span class="ln" style="--d:1.25s">  rpc round trip   n=1000  p50    19.914  p95    21.084  p99    22.619 ms</span><span class="ln wr" style="--d:1.30s">  cold first resolve p50 82.431 ms (n=5) · envelope 365 bytes · failed calls 0 measured, 0 warm-up · mismatches 0</span><span class="ln" style="--d:1.35s">  resolve+seal p50 across runs: 25.489 to 25.789 ms (median 25.577 ms)</span><span class="ln dim" style="--d:1.40s">  gas deploy                       1201505  0.12255351 MON  matches deployments/143.json</span><span class="ln dim" style="--d:1.45s">  gas agentRegister                 224739  0.022923378 MON  matches deployments/143.json</span><span class="ln" style="--d:1.50s">  gas publish                        70863  0.007228026 MON  matches deployments/143.json</span><span class="ln dim" style="--d:1.55s">  gas publishForAgent               108799  0.011097498 MON  matches deployments/143.json</span><span class="ln" style="--d:1.60s">  gas drop                           45780  0.00466956 MON  matches deployments/143.json</span><span class="ln dim" style="--d:1.65s">  gas publishForAgent epoch 2        74652  0.007614504 MON  matches deployments/143.json</span><span class="ln wr" style="--d:1.70s">  wrote bench/results.json and bench/RESULTS.md</span></pre>
         </div>
       </div>
@@ -639,15 +666,15 @@ pre.tty .ln{display:block}
         <svg class="hand" viewBox="0 0 46 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M2 9.5h22c1.8 0 1.8 3 0 3H15"/><path d="M15 12.5h4.5c1.7 0 1.7 3 0 3H15"/><path d="M15 15.5h3.8c1.6 0 1.6 2.8 0 2.8H15"/><path d="M14.5 18.3h2.8c1.5 0 1.5 2.7 0 2.7H9c-3.5 0-6.8-2.2-7-6.6V9.5"/><path d="M2 9.5c1.5-2.8 4.6-4.4 8.2-5.3l3.2-.9"/></svg>
         <span class="code">TAMPERED</span>
         <h3>One byte changed on the way.</h3>
-        <p>Or the envelope was re-addressed to another chain, directory, recipient or epoch: HPKE's <code class="data">info</code> binds all four.</p>
+        <p>Or the envelope was re-addressed to another chain, directory or recipient: HPKE's <code class="data">info</code> binds each one.</p>
         <a class="test" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/packages/letterlock/test/envelope.test.ts#L85">envelope.test.ts:85</a>
       </article>
       <article class="slip">
         <svg class="hand" viewBox="0 0 46 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M2 9.5h22c1.8 0 1.8 3 0 3H15"/><path d="M15 12.5h4.5c1.7 0 1.7 3 0 3H15"/><path d="M15 15.5h3.8c1.6 0 1.6 2.8 0 2.8H15"/><path d="M14.5 18.3h2.8c1.5 0 1.5 2.7 0 2.7H9c-3.5 0-6.8-2.2-7-6.6V9.5"/><path d="M2 9.5c1.5-2.8 4.6-4.4 8.2-5.3l3.2-.9"/></svg>
         <span class="code">WRONG_KEY</span>
         <h3>Another passkey answered the prompt.</h3>
-        <p>Said before any decryption, so the addressee knows to try the passkey that made the address.</p>
-        <a class="test" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/packages/letterlock/test/envelope.test.ts#L68">envelope.test.ts:68</a>
+        <p>Decryption fails and the envelope's key hint names a different key, so the addressee knows to try the passkey that made the address.</p>
+        <a class="test" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/packages/letterlock/test/envelope.test.ts#L68-L74">envelope.test.ts:68–74</a>
       </article>
       <article class="slip">
         <svg class="hand" viewBox="0 0 46 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M2 9.5h22c1.8 0 1.8 3 0 3H15"/><path d="M15 12.5h4.5c1.7 0 1.7 3 0 3H15"/><path d="M15 15.5h3.8c1.6 0 1.6 2.8 0 2.8H15"/><path d="M14.5 18.3h2.8c1.5 0 1.5 2.7 0 2.7H9c-3.5 0-6.8-2.2-7-6.6V9.5"/><path d="M2 9.5c1.5-2.8 4.6-4.4 8.2-5.3l3.2-.9"/></svg>
@@ -657,7 +684,7 @@ pre.tty .ln{display:block}
         <a class="test" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/contracts/test/Letterlock.t.sol#L209">Letterlock.t.sol:209</a>
       </article>
     </div>
-    <p class="note-honest">Proven by the test suites and the testnet end-to-end run (<a href="https://github.com/edycutjong/letterlock/blob/main/apps/demo/e2e-results/testnet.json">e2e-results/testnet.json</a>). Nothing has reverted on mainnet, so there is no mainnet transaction to link for these.</p>
+    <p class="note-honest">Proven by the test suites and the testnet end-to-end run (<a href="https://github.com/edycutjong/letterlock/blob/v0.1.0/apps/demo/e2e-results/testnet.json">e2e-results/testnet.json</a>). Nothing has reverted on mainnet, so there is no mainnet transaction to link for these.</p>
   </section>
 
   <section class="sec" id="tracking" aria-labelledby="tr-h">
@@ -692,7 +719,7 @@ pre.tty .ln{display:block}
               <g clip-path="url(#ws-blob-clip)"><path class="crackLine" d="M113 -8L111 12L114 22L108 33L110 43L104 52L106 64L100 71L103 86L96 92L99 104L94 112L98 121L97 131L91 146L95 157L89 169L92 181L88 208" pathLength="1" fill="none" stroke="#7A1B15" stroke-width="2.4" stroke-linejoin="round"/></g>
             </svg>
           </span>
-          <div><time datetime="2026-09-27T05:49:58Z">05:49:58 UTC · no transaction</time><h3>Storage cleared, opened again</h3><p>The browser forgot everything; one passkey tap re-derived the key and the seal broke. Opening is local, so the record is the check's own: <code class="data">"storage cleared + reopen": opened</code>.</p><a class="tx" href="https://github.com/edycutjong/letterlock/blob/main/apps/demo/e2e-results/mainnet-live.json">e2e-results/mainnet-live.json</a></div>
+          <div><time datetime="2026-09-27T05:49:58Z">05:49:58 UTC · no transaction</time><h3>Storage cleared, opened again</h3><p>The browser forgot everything; one passkey tap re-derived the key and the seal broke. Opening is local, so the record is the check's own: <code class="data">"storage cleared + reopen": opened</code>.</p><a class="tx" href="https://github.com/edycutjong/letterlock/blob/v0.1.0/apps/demo/e2e-results/mainnet-live.json">e2e-results/mainnet-live.json</a></div>
         </li>
       </ol>
       <div>
@@ -715,7 +742,7 @@ pre.tty .ln{display:block}
       <article class="card w4">
         <svg class="ic" viewBox="0 0 44 44" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M22 7c-8 0-13.5 6-13.5 13.5 0 4 .8 7 2.2 9.6"/><path d="M15 31c-1.3-3-1.9-6.3-1.9-10 0-5 3.9-8.8 8.9-8.8s8.9 3.8 8.9 8.8c0 2.6-.3 5-.9 7.2"/><path d="M18.5 35.5c-.9-4.3-1.4-8.7-1.4-13.2 0-2.8 2.2-5 4.9-5s4.9 2.2 4.9 5c0 5.5-.9 10.6-2.8 15.3"/><path d="M22 22v5.5c0 3.7-.5 7.2-1.6 10.5"/><path d="M33.2 25.8l3.3 3.3m-1.6-1.6l2.2-2.2m-6.4 6.4a3.2 3.2 0 104.5-4.5 3.2 3.2 0 00-4.5 4.5z"/></svg>
         <h3>Derive</h3>
-        <p>Your passkey's PRF output, under Letterlock's own salt, becomes an X25519 key. Nothing is stored: the same passkey gives the same key on every device it syncs to.</p>
+        <p>Your passkey's PRF output, under Letterlock's own salt, becomes an X25519 key. Nothing is stored: by construction a synced copy of the passkey gives the same key. Verified in a browser with its storage cleared; Mac to iPad on real hardware is still pending (<a href="#faq">see Questions</a>).</p>
         <span class="chip">WebAuthn PRF · mera 0.2.0 · HKDF-SHA256</span>
       </article>
       <article class="card w2">
@@ -747,7 +774,7 @@ pre.tty .ln{display:block}
         <div class="txt">
           <svg class="ic" viewBox="0 0 44 44" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M33.5 16.5A13 13 0 1 0 35 26"/><path d="M36.5 10.5v6.5H30"/><path d="M22 15v7l4.5 3"/></svg>
           <h3>Open, <em>and rotate</em></h3>
-          <p>One passkey tap re-derives the key and opens the note on any synced device. <code class="data">rotate()</code> moves to epoch + 1 with a new salt, and every earlier epoch still re-derives, so old notes keep opening.</p>
+          <p>One passkey tap re-derives the key and opens the note, even after the browser's storage is cleared. <code class="data">rotate()</code> moves to epoch + 1 with a new salt, and every earlier epoch still re-derives, so old notes keep opening.</p>
           <span class="chip">openWithPasskey · rotate() · agent 10260 at epoch 2</span>
         </div>
         <div class="epochs" aria-hidden="true">
@@ -914,10 +941,21 @@ pre.tty .ln{display:block}
   // the terminal: tabs, and one replay of each run the first time it is shown
   const tabs = [...document.querySelectorAll('.tab')];
   const replay = (panel) => { if (reduce || panel.dataset.played) return; panel.dataset.played = '1'; const pre = panel.querySelector('pre'); pre.classList.remove('replay'); void pre.offsetWidth; pre.classList.add('replay'); };
+  // a table wider than its box says so in its caption (the shadow shows which side scrolls), and takes keyboard focus
+  // so the arrow keys can scroll it
+  const wide = () => document.querySelectorAll('.panel:not([hidden]) pre.table').forEach((pre) => {
+    const panel = pre.closest('.panel'), over = pre.scrollWidth > pre.clientWidth + 1;
+    panel.classList.toggle('wide', over);
+    if (over) { pre.tabIndex = 0; pre.setAttribute('role', 'region'); pre.setAttribute('aria-labelledby', panel.getAttribute('aria-labelledby')); }
+    else { pre.removeAttribute('tabindex'); pre.removeAttribute('role'); pre.removeAttribute('aria-labelledby'); }
+  });
+  addEventListener('resize', () => requestAnimationFrame(wide));
+  if (document.fonts) document.fonts.ready.then(wide);
   const select = (tab, focus) => {
     tabs.forEach((t) => { const on = t === tab; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; document.getElementById(t.getAttribute('aria-controls')).hidden = !on; });
     if (focus) tab.focus();
     replay(document.getElementById(tab.getAttribute('aria-controls')));
+    wide();
   };
   tabs.forEach((t, i) => {
     t.addEventListener('click', () => select(t));
@@ -957,7 +995,7 @@ pre.tty .ln{display:block}
       try {
         const h = await (await fetch(AGENT + '/health', { signal: AbortSignal.timeout(8000) })).json();
         const d = h.limits && h.limits.dailyDrops;
-        agent = h.ok && h.key ? `<span class="w1"> · agent 10260 ${h.key.matches ? 'holds the posted key' : 'holds a key that does not match the posted one'}${d ? `, ${esc(d.used)} of ${esc(d.allowedToday)} letters today` : ''}</span>` : '';
+        agent = h.ok && h.key ? `<span class="w1"> · agent 10260 ${h.key.matches ? 'holds the posted key' : 'holds a key that does not match the posted one'}${d ? `, ${esc(d.used)} of ${esc(d.allowedToday)} daily drops used` : ''}</span>` : '';
       } catch { agent = '<span class="w1"> · agent 10260 did not answer this page just now</span>'; }
       text.innerHTML = epoch > 0
         ? `<b>Live</b><span class="w2">, read by this page from Monad mainnet</span>: <code class="data">keyOfAgent(10260)</code> → epoch ${esc(epoch)}${kid ? ` · <span class="data">${esc(kid)}</span>` : ''}<span class="w3"> · block ${esc(block.toLocaleString('en-US'))} in ${esc(ms)} ms</span>${agent}`

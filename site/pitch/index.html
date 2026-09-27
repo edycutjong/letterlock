@@ -8,6 +8,21 @@
 <meta name="author" content="Edy Cu">
 <meta name="theme-color" content="#F3EEE3">
 <meta name="robots" content="noindex">
+<!-- Social card: the landing page's own (assets/og.png); bump ?v= on both pages whenever it changes. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Letterlock">
+<meta property="og:url" content="https://letterlock-site.vercel.app/pitch/">
+<meta property="og:title" content="Letterlock · pitch deck v0.1.0">
+<meta property="og:description" content="A passkey becomes an encryption address on Monad. Ten slides, every number from a mainnet receipt or a committed run.">
+<meta property="og:image" content="https://letterlock-site.vercel.app/assets/og.png?v=1">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Letterlock: an envelope addressed to agent:10260, epoch 2, under a red wax seal, beside the headline and two mainnet numbers.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Letterlock · pitch deck v0.1.0">
+<meta name="twitter:description" content="A passkey becomes an encryption address on Monad. Ten slides, every number from a mainnet receipt or a committed run.">
+<meta name="twitter:image" content="https://letterlock-site.vercel.app/assets/og.png?v=1">
+<meta name="twitter:image:alt" content="Letterlock: an envelope addressed to agent:10260, epoch 2, under a red wax seal, beside the headline and two mainnet numbers.">
 <link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +32,7 @@
   Keys: → / Space / PageDown next · ← / PageUp previous · Home / End · Esc overview · P presenter (notes) ·
   C contrast check (outlines every text block, for a projector test). Swipe on touch screens. #3 in the URL opens slide 3.
   Print to PDF: Cmd/Ctrl+P, landscape, margins none, background graphics on: one slide per 16 × 9 in page.
-  Images: ../assets/icon.svg, ../assets/screens/{home,open,register}.webp (the production app on Monad mainnet,
+  Images: ../assets/icon.svg, ../assets/screens/{home,open}.webp (the production app on Monad mainnet,
   27 Sep 2026). The QR code is drawn here from https://letterlock-app.vercel.app/judge.
   Inline scripts are allowed by hash in vercel.json's Content-Security-Policy: after editing one, put its new sha256 there.
 -->
@@ -204,6 +219,8 @@ body.presenter #notes{display:block}
 body.presenter.idle{cursor:none}
 .keys{position:fixed;left:14px;bottom:10px;z-index:15;margin:0;padding:3px 6px;border-radius:2px;background:color-mix(in srgb,var(--sheet) 90%,transparent);font:500 12px/1.4 var(--font-data);color:var(--ink-2)}
 body.presenter .keys{display:none}
+/* no keyboard on a touch screen: swiping is the hint */
+@media (hover:none),(pointer:coarse){.keys{display:none}}
 /* Press C to toggle contrast debug mode */
 body.debug-contrast .contrast-check{outline:2px dashed var(--before);outline-offset:4px}
 
@@ -551,7 +568,7 @@ agent:10260 has a key on Monad mainnet (143)
     <div class="zero contrast-check"><span class="n">0</span><h3>outside integrations, so far.</h3><p>The ask is next.</p></div>
   </div>
   <div class="foot"><span class="wm">Letter<em>lock</em></span><span>v0.1.0</span></div>
-  <aside class="speaker-notes">Everything is live and public, but no outside team has integrated yet, and I will not count our own test keys. The first integration is the goal for the rest of the hackathon.</aside>
+  <aside class="speaker-notes">Everything is live, but no outside team has integrated yet, and I will not count our own test keys. The first integration is the goal for the rest of the hackathon.</aside>
 </section>
 
 <section class="slide ask-slide" aria-label="The ask">
