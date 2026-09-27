@@ -112,9 +112,12 @@
   font-variant-numeric: lining-nums tabular-nums;
 }
 
+/* a 42-character address breaks anywhere, and its lines are balanced: without it the last line could hold 1 to 3
+   characters alone ('0x4ccacf…85fa3 / 0' at 430 px) */
 .full {
   font-size: 0.875rem;
-  overflow-wrap: anywhere;
+  word-break: break-all;
+  text-wrap: balance;
   color: var(--ink);
 }
 
