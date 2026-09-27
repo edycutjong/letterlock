@@ -28,7 +28,8 @@ sk             = HKDF-SHA256(ikm = prf, salt = "letterlock/v1",
 pk             = X25519(sk, 9)                                                published as bytes32
 fingerprint    = lower-case hex(SHA-256(pk)[0..8])                            16 hex digits
 ```
-An ERC-8004 agent's key (§8) comes from its owner's passkey with the agent id in both labels:
+An ERC-8004 agent's key (§8) comes from a PRF evaluated at the agent's own salt, with the agent id in both labels. The
+PRF is the owner's passkey's, or, for an agent hosted on a server, a seed's (below):
 ```
 agentSalt(id, epoch) = SHA-256("letterlock/hpke/v1/agent:" ‖ decimal(id) ‖ "/" ‖ decimal(epoch))    id ∈ [0, 2^256 − 2]
 prf                  = PRF(passkey, agentSalt(id, epoch))
@@ -38,15 +39,26 @@ sk                   = HKDF-SHA256(ikm = prf, salt = "letterlock/v1",
 - Letterlock's salt namespace is disjoint from mera's account salt `SHA-256("mera.prf.salt.v1")`: the
   encryption key and the passkey wallet key are unrelated.
 - An agent's key is unrelated to its owner's own key and to the owner's other agents' keys, so the agent's server
-  can hold its `sk` without being able to open anything sealed to the owner, and the owner's passkey re-derives it
-  on any device. An address label has only digits after the prefix and an agent label starts with `agent:`, so the
-  two never collide. The owner of an agent is public anyway (the registry's `ownerOf`, the publishing transaction):
-  distinct keys stop key sharing, not that link.
+  can hold its `sk` without being able to open anything sealed to the owner. A key from the owner's passkey is
+  re-derived by that passkey on any device. An address label has only digits after the prefix and an agent label
+  starts with `agent:`, so the two never collide. The owner of an agent is public anyway (the registry's `ownerOf`,
+  the publishing transaction): distinct keys stop key sharing, not that link.
 - Rotation is `epoch + 1`: a new salt gives an unrelated PRF output. Every earlier epoch stays re-derivable, so
   old envelopes keep opening.
 - Nothing secret is persisted by Letterlock. `openWithPasskey` zeroes its copy of `sk` after use (best effort:
   copies inside the crypto libraries and mera's PRF output are out of reach, and JS cannot guarantee erasure).
   `deriveFromPasskey` and `deriveForAgent` return `sk` to the caller, who owns wiping it.
+
+**Server-hosted agents.** An agent that runs on a server has no passkey. It MAY take `prf` from a 32-byte secret
+seed, through the computation a WebAuthn PRF performs over CTAP2 hmac-secret (WebAuthn Level 3 §10.1.4), and derive
+`sk` from it exactly as above, with the same salts and labels:
+```
+prf = HMAC-SHA256(seed, SHA-256("WebAuthn PRF" ‖ 0x00 ‖ agentSalt(id, epoch)))      seed: 32 secret random bytes
+```
+Such a key is recovered only from the seed: no passkey can re-derive it, the owner's included, and whoever holds the
+seed opens everything sealed to the agent at every epoch derived from it. The directory cannot tell the two kinds of
+agent key apart; the owner publishes either with `publishForAgent` (§8). The reference agent (`examples/agent-memory`,
+ERC-8004 agent #10260 from epoch 2 on) derives its keys this way.
 
 ## 3. Envelope
 ```json
@@ -231,7 +243,7 @@ directory `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before
 - `epoch` must be exactly the stored epoch + 1 (`EpochNotNext(current, given)`): the first key is epoch 1, and each
   rotation adds 1, as in §2. Reaching epoch n takes n publishes, so no single call can use up the epoch range.
 - An agent has one epoch sequence across owners. A new owner publishes `agentKeyRecord(agentId).epoch + 1`, derived
-  from its own passkey with the agent's salt (§2), never its own address key.
+  with the agent's salt (§2) from its own passkey or from the agent's seed, never its own address key.
 - `NO_AGENT = 2^256 − 1` marks "no agent": it is `KeyPublished.agentId` for an address key and `toAgent` in `drop`
   for an address recipient. Agent id 0 is a real ERC-8004 id, so the marker cannot be 0; `publishForAgent` rejects
   `NO_AGENT` (`AgentIdReserved`).
