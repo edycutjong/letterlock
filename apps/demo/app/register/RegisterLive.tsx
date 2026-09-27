@@ -1,7 +1,7 @@
 "use client";
 
 import type { ResolvedKey } from "letterlock";
-import { useCallback, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/Button";
 import { FailureNotice } from "@/components/FailureNotice";
 import { TextField } from "@/components/Field";
@@ -59,8 +59,12 @@ export const rowsFrom = (lines: KeyLine[], found?: string): RegisterRow[] => {
     });
 };
 
-/** Every KeyPublished event of the directory, newest first, read again every five seconds; and a live keyOf lookup. */
-export function RegisterLive() {
+/**
+ * Every KeyPublished event of the directory, newest first, read again every five seconds; and a live keyOf lookup.
+ * `initialQuery` is the page's ?q=: a link to a look-up, or the form sent the browser's way before this script ran (a
+ * Look up pressed while the page loads). The field shows it and the look-up runs, so neither is a silent reload.
+ */
+export function RegisterLive({ initialQuery }: { initialQuery?: string }) {
   const [scan, setScan] = useState<Scan>({ lines: [] });
   const scanRef = useRef(scan);
   scanRef.current = scan;
@@ -89,11 +93,10 @@ export function RegisterLive() {
   usePoll(read, POLL_MS);
 
   // ---- look up ----
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery ?? "");
   const [lookup, setLookup] = useState<{ status: "idle" | "reading" } | { status: "found"; key: ResolvedKey } | { status: "failed"; failure: Failure }>({ status: "idle" });
-  const onLookup = async (e: FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
+  const lookUp = useCallback(async (raw: string) => {
+    const q = raw.trim();
     if (!q) return;
     setLookup({ status: "reading" });
     try {
@@ -101,7 +104,14 @@ export function RegisterLive() {
     } catch (err) {
       setLookup({ status: "failed", failure: toFailure(err) });
     }
+  }, []);
+  const onLookup = (e: FormEvent) => {
+    e.preventDefault();
+    void lookUp(query);
   };
+  useEffect(() => {
+    if (initialQuery) void lookUp(initialQuery);
+  }, [initialQuery, lookUp]);
   const foundLine =
     lookup.status === "found"
       ? scan.lines.filter((l) => l.recipient === lookup.key.recipient && l.epoch === lookup.key.epoch).at(-1)
@@ -126,7 +136,7 @@ export function RegisterLive() {
   const age = scan.readAt === undefined ? undefined : Math.max(0, now - scan.readAt);
   return (
     <>
-      <form className={styles.lookup} role="search" aria-label="Look up an address" onSubmit={onLookup}>
+      <form className={styles.lookup} role="search" aria-label="Look up an address" action="/register" onSubmit={onLookup}>
         <TextField
           className={styles.lookupField}
           label="Look up"

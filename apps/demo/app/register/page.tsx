@@ -8,7 +8,8 @@ import styles from "./register.module.css";
 
 export const metadata: Metadata = { title: "The register" };
 
-export default function Register() {
+export default async function Register({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = (await searchParams).q;
   return (
     <main id="main" className="page">
       <PageHead
@@ -16,7 +17,7 @@ export default function Register() {
         lede="Every key posted to the directory. Anyone may read it: find an address, then seal to the key on its line. When someone rotates, their earlier line stays in the register, ruled through."
       />
 
-      <RegisterLive />
+      <RegisterLive initialQuery={typeof q === "string" && q.trim() ? q.trim().slice(0, 100) : undefined} />
 
       <aside className={styles.facts} aria-labelledby="facts-title">
         <h2 id="facts-title" className="label-caps">

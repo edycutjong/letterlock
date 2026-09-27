@@ -97,6 +97,14 @@ try {
       const found = await page.getByText("Found by keyOf").first().waitFor({ timeout: 20_000 }).then(() => true, () => false);
       if (!found) fail("/register: the keyOf lookup of the deployer found nothing");
       else pass(`/register: keyOf(${record.deployer.slice(0, 10)}…) found its key live`);
+      // the same look-up as a link, which is also where the form lands when Look up is pressed before the page is ready
+      const linked = await context.newPage();
+      await linked.goto(`${base}/register?q=${record.deployer}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      const shown = await linked.getByText("Found by keyOf").first().waitFor({ timeout: 30_000 }).then(() => true, () => false);
+      const kept = (await linked.getByRole("textbox", { name: "Look up" }).inputValue()) === record.deployer;
+      if (!shown || !kept) fail(`/register?q=${record.deployer}: ${!kept ? "the field is empty" : "no result"}, so a Look up pressed before the page is ready is a silent reload`);
+      else pass(`/register?q=${record.deployer.slice(0, 10)}…: the field holds the address and keyOf's answer is shown`);
+      await linked.close();
     }
     if (route === "/seal") {
       // a malformed recipient (a truncated paste) is named beside the field, not met with a silently disabled button
