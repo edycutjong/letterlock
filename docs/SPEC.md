@@ -163,8 +163,9 @@ recipient, epoch, directory or chain.
   Letterlock passkey: every encryption key (§2) and the passkey account's key (§7). The host must stay under the
   Letterlock owner's control for as long as keys derived under it are in use. `letterlock-app.vercel.app` is a
   Vercel project name, held only while that project exists; a domain the owner registers is sturdier. Since the SDK
-  pins the rpId, moving to another host takes a new release. On 2026-09-27 nothing was deployed there (HTTP 404,
-  `DEPLOYMENT_NOT_FOUND`), and the directory's keys so far are demo keys (§8).
+  pins the rpId, moving to another host takes a new release. Since 2026-09-27 that host serves the Letterlock app
+  (the Vercel project `letterlock-app`), where passkeys for the rpId are made; the directory's keys so far are demo
+  and test keys (§8).
 - **A compromised device during `open`** exposes that epoch's key. Rotate to recover forward secrecy for new
   notes.
 

@@ -62,9 +62,10 @@ describe.skipIf(!live)("names the docs point at (LIVE=1, read-only)", () => {
     expect(r.status, "the npm name letterlock is taken now: if the owner published it, restore npx in the README").toBe(404);
   });
 
-  it(`nothing is deployed at the pinned rpId's host (${LETTERLOCK_RP_ID}) yet, as the README says`, async () => {
+  it(`the pinned rpId's host (${LETTERLOCK_RP_ID}) serves the Letterlock app, as the README says`, async () => {
     const r = await fetch(`https://${LETTERLOCK_RP_ID}/`, { redirect: "manual" });
-    expect([r.status, r.headers.get("x-vercel-error")], "something is served at the rpId's host now: whose is it?").toEqual([404, "DEPLOYMENT_NOT_FOUND"]);
+    expect(r.status, "the rpId's host serves no page: the app is gone, and the name may be taken").toBe(200);
+    expect(await r.text(), "the page at the rpId's host does not name the mainnet directory: whose is it?").toContain(DEPLOYMENTS.monad.directory);
   });
 });
 
