@@ -1,4 +1,5 @@
-// What a result was measured against: the checked-out commit, and the last commit that changed the SDK's runtime code.
+// What a result was measured against: the checked-out commit, the last commit that changed the SDK's runtime code, and
+// whether the benchmark's own code was committed when it ran.
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,9 @@ export const ROOT = fileURLToPath(new URL("../../", import.meta.url));
  */
 export const SDK_RUNTIME_PATHS = ["packages/letterlock/src", "packages/letterlock/package.json"] as const;
 
+/** The benchmark's own code: what it times and how it reports it. */
+export const BENCH_PATHS = ["scripts/bench.ts", "scripts/lib"] as const;
+
 const git = (...args: string[]): string =>
   execFileSync("git", args, { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
 
@@ -20,6 +24,9 @@ export type GitContext = {
   readonly sdkCommitDate: string;
   /** Uncommitted changes under SDK_RUNTIME_PATHS when measured: the numbers then belong to no commit. */
   readonly sdkDirty: boolean;
+  /** The last commit that changed BENCH_PATHS, and whether they had uncommitted changes when the bench ran. */
+  readonly benchCommit: string;
+  readonly benchDirty: boolean;
 };
 
 /** Undefined outside a git checkout (a tarball of the repository). */
@@ -31,6 +38,8 @@ export const gitContext = (): GitContext | undefined => {
       sdkCommit: sdkCommit!,
       sdkCommitDate: sdkCommitDate!,
       sdkDirty: git("status", "--porcelain", "--", ...SDK_RUNTIME_PATHS) !== "",
+      benchCommit: git("log", "-1", "--format=%H", "--", ...BENCH_PATHS),
+      benchDirty: git("status", "--porcelain", "--", ...BENCH_PATHS) !== "",
     };
   } catch {
     return undefined;
