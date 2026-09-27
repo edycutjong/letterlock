@@ -12,7 +12,8 @@
     "spike:browser": "pnpm --filter prf-browser-spike test",
     "bench": "node scripts/bench.ts",
     "verify:offline": "node scripts/verify_offline.ts",
-    "fixtures": "node scripts/fixtures.ts"
+    "fixtures": "node scripts/fixtures.ts",
+    "seed": "node scripts/seed.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
