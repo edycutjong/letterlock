@@ -1,15 +1,22 @@
 # gitleaks (https://github.com/gitleaks/gitleaks): its default rules, plus one allowlist.
 #
-# deployments/*.json record the X25519 PUBLIC keys the deploy smoke tests published on Monad ("publishedKey"). They
-# are public by design (anyone reads them with keyOf / keyOfAgent), and the generic-api-key rule flags them only
-# because the field name contains "Key". The allowlist takes a line only when the whole line is that one JSON field,
-# so a private key, a token or a seed anywhere else, the same files included, still fails.
-#   gitleaks git --log-opts="--all" .      # every commit of every branch, messages and patches
+# deployments/<chain id>.json record the X25519 PUBLIC keys the deploy smoke tests published on Monad ("publishedKey").
+# They are public by design (anyone reads them with keyOf / keyOfAgent), and the generic-api-key rule flags them only
+# because the field name contains "Key". The allowlist takes a finding only when both hold: it is in one of those
+# files, and its whole line is that one JSON field. The same line in any other file, and a private key, a token or a
+# seed anywhere, those files included, still fails.
+#
+# `gitleaks git` reads the patches of the commits it is given, not their messages, and both go public with the
+# history. Scan each (pnpm readiness runs both when gitleaks is installed):
+#   gitleaks git --log-opts="--all" .                      # every patch of every commit on every branch
+#   git log --all --format=%B | gitleaks stdin             # every commit message
 
 [extend]
 useDefault = true
 
 [[allowlists]]
 description = "X25519 public keys published on chain, in the deployment records"
+condition = "AND"
+paths = ['''(^|/)deployments/[0-9]+\.json$''']
 regexTarget = "line"
 regexes = ['''^\s*"publishedKey": "0x[0-9a-f]{64}",?\s*$''']

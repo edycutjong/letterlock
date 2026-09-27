@@ -4,7 +4,9 @@
   pnpm readiness              python3 scripts/check_submission_readiness.py
   pnpm readiness --online     also fetch the live app, every external link in README.md and DEMO.md (outside code: a
                               URL in a command is not a link; a Cloudflare bot check counts as up), each video's
-                              oEmbed record, and the code of both directories over JSON-RPC
+                              oEmbed record, and the code of both directories over JSON-RPC; an explorer link to a
+                              transaction or an address is asked of the chain it names instead (the explorers sit
+                              behind a bot check, which answers the same for a hash that exists and one that does not)
 
 Checks (FAIL blocks a submission, WARN is worth a look):
   docs         README.md and DEMO.md exist and carry the links a judge needs: the live app (the SDK's rpId host), a
@@ -23,10 +25,12 @@ Checks (FAIL blocks a submission, WARN is worth a look):
   fixtures     fixtures/envelopes.json exists; a complete mainnet seed run is recorded: status "sent and read back", to
                the directory deployments/143.json names, with at least 5 drops (WARN until one is)
   license      LICENSE at the root
-  public repo  no CLAUDE.md, AGENTS.md or .claude/, no .env file, no private key or PEM block, and no name of a
+  public repo  no CLAUDE.md, AGENTS.md or .claude/, no private tool output (graphify-out/, .impeccable/,
+               brag-output/, PRODUCT.md, DESIGN.md), no .env file, no private key or PEM block, and no name of a
                private planning note (read from the folder next to the repository, never spelled out here), in the
-               published files AND in the git history, which goes public with them
-Standard library only.
+               published files AND in the git history, which goes public with them; and gitleaks, when installed,
+               over every commit's patch and every commit message (`gitleaks git` reads no message)
+Standard library only (gitleaks, when installed, is run as a program).
 """
 from __future__ import annotations
 
@@ -34,6 +38,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -142,22 +147,31 @@ def check_deployments(consts: dict[str, str]) -> dict[str, dict]:
     return records
 
 
+RPCS = {"143": "https://rpc.monad.xyz", "10143": "https://testnet-rpc.monad.xyz"}
+
+
 def rpc_call(url: str, method: str, params: list) -> object:
+    """One JSON-RPC call; a transport failure (a public RPC's rate limit, a timeout) is tried once more."""
     req = urllib.request.Request(url, data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
                                  headers={"content-type": "application/json", "user-agent": "letterlock-readiness"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        body = json.loads(r.read())
+    for attempt in (1, 2):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                body = json.loads(r.read())
+            break
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            if attempt == 2:
+                raise
     if "error" in body:
         raise RuntimeError(body["error"])
     return body["result"]
 
 
 def check_deployments_online(records: dict[str, dict]) -> None:
-    rpcs = {"143": "https://rpc.monad.xyz", "10143": "https://testnet-rpc.monad.xyz"}
     for chain_id, d in records.items():
         try:
-            code = rpc_call(rpcs[chain_id], "eth_getCode", [d["address"], "latest"])
-            receipt = rpc_call(rpcs[chain_id], "eth_getTransactionReceipt", [d["deployTx"]])
+            code = rpc_call(RPCS[chain_id], "eth_getCode", [d["address"], "latest"])
+            receipt = rpc_call(RPCS[chain_id], "eth_getTransactionReceipt", [d["deployTx"]])
             ok = isinstance(code, str) and len(code) > 2 and isinstance(receipt, dict) and receipt.get("status") == "0x1"
             record("deployments", "PASS" if ok else "FAIL", f"chain {chain_id}: code at {d['address']} (online)",
                    f"{(len(code) - 2) // 2} bytes of code, deploy receipt status {receipt.get('status') if isinstance(receipt, dict) else None}")
@@ -576,17 +590,76 @@ def check_docs(consts: dict[str, str], deployments: dict[str, dict], bench: dict
                    else (f"{checked} figure(s), each tied to an operation and a statistic{note}" if checked else f"no latency figure quoted{note}"))
 
     if online:
-        urls = sorted({u for t in texts.values() if t for u in external_links(t)} | ({app} if app else set()))
-        dead, challenged = [], []
-        for u in urls:
-            status = http_status(u, challenge_ok=True)
-            if status == BOT_CHECK:
-                challenged.append(u)
-            elif status is None or status >= 400:
-                dead.append(f"{u} ({status or 'no answer'})")
-        note = f"; {len(challenged)} behind a Cloudflare bot check, which a browser passes: {', '.join(challenged)}" if challenged else ""
-        record("docs", "FAIL" if dead else "PASS", "external links answer (online)",
-               ("dead: " + "; ".join(dead)) if dead else f"{len(urls)} links, all below HTTP 400{note}")
+        check_links_online([t for t in texts.values() if t], app)
+
+
+def check_links_online(texts: list[str], app: str | None, status_of=None, rpc=None) -> None:
+    """--online: each external link outside code answers below HTTP 400, except an explorer link to a transaction or an
+    address, which the chain it names must know: MonadVision and MonadScan answer a bot check, or a page, for any hash."""
+    status_of = status_of or (lambda u: http_status(u, challenge_ok=True))
+    urls = sorted({u for t in texts for u in external_links(t)} | ({app} if app else set()))
+    targets = {u: explorer_target(u) for u in urls}
+    web = [u for u in urls if targets[u] is None]
+    dead, challenged = [], []
+    for u in web:
+        status = status_of(u)
+        if status == BOT_CHECK:
+            challenged.append(u)
+        elif status is None or status >= 400:
+            dead.append(f"{u} ({status or 'no answer'})")
+    note = f"; {len(challenged)} behind a Cloudflare bot check, which a browser passes: {', '.join(challenged)}" if challenged else ""
+    record("docs", "FAIL" if dead else "PASS", "external links answer (online)",
+           ("dead: " + "; ".join(dead)) if dead else f"{len(web)} links, all below HTTP 400{note}")
+    onchain = [u for u in urls if targets[u] is not None]
+    if not onchain:
+        return
+    unknown = []
+    for u in onchain:
+        chain_id, kind, value = targets[u]
+        try:
+            why = onchain_problem(chain_id, kind, value, rpc)
+        except Exception as e:  # noqa: BLE001 - an RPC failure is reported, not raised
+            why = f"RPC failed: {e}"
+        if why:
+            unknown.append(f"{u} ({why})")
+    txs = sum(1 for u in onchain if targets[u][1] == "tx")
+    record("docs", "FAIL" if unknown else "PASS", "explorer links name what is on chain (online, JSON-RPC)",
+           ("not on chain: " + "; ".join(unknown)) if unknown
+           else f"{txs} transaction(s) with a status-1 receipt and {len(onchain) - txs} address(es) with code, a sent transaction or a balance")
+
+
+EXPLORER_LINK = re.compile(r"^https?://(?P<testnet>testnet\.)?(?:www\.)?(?:" + "|".join(re.escape(e) for e in EXPLORERS) +
+                           r")/(?P<kind>tx|address)/(?P<id>[^/?#]+)/?(?:[?#].*)?$", re.I)
+
+
+def explorer_target(url: str) -> tuple[str, str, str] | None:
+    """(chain id, "tx" or "address", the hash or address) for a MonadVision or MonadScan link, else None."""
+    m = EXPLORER_LINK.match(url)
+    return ("10143" if m.group("testnet") else "143", m.group("kind").lower(), m.group("id")) if m else None
+
+
+def onchain_problem(chain_id: str, kind: str, value: str, rpc=None) -> str | None:
+    """Why the chain does not know what an explorer link names, or None: a transaction must have a receipt with status 1,
+    an address must have code, have sent a transaction, or hold a balance."""
+    rpc = rpc or rpc_call
+    url = RPCS[chain_id]
+    network = "Monad testnet" if chain_id == "10143" else "Monad mainnet"
+    if kind == "tx":
+        if not re.fullmatch(r"0x[0-9a-fA-F]{64}", value):
+            return "not a transaction hash"
+        receipt = rpc(url, "eth_getTransactionReceipt", [value])
+        if not isinstance(receipt, dict):
+            return f"no such transaction on {network}"
+        return None if receipt.get("status") == "0x1" else f"reverted on {network} (status {receipt.get('status')})"
+    if not re.fullmatch(r"0x[0-9a-fA-F]{40}", value):
+        return "not an address"
+    if str(rpc(url, "eth_getCode", [value, "latest"]) or "0x") not in ("0x", "0x0"):
+        return None
+    if int(str(rpc(url, "eth_getTransactionCount", [value, "latest"])), 16) > 0:
+        return None
+    if int(str(rpc(url, "eth_getBalance", [value, "latest"])), 16) > 0:
+        return None
+    return f"no code, no transaction sent and no balance on {network}"
 
 
 def external_links(md: str) -> list[str]:
@@ -758,6 +831,11 @@ def check_fixtures(deployments: dict[str, dict] | None = None) -> None:
 
 # ---------------------------------------------------------------------------------------------------------- public repo
 KEY_RX = re.compile(r"(PRIVATE_KEY|SECRET_KEY|MNEMONIC)\s*[:=]\s*[\"']?(0x)?[0-9a-fA-F]{64}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----")
+AGENT_FILE = re.compile(r"(^|/)(CLAUDE|AGENTS)\.md$|(^|/)\.claude/")
+# What private tools write in the folder they run in (a knowledge graph of the code, design and product notes, launch
+# clips). .gitignore ignores them; a forced add, or a commit made before they were ignored, still fails here.
+TOOL_OUTPUT = re.compile(r"(^|/)(graphify-out|\.impeccable|brag-output)/|(^|/)(PRODUCT|DESIGN)\.md$")
+TOOL_OUTPUT_NAMES = "graphify-out/, .impeccable/, brag-output/, PRODUCT.md, DESIGN.md"
 
 
 def planning_patterns() -> tuple[list[str], list[re.Pattern]]:
@@ -797,9 +875,30 @@ def history_hits(pats: list[re.Pattern]) -> tuple[dict[str, set[int]], list[str]
     return names, keys, commits
 
 
+def history_paths() -> dict[str, set[str]]:
+    """Every path each commit adds, changes or removes, on every branch ({commit: paths}); renames as a removal and an
+    addition, and merges against each parent."""
+    out = git("log", "--all", "-m", "--no-renames", "--name-only", "--format=%x1e%h", "--abbrev=7")
+    paths: dict[str, set[str]] = {}
+    for rec in out.split("\x1e"):  # git() strips the output, and str.strip() takes a leading \x1e as whitespace
+        commit, _, rest = rec.strip("\n").partition("\n")
+        if commit.strip():
+            paths.setdefault(commit.strip(), set()).update(line.strip() for line in rest.split("\n") if line.strip())
+    return paths
+
+
 def check_public(files: list[str]) -> None:
-    agent_files = [f for f in files if re.search(r"(^|/)(CLAUDE|AGENTS)\.md$", f) or re.search(r"(^|/)\.claude/", f)]
+    agent_files = [f for f in files if AGENT_FILE.search(f)]
     record("public repo", "FAIL" if agent_files else "PASS", "no CLAUDE.md, AGENTS.md or .claude/", ", ".join(agent_files) or "none")
+    tool_files = [f for f in files if TOOL_OUTPUT.search(f)]
+    record("public repo", "FAIL" if tool_files else "PASS", f"no private tool output ({TOOL_OUTPUT_NAMES})",
+           ", ".join(tool_files[:10]) + (f" ... {len(tool_files) - 10} more" if len(tool_files) > 10 else "") if tool_files else "none")
+    touched = history_paths()
+    private = {c: sorted(p for p in ps if AGENT_FILE.search(p) or TOOL_OUTPUT.search(p)) for c, ps in touched.items()}
+    private = {c: ps for c, ps in private.items() if ps}
+    record("public repo", "FAIL" if private else "PASS", "no agent file or private tool output in the git history",
+           ("; ".join(f"{c}: {', '.join(ps[:3])}" for c, ps in sorted(private.items())[:8]) + ". Rewrite those commits before the repository goes public")
+           if private else f"{len(touched)} commits, every path they add, change or remove")
     env_files = [f for f in files if re.search(r"(^|/)\.env($|\.)", f) and not f.endswith(".example")]
     record("public repo", "FAIL" if env_files else "PASS", "no .env file", ", ".join(env_files) or "none")
     keys = []
@@ -836,6 +935,59 @@ def check_public(files: list[str]) -> None:
            ("added or removed in " + ", ".join(key_commits)) if key_commits else f"{commits} commits scanned, messages and patches (git log --all -p)")
 
 
+def commit_messages() -> list[tuple[str, str]]:
+    """(abbreviated hash, message) for every commit on every branch."""
+    out = git("log", "--all", "--format=%h%x00%B%x1e", "--abbrev=7")
+    pairs = []
+    for rec in out.split("\x1e"):
+        commit, sep, message = rec.lstrip("\n").partition("\0")
+        if sep:
+            pairs.append((commit.strip(), message.rstrip("\n")))
+    return pairs
+
+
+GITLEAKS_TITLE = "gitleaks: no secret in any commit's patch or message"
+
+
+def check_gitleaks(run=subprocess.run, which=shutil.which) -> None:
+    """gitleaks, with its default rules and .gitleaks.toml, over every commit's patch (`gitleaks git --log-opts=--all`)
+    and every commit message (`gitleaks stdin`: `gitleaks git` reads no message). Findings name a rule and a place, never
+    the secret (--redact). A WARN when gitleaks is not installed."""
+    exe = which("gitleaks")
+    if not exe:
+        record("public repo", "WARN", GITLEAKS_TITLE, "gitleaks is not installed, so only the checks above ran: install it "
+               "(https://github.com/gitleaks/gitleaks) and run pnpm readiness again before the repository goes public")
+        return
+    config = ["-c", str(ROOT / ".gitleaks.toml")] if (ROOT / ".gitleaks.toml").is_file() else []
+    opts = ["--no-banner", "--redact", "--exit-code", "0", "--report-format", "json", "--report-path", "-", *config]
+    messages = commit_messages()
+    lines, owner = [], []  # owner[i]: the commit whose message holds line i + 1 of gitleaks' input
+    for commit, message in messages:
+        body = message.split("\n")
+        lines.extend(body)
+        owner.extend([commit] * len(body))
+    found = []
+    try:
+        patches = run([exe, "git", "--log-opts=--all", *opts, "."], cwd=ROOT, capture_output=True, text=True)
+        texts = run([exe, "stdin", *opts], cwd=ROOT, input="\n".join(lines) + "\n", capture_output=True, text=True)
+        for what, proc in (("patches", patches), ("messages", texts)):
+            if proc.returncode != 0:
+                tail = (proc.stderr or "").strip().splitlines()[-1:] or ["no output"]
+                raise RuntimeError(f"on the {what}, it exited {proc.returncode}: {tail[0][:200]}")
+        for f in json.loads(patches.stdout or "[]"):
+            found.append(f"{f.get('RuleID')} in {str(f.get('Commit'))[:7]}:{f.get('File')}:{f.get('StartLine')}")
+        for f in json.loads(texts.stdout or "[]"):
+            line = int(f.get("StartLine") or 0)
+            found.append(f"{f.get('RuleID')} in {owner[line - 1] if 0 < line <= len(owner) else 'a commit'}'s message")
+    except (OSError, RuntimeError, ValueError) as e:
+        record("public repo", "FAIL", GITLEAKS_TITLE, f"gitleaks did not finish: {e}")
+        return
+    record("public repo", "FAIL" if found else "PASS", GITLEAKS_TITLE,
+           ("; ".join(found[:10]) + (f" ... {len(found) - 10} more" if len(found) > 10 else "") + " (redacted: gitleaks git --log-opts=--all . "
+            "and git log --all --format=%B | gitleaks stdin show them)") if found
+           else f"{len(messages)} commits: every patch (gitleaks git --log-opts=--all) and every message (gitleaks stdin), with .gitleaks.toml")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--online", action="store_true", help="also fetch the live app, the docs' external links, each video's oEmbed record and both directories' code")
@@ -852,6 +1004,7 @@ def main() -> int:
     check_placeholders(files)
     check_fixtures(deployments)
     check_public(files)
+    check_gitleaks()
 
     head = git("rev-parse", "--short", "HEAD") or "?"
     dirty = " with uncommitted changes" if git("status", "--porcelain") else ""

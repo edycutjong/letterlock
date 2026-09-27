@@ -7,3 +7,14 @@ dist/
 coverage/
 .DS_Store
 spikes/*/spike-result.json
+
+# Private tool output, never published (pnpm readiness fails when any of it is tracked, now or in the history):
+# agent instructions, a knowledge graph of the code, design and product notes, launch clips
+CLAUDE.md
+AGENTS.md
+.claude/
+graphify-out/
+.impeccable/
+brag-output/
+PRODUCT.md
+DESIGN.md

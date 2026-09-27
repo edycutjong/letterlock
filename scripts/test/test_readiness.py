@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -219,6 +220,89 @@ class OnlineLinks(unittest.TestCase):
         self.assertEqual(asked, [("https://badges.test/badge/%F0%9F%9A%80_Live-App-2F5D9E", "HEAD")])
 
 
+class ExplorerLinks(unittest.TestCase):
+    """--online: an explorer link to a transaction or an address is asked of the chain it names, never over HTTP (the
+    explorers answer a bot check, or a page, for a hash that does not exist)."""
+
+    TX = "0x" + "9766a31c" * 8
+    TYPO = "0x" + "abab" * 16
+    DIRECTORY = "0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e"
+    NOBODY = "0x" + "12" * 20
+    TITLE = "explorer links name what is on chain (online, JSON-RPC)"
+
+    def setUp(self):
+        R.results.clear()
+        self.addCleanup(R.results.clear)
+
+    def chain(self, known_txs=(), reverted=(), contracts=(), senders=(), funded=()):
+        """A stand-in for JSON-RPC: records (url, method, first param) and answers from the sets given."""
+        asked = []
+
+        def rpc(url, method, params):
+            asked.append((url, method, params[0]))
+            v = params[0].lower()
+            if method == "eth_getTransactionReceipt":
+                return {"status": "0x0" if v in reverted else "0x1"} if v in known_txs or v in reverted else None
+            if method == "eth_getCode":
+                return "0x6080" if v in contracts else "0x"
+            if method == "eth_getTransactionCount":
+                return "0x3" if v in senders else "0x0"
+            if method == "eth_getBalance":
+                return "0x1" if v in funded else "0x0"
+            raise AssertionError(method)
+        return rpc, asked
+
+    def found(self):
+        rows = [(st, d) for _, st, t, d in R.results if t == self.TITLE]
+        self.assertEqual(len(rows), 1, R.results)
+        return rows[0]
+
+    def test_explorer_links_name_a_chain_a_kind_and_a_value(self):
+        self.assertEqual(R.explorer_target(f"https://monadvision.com/tx/{self.TX}"), ("143", "tx", self.TX))
+        self.assertEqual(R.explorer_target(f"https://testnet.monadvision.com/address/{self.DIRECTORY}"), ("10143", "address", self.DIRECTORY))
+        self.assertEqual(R.explorer_target(f"https://monadscan.com/address/{self.DIRECTORY}/"), ("143", "address", self.DIRECTORY))
+        for other in ("https://monadvision.com/token/0x1", "https://notmonadvision.com/tx/0x1", "https://letterlock-app.vercel.app/open"):
+            self.assertIsNone(R.explorer_target(other))
+
+    def test_a_mistyped_transaction_or_an_unused_address_fails_and_http_is_never_asked(self):
+        md = (f"[deploy](https://monadvision.com/tx/{self.TX}), [typo](https://monadvision.com/tx/{self.TYPO}), "
+              f"[directory](https://monadvision.com/address/{self.DIRECTORY}), [nobody](https://monadvision.com/address/{self.NOBODY}), "
+              f"[short](https://monadvision.com/tx/{self.TX[:-2]}) and [the app](https://app.test/)")
+        rpc, asked = self.chain(known_txs={self.TX}, contracts={self.DIRECTORY.lower()})
+        web = []
+        R.check_links_online([md], None, status_of=lambda u: web.append(u) or 200, rpc=rpc)
+        self.assertEqual(web, ["https://app.test/"])
+        status, detail = self.found()
+        self.assertEqual(status, "FAIL")
+        self.assertIn(f"tx/{self.TYPO} (no such transaction on Monad mainnet)", detail)
+        self.assertIn(f"address/{self.NOBODY} (no code, no transaction sent and no balance on Monad mainnet)", detail)
+        self.assertIn("(not a transaction hash)", detail)
+        self.assertNotIn(f"tx/{self.TX} ", detail)
+        self.assertEqual({u for u, _, _ in asked}, {"https://rpc.monad.xyz"})
+
+    def test_known_transactions_and_used_addresses_pass_on_the_chain_they_name(self):
+        wallet, funded = "0x" + "de" * 20, "0x" + "ce" * 20
+        md = (f"[a](https://testnet.monadvision.com/tx/{self.TX}) [b](https://monadvision.com/address/{wallet}) "
+              f"[c](https://monadvision.com/address/{funded}) [d](https://monadvision.com/address/{self.DIRECTORY})")
+        rpc, asked = self.chain(known_txs={self.TX}, senders={wallet}, funded={funded}, contracts={self.DIRECTORY.lower()})
+        R.check_links_online([md], None, status_of=lambda u: 200, rpc=rpc)
+        self.assertEqual(self.found(), ("PASS", "1 transaction(s) with a status-1 receipt and 3 address(es) with code, a sent transaction or a balance"))
+        self.assertIn(("https://testnet-rpc.monad.xyz", "eth_getTransactionReceipt", self.TX), asked)
+
+    def test_a_reverted_transaction_or_a_failed_rpc_fails(self):
+        md = f"[a](https://monadvision.com/tx/{self.TX})"
+        rpc, _ = self.chain(reverted={self.TX})
+        R.check_links_online([md], None, status_of=lambda u: 200, rpc=rpc)
+        self.assertIn("reverted on Monad mainnet (status 0x0)", self.found()[1])
+        R.results.clear()
+
+        def down(url, method, params):
+            raise OSError("connection refused")
+        R.check_links_online([md], None, status_of=lambda u: 200, rpc=down)
+        status, detail = self.found()
+        self.assertEqual((status, "RPC failed: connection refused" in detail), ("FAIL", True))
+
+
 class Placeholders(unittest.TestCase):
     def test_planted_placeholders_are_found(self):
         readme = "\n".join([f"Agent card owner: {XS} (fill in)", f"Mainnet support {SOON}.", f"Write to {SLOT}.", f"See {EXAMPLE}.", f"{MARK}: the video"])
@@ -335,6 +419,134 @@ class History(TempRepo):
         R.check_public(R.publishable_files())
         self.assertEqual(self.found("no private planning-note name in the git history")[0], "PASS")
         self.assertEqual(self.found("no private key or PEM block in the git history")[0], "PASS")
+
+
+class PrivateToolOutput(TempRepo):
+    TITLE_FILES = "no private tool output (graphify-out/, .impeccable/, brag-output/, PRODUCT.md, DESIGN.md)"
+    TITLE_HISTORY = "no agent file or private tool output in the git history"
+
+    def test_tool_output_fails_in_the_files_and_stays_in_the_history(self):
+        self.commit("README.md", "clean\n")
+        self.commit("graphify-out/graph.json", "{}\n")
+        self.commit("apps/demo/PRODUCT.md", "users\n")
+        R.check_public(R.publishable_files())
+        self.assertEqual(self.found(self.TITLE_FILES), ("FAIL", "apps/demo/PRODUCT.md, graphify-out/graph.json"))
+        R.results.clear()
+        self.commit("graphify-out/graph.json", None)
+        self.commit("apps/demo/PRODUCT.md", None)
+        R.check_public(R.publishable_files())
+        self.assertEqual(self.found(self.TITLE_FILES), ("PASS", "none"))
+        status, detail = self.found(self.TITLE_HISTORY)
+        self.assertEqual(status, "FAIL")
+        # each path twice: in the commit that added it and in the one that removed it
+        self.assertEqual((detail.count("graphify-out/graph.json"), detail.count("apps/demo/PRODUCT.md")), (2, 2))
+
+    def test_an_agent_file_in_the_first_commit_is_in_the_history(self):
+        self.commit("CLAUDE.md", "notes\n")
+        self.commit("CLAUDE.md", None)
+        R.check_public(R.publishable_files())
+        self.assertEqual(self.found("no CLAUDE.md, AGENTS.md or .claude/")[0], "PASS")
+        status, detail = self.found(self.TITLE_HISTORY)
+        self.assertEqual((status, detail.count("CLAUDE.md")), ("FAIL", 2))
+
+    def test_a_clean_history_passes_with_every_commit_counted(self):
+        self.commit("README.md", "clean\n")
+        self.commit("docs/design-notes.txt", "a design note is not DESIGN.md\n")
+        R.check_public(R.publishable_files())
+        self.assertEqual(self.found(self.TITLE_HISTORY), ("PASS", "2 commits, every path they add, change or remove"))
+
+    def test_the_repository_ignores_private_tool_output(self):
+        repo = HERE.parent.parent
+        paths = ["graphify-out/graph.json", "apps/demo/graphify-out/GRAPH_REPORT.md", ".impeccable/state.json", "brag-output/clip.mp4",
+                 "PRODUCT.md", "apps/demo/DESIGN.md", "CLAUDE.md", "packages/letterlock/AGENTS.md", ".claude/settings.json"]
+        out = subprocess.run(["git", "check-ignore", "--no-index", *paths], cwd=repo, capture_output=True, text=True).stdout.split()
+        self.assertEqual(sorted(out), sorted(paths))
+
+
+class Gitleaks(TempRepo):
+    """check_gitleaks with a stand-in for the gitleaks program: what it is asked, and how its report is read."""
+
+    def fake(self, patches=(), messages=(), code=0, stderr=""):
+        calls = []
+
+        def run(args, cwd=None, input=None, capture_output=True, text=True):
+            calls.append((args, input))
+            report = patches if args[1] == "git" else messages
+            return subprocess.CompletedProcess(args, code, json.dumps(list(report)) if code == 0 else "", stderr)
+        return run, calls
+
+    def check(self, run):
+        R.check_gitleaks(run=run, which=lambda name: "/usr/local/bin/" + name)
+        return self.found(R.GITLEAKS_TITLE)
+
+    def test_not_installed_is_a_warning(self):
+        R.check_gitleaks(run=None, which=lambda name: None)
+        status, detail = self.found(R.GITLEAKS_TITLE)
+        self.assertEqual(status, "WARN")
+        self.assertIn("not installed", detail)
+
+    def test_every_commit_message_is_scanned_and_a_finding_names_its_commit(self):
+        self.commit("README.md", "one\n")
+        self.git("commit", "-q", "--allow-empty", "-m", "subject\n\nbody line one\nbody line two")
+        self.commit("docs/a.md", "two\n")
+        messages = R.commit_messages()
+        self.assertEqual([m for _, m in messages], ["change docs/a.md", "subject\n\nbody line one\nbody line two", "change README.md"])
+        # gitleaks reads the messages newest first, line by line: its line 5 is the second commit's "body line two"
+        run, calls = self.fake(messages=[{"RuleID": "github-pat", "StartLine": 5, "Secret": "REDACTED"}])
+        status, detail = self.check(run)
+        self.assertEqual(status, "FAIL")
+        self.assertIn(f"github-pat in {messages[1][0]}'s message", detail)
+        stdin = [inp for args, inp in calls if args[1] == "stdin"]
+        self.assertEqual(stdin, ["change docs/a.md\nsubject\n\nbody line one\nbody line two\nchange README.md\n"])
+
+    def test_a_patch_finding_names_commit_file_and_line_and_never_the_secret(self):
+        self.commit("README.md", "one\n")
+        finding = {"RuleID": "generic-api-key", "Commit": "bc4ab8f7d9c2", "File": "docs/notes.json", "StartLine": 3,
+                   "Secret": "0xsecretvalue", "Match": "publishedKey: 0xsecretvalue"}
+        run, calls = self.fake(patches=[finding])
+        status, detail = self.check(run)
+        self.assertEqual(status, "FAIL")
+        self.assertIn("generic-api-key in bc4ab8f:docs/notes.json:3", detail)
+        self.assertNotIn("secretvalue", detail)
+        self.assertEqual([args[:3] for args, _ in calls],
+                         [["/usr/local/bin/gitleaks", "git", "--log-opts=--all"], ["/usr/local/bin/gitleaks", "stdin", "--no-banner"]])
+        for args, _ in calls:
+            self.assertIn("--redact", args)
+
+    def test_a_clean_run_passes_and_a_run_that_fails_is_no_pass(self):
+        self.commit("README.md", "one\n")
+        run, _ = self.fake()
+        self.assertEqual(self.check(run), ("PASS", "1 commits: every patch (gitleaks git --log-opts=--all) and every message (gitleaks stdin), with .gitleaks.toml"))
+        R.results.clear()
+        run, _ = self.fake(code=1, stderr="FTL unable to load gitleaks config\n")
+        status, detail = self.check(run)
+        self.assertEqual(status, "FAIL")
+        self.assertIn("gitleaks did not finish: on the patches, it exited 1: FTL unable to load gitleaks config", detail)
+
+
+class GitleaksConfig(unittest.TestCase):
+    """.gitleaks.toml keeps the default rules, and its one allowlist takes a finding only in a deployment record AND on a
+    line that is exactly the publishedKey field, so the same line in any other file still fails."""
+
+    def test_the_allowlist_is_scoped_to_the_deployment_records(self):
+        text = (HERE.parent.parent / ".gitleaks.toml").read_text()
+        self.assertRegex(text, r"(?m)^\[extend\]\nuseDefault = true$")
+        blocks = text.split("[[allowlists]]")[1:]
+        self.assertEqual(len(blocks), 1)
+        block = blocks[0]
+        self.assertRegex(block, r'(?m)^condition = "AND"$')
+        self.assertRegex(block, r'(?m)^regexTarget = "line"$')
+        paths = re.findall(r"(?m)^paths = \['''(.+)'''\]$", block)
+        regexes = re.findall(r"(?m)^regexes = \['''(.+)'''\]$", block)
+        self.assertEqual((len(paths), len(regexes)), (1, 1))
+        path, line = re.compile(paths[0]), re.compile(regexes[0])
+        for record_file in ("deployments/143.json", "deployments/10143.json"):
+            self.assertTrue(path.search(record_file), record_file)
+        for other in ("docs/notes.json", "deployments/143.json.bak", "apps/demo/deployments.json", "README.md"):
+            self.assertFalse(path.search(other), other)
+        self.assertTrue(line.search('    "publishedKey": "0x' + "ab" * 32 + '",'))
+        self.assertFalse(line.search('    "privateKey": "0x' + "ab" * 32 + '",'))
+        self.assertFalse(line.search('    "publishedKey": "0x' + "ab" * 32 + '", "seed": "0x' + "cd" * 32 + '"'))
 
 
 class SeedRecord(TempRepo):
