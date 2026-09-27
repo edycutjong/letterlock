@@ -11,7 +11,8 @@ import { tokenValue } from "@/lib/tokens.ts";
 
 // Display: engraved-stationery Didone with a true italic for address lines; its optical-size axis keeps the
 // hairlines sturdy at 15 px and fine at 60 px. Body: a plain civil-service sans, like postal forms. Data: mono, for
-// fingerprints, hashes and envelope JSON only.
+// fingerprints, hashes and envelope JSON only. Each family ships only the styles and weights the pages are set in:
+// every one is preloaded on every page (scripts/checks/font-preloads.mjs).
 const display = Bodoni_Moda({
   subsets: ["latin"],
   style: ["normal", "italic"],
@@ -22,14 +23,14 @@ const display = Bodoni_Moda({
 
 const body = Public_Sans({
   subsets: ["latin"],
-  style: ["normal", "italic"],
+  style: ["normal"],
   display: "swap",
   variable: "--nf-body",
 });
 
 const data = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400"],
   display: "swap",
   variable: "--nf-data",
 });
