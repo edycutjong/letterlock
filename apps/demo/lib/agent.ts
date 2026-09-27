@@ -19,16 +19,42 @@ export type AgentDrop = {
   readonly explorer?: string;
 };
 
+/**
+ * True only when it is known that no letter went out: the page never asked, or the agent refused the request (a 4xx:
+ * its checks run before it seals anything), or its own message says nothing was sent (its reserve, its switch, an RPC
+ * that failed before it signed). Anything else (a 500 that "knows nothing more", a 502 the SDK's drop raised after it
+ * broadcast, an answer the page could not read) leaves it open.
+ */
+export const knownNotSent = (code: string, message: string, status: number | undefined): boolean =>
+  code === "NO_AGENT" || (status !== undefined && status >= 400 && status < 500) || /\bnothing was sent\b/i.test(message);
+
 export class AgentError extends Error {
   readonly code: string;
   readonly status?: number;
+  /** knownNotSent(): false means it is not known whether a letter went out */
+  readonly nothingSent: boolean;
   constructor(code: string, message: string, status?: number) {
     super(message);
     this.name = "AgentError";
     this.code = code;
     this.status = status;
+    this.nothingSent = knownNotSent(code, message, status);
   }
 }
+
+/**
+ * What /judge shows for a failed request: "Nothing was sent" only when that is known (AgentError.nothingSent), and
+ * otherwise that it is not known, with where to look before asking again, so a judge does not spend a second drop on
+ * a letter that did go out.
+ */
+export const agentFailureCopy = (e: AgentError): { readonly title: string; readonly message: string } => {
+  const said = `${e.message} (${e.code}).`;
+  if (e.nothingSent) return { title: "The agent did not deliver", message: /\bnothing was sent\b/i.test(e.message) ? said : `${said} Nothing was sent.` };
+  return {
+    title: "The agent did not confirm a delivery",
+    message: `${said} Whether a letter went out is not known: step 3 counts the letters in your inbox, so look there before you ask again.`,
+  };
+};
 
 /** The firewall's limit on POST requests per network (examples/agent-memory, vercel-firewall.json). */
 export const AGENT_POSTS_PER_WINDOW = 5;

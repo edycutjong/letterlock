@@ -11,7 +11,7 @@ import { Steps, type StepItem } from "@/components/Steps";
 import { TxLink } from "@/components/TxLink";
 import { createAddress, postMyKey, type StepName, type StepReport } from "@/lib/actions.ts";
 import { AGENT_URL, LETTERLOCK_RP_ID, SCAN_RANGE } from "@/lib/chain.ts";
-import { AGENT_TEXT_MAX, AgentError, askAgent, type AgentDrop } from "@/lib/agent.ts";
+import { AGENT_TEXT_MAX, AgentError, agentFailureCopy, askAgent, type AgentDrop } from "@/lib/agent.ts";
 import { scanClient, useOrigin, usePasskeyHost } from "@/lib/client.ts";
 import { DIRECTORY } from "@/lib/deployment.ts";
 import { toFailure, type Failure } from "@/lib/failure.ts";
@@ -105,11 +105,8 @@ export function JudgeRoute() {
     try {
       setDrop(await askAgent(address, text));
     } catch (e) {
-      setAgentFailure(
-        e instanceof AgentError
-          ? { kind: "message", title: "The agent did not deliver", message: `${e.message} (${e.code}). Nothing was sent.` }
-          : toFailure(e),
-      );
+      // the copy says no letter left only when that is known; otherwise the inbox below says whether one came
+      setAgentFailure(e instanceof AgentError ? { kind: "message", ...agentFailureCopy(e) } : toFailure(e));
     } finally {
       setAsking(false);
     }

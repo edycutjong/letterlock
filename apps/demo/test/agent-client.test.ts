@@ -13,7 +13,7 @@ registerHooks({
       : nextLoad(url, context),
 });
 process.env.NEXT_PUBLIC_LETTERLOCK_AGENT_URL = "https://agent.example";
-const { askAgent, AgentError } = await import("../lib/agent.ts");
+const { askAgent, AgentError, agentFailureCopy } = await import("../lib/agent.ts");
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -74,4 +74,74 @@ test("the agent's own 429, which carries CORS, is read as it is", async () => {
   const e = await failure();
   assert.equal(e.code, "RATE_LIMITED");
   assert.equal(e.status, 429);
+});
+
+// ---- what /judge says after a failed request: "Nothing was sent" only when that is known ------------------------------
+// A judge told "nothing was sent" asks again, and a second drop leaves the agent's wallet. The agent's own answers
+// (examples/agent-memory, src/app.ts) say "nothing was sent" where it knows; a 4xx is a request it refused before sealing.
+
+const answering = (status: number, body: unknown) => {
+  globalThis.fetch = (async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as typeof fetch;
+};
+
+const saysNotSent = (copy: { message: string }) => {
+  assert.match(copy.message, /nothing was sent/i);
+  assert.equal(copy.message.match(/nothing was sent/gi)?.length, 1, `said once: ${copy.message}`);
+  assert.doesNotMatch(copy.message, /not known/);
+};
+const saysUnknown = (copy: { title: string; message: string }) => {
+  assert.doesNotMatch(`${copy.title} ${copy.message}`, /nothing was sent|did not deliver/i);
+  assert.match(copy.message, /Whether a letter went out is not known/);
+  assert.match(copy.message, /step 3 counts the letters in your inbox/);
+};
+
+test("an agent that fails after it may have sent is never reported as having sent nothing", async () => {
+  for (const [status, code, message] of [
+    [500, "INTERNAL", "the agent failed unexpectedly; nothing more is known"],
+    [502, "CHAIN_UNAVAILABLE", "the RPC did not answer while the drop's receipt was awaited"],
+    [503, "MISCONFIGURED", "LETTERLOCK_AGENT_KEY_SEED is not set"],
+  ] as const) {
+    answering(status, { error: { code, message } });
+    const e = await failure();
+    assert.equal(e.nothingSent, false, code);
+    saysUnknown(agentFailureCopy(e));
+  }
+  // an answer of 200 without a transaction
+  answering(200, { ok: true });
+  saysUnknown(agentFailureCopy(await failure()));
+});
+
+test("an answer the page could not read leaves it open whether a letter went out", async () => {
+  for (const health of ["up", "down"] as const) {
+    postHidden(health);
+    const e = await failure();
+    assert.equal(e.nothingSent, false, e.code);
+    saysUnknown(agentFailureCopy(e));
+  }
+});
+
+test("a refusal (a 4xx), and the agent's own 'nothing was sent', say so, once", async () => {
+  for (const [status, code, message] of [
+    [429, "RATE_LIMITED", "drops: at most 3 per 3600 s from one address in this server instance; try again in 60 s"],
+    [429, "DAILY_CAP", "the agent has sent 150 of the 150 drops it allows itself today; nothing was sent"],
+    [400, "TEXT_TOO_LONG", '"text" is 1001 characters; the agent seals at most 1000'],
+    [422, "NO_KEY_PUBLISHED", "no key is published for 0x0000000000000000000000000000000000000001; nothing was sent"],
+    [503, "GAS_RESERVE", "the agent's wallet is down to its reserve (0.05 MON, keeps 0.05 MON); nothing was sent"],
+    [502, "CHAIN_UNAVAILABLE", "the RPC did not answer eth_getBalance or eth_gasPrice; nothing was sent"],
+    [503, "AGENT_DISABLED", "the agent is switched off (AGENT_ENABLED is not true); nothing was sent"],
+  ] as const) {
+    answering(status, { error: { code, message } });
+    const e = await failure();
+    assert.equal(e.nothingSent, true, code);
+    const copy = agentFailureCopy(e);
+    assert.equal(copy.title, "The agent did not deliver");
+    saysNotSent(copy);
+    assert.ok(copy.message.startsWith(`${message} (${code})`), copy.message);
+  }
+});
+
+test("/judge shows the agent's failure through agentFailureCopy, and never adds 'Nothing was sent' itself", () => {
+  const judge = readFileSync(new URL("../app/judge/JudgeRoute.tsx", import.meta.url), "utf8");
+  assert.match(judge, /agentFailureCopy\(e\)/);
+  assert.doesNotMatch(judge, /Nothing was sent/i);
 });
