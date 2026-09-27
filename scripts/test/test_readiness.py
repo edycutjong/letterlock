@@ -169,6 +169,56 @@ class Videos(unittest.TestCase):
         self.assertTrue(R.oembed_url("https://www.loom.com/share/" + "0f" * 16).startswith("https://www.loom.com/v1/oembed?url="))
 
 
+class OnlineLinks(unittest.TestCase):
+    """--online: which URLs count as links, and what counts as an answer."""
+
+    def answer(self, *, status=200, headers=None):
+        """Replaces urlopen for one test: records each request's URL and method, answers with `status`."""
+        asked = []
+
+        class Resp:
+            def __init__(self, code):
+                self.status = code
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def urlopen(req, timeout=None):
+            asked.append((req.full_url, req.get_method()))
+            if status >= 400:
+                raise R.urllib.error.HTTPError(req.full_url, status, "refused", headers or {}, None)
+            return Resp(status)
+
+        original = R.urllib.request.urlopen
+        R.urllib.request.urlopen = urlopen
+        self.addCleanup(setattr, R.urllib.request, "urlopen", original)
+        return asked
+
+    def test_urls_inside_code_are_commands_not_links(self):
+        md = ("Open [the app](https://app.test/judge) or <https://agent.test>.\n\n"
+              "```sh\nletterlock inbox 0x1 --rpc https://rpc.test\ncurl -s https://agent.test/health\n```\n\n"
+              "Or run `curl https://inline.test/x`, then see [the tx](https://explorer.test/tx/1).\n\n"
+              "- In a list item:\n\n  ```sh\n  npx letterlock inbox 0x1 --rpc https://indented.test\n  ```\n")
+        self.assertEqual(R.external_links(md), ["https://agent.test", "https://app.test/judge", "https://explorer.test/tx/1"])
+
+    def test_a_cloudflare_challenge_is_up_behind_a_bot_check(self):
+        self.answer(status=403, headers={"cf-mitigated": "challenge"})
+        self.assertEqual(R.http_status("https://explorer.test/address/1", challenge_ok=True), R.BOT_CHECK)
+        self.assertEqual(R.http_status("https://explorer.test/address/1"), 403)
+
+    def test_a_plain_403_is_still_dead(self):
+        self.answer(status=403, headers={"server": "nginx"})
+        self.assertEqual(R.http_status("https://private.test/repo", challenge_ok=True), 403)
+
+    def test_a_url_with_an_emoji_is_sent_percent_encoded(self):
+        asked = self.answer(status=200)
+        self.assertEqual(R.http_status("https://badges.test/badge/\U0001F680_Live-App-2F5D9E"), 200)
+        self.assertEqual(asked, [("https://badges.test/badge/%F0%9F%9A%80_Live-App-2F5D9E", "HEAD")])
+
+
 class Placeholders(unittest.TestCase):
     def test_planted_placeholders_are_found(self):
         readme = "\n".join([f"Agent card owner: {XS} (fill in)", f"Mainnet support {SOON}.", f"Write to {SLOT}.", f"See {EXAMPLE}.", f"{MARK}: the video"])

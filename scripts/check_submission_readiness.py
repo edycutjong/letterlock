@@ -2,7 +2,8 @@
 """Submission readiness: a checklist of what a judge opens first, and exit code 1 while anything fails.
 
   pnpm readiness              python3 scripts/check_submission_readiness.py
-  pnpm readiness --online     also fetch the live app, every external link in README.md and DEMO.md, each video's
+  pnpm readiness --online     also fetch the live app, every external link in README.md and DEMO.md (outside code: a
+                              URL in a command is not a link; a Cloudflare bot check counts as up), each video's
                               oEmbed record, and the code of both directories over JSON-RPC
 
 Checks (FAIL blocks a submission, WARN is worth a look):
@@ -83,7 +84,7 @@ def read_text(rel: str) -> str | None:
 def strip_code(md: str) -> str:
     """Markdown with fenced blocks and inline code spans blanked, where 0x… is notation (docs/SPEC.md §3), not a
     placeholder. Line numbers are kept."""
-    md = re.sub(r"^(```|~~~).*?^\1[^\n]*$", lambda m: "\n" * m.group(0).count("\n"), md, flags=re.S | re.M)
+    md = re.sub(r"^[ \t]*(```|~~~).*?^[ \t]*\1[^\n]*$", lambda m: "\n" * m.group(0).count("\n"), md, flags=re.S | re.M)  # a fence in a list item is indented
     return re.sub(r"`[^`\n]*`", lambda m: " " * len(m.group(0)), md)
 
 
@@ -575,22 +576,41 @@ def check_docs(consts: dict[str, str], deployments: dict[str, dict], bench: dict
                    else (f"{checked} figure(s), each tied to an operation and a statistic{note}" if checked else f"no latency figure quoted{note}"))
 
     if online:
-        urls = sorted({u.rstrip(".,;") for t in texts.values() if t for u in links_in(t)[1]} | ({app} if app else set()))
-        dead = []
+        urls = sorted({u for t in texts.values() if t for u in external_links(t)} | ({app} if app else set()))
+        dead, challenged = [], []
         for u in urls:
-            status = http_status(u)
-            if status is None or status >= 400:
+            status = http_status(u, challenge_ok=True)
+            if status == BOT_CHECK:
+                challenged.append(u)
+            elif status is None or status >= 400:
                 dead.append(f"{u} ({status or 'no answer'})")
-        record("docs", "FAIL" if dead else "PASS", "external links answer (online)", ("dead: " + "; ".join(dead)) if dead else f"{len(urls)} links, all below HTTP 400")
+        note = f"; {len(challenged)} behind a Cloudflare bot check, which a browser passes: {', '.join(challenged)}" if challenged else ""
+        record("docs", "FAIL" if dead else "PASS", "external links answer (online)",
+               ("dead: " + "; ".join(dead)) if dead else f"{len(urls)} links, all below HTTP 400{note}")
 
 
-def http_status(url: str) -> int | None:
+def external_links(md: str) -> list[str]:
+    """The external links a reader can follow in a Markdown file: link targets and bare URLs outside code. A URL in a
+    code block or span is part of a command (an RPC endpoint, a curl target), not a link."""
+    return sorted({u.rstrip(".,;") for u in links_in(strip_code(md))[1]})
+
+
+BOT_CHECK = "bot check"  # http_status(challenge_ok=True): Cloudflare answered with its challenge page, which a browser passes
+
+
+def http_status(url: str, challenge_ok: bool = False) -> int | str | None:
+    """The HTTP status of a URL (HEAD, then GET when HEAD is refused), None when nothing answers. A URL written with
+    characters outside ASCII (a badge's emoji) is sent percent-encoded, as a browser sends it. With challenge_ok, a 403
+    that carries Cloudflare's `cf-mitigated: challenge` is BOT_CHECK: the page is up, behind a check a browser passes."""
+    url = re.sub(r"[^\x21-\x7e]", lambda m: urllib.parse.quote(m.group(0)), url)
     for method in ("HEAD", "GET"):
         try:
             req = urllib.request.Request(url, method=method, headers={"user-agent": "Mozilla/5.0 letterlock-readiness"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 return r.status
         except urllib.error.HTTPError as e:
+            if challenge_ok and e.code == 403 and (e.headers.get("cf-mitigated") or "").lower() == "challenge":
+                return BOT_CHECK
             if method == "HEAD" and e.code in (403, 405, 501):
                 continue
             return e.code
