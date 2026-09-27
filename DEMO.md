@@ -93,7 +93,7 @@ pnpm bench           # resolve + seal against Monad mainnet, 5 runs of 200
 pnpm readiness       # the submission checklist
 ```
 
-`pnpm verify` in a fresh clone on 2026-09-27 (Node v22.22.0, forge 1.8.3), 701 passed, 0 failed, 12 skipped:
+`pnpm verify` in a fresh clone on 2026-09-27 (Node v22.22.0, forge 1.8.3), 705 passed, 0 failed, 12 skipped:
 
 | Step | Passed | Skipped |
 |---|---|---|
@@ -104,9 +104,11 @@ pnpm readiness       # the submission checklist
 | Reference agent, with anvil | 95 | 0 |
 | Offline seal and open, with the network taken away by the OS | 73 | 0 |
 | Scripts: the seed script on anvil, the network guards | 32 | 0 |
-| Readiness checks | 42 | 0 |
+| Readiness checks | 46 | 0 |
 
-In the author's copy, next to the planning folder, the same run gives 704 passed, 0 failed, 9 skipped.
+In the author's copy, next to the planning folder, the same run gives 708 passed, 0 failed, 9 skipped. CI runs the
+same command on Ubuntu, with the offline proof in a network namespace; run locally with `act` on 2026-09-27, it gave
+the fresh-clone counts above.
 
 `pnpm bench` on 2026-09-27 against the public RPC, N = 1,000 (5 runs of 200):
 **resolve + seal p50 25.578 ms, p95 29.636 ms, p99 32.436 ms**. Sealing alone took p50 3.534 ms; resolve alone,
