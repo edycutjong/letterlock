@@ -12,7 +12,6 @@ import {
   HOURLY_CAP_WEI,
   HOUR_SECONDS,
   JUDGE_RESERVE_PERCENT,
-  MAX_OUT_PER_DRIP,
   MIN_OUT_PER_DRIP,
   PUBLISH_GAS,
   TRANSFER_GAS,
@@ -24,6 +23,7 @@ import {
   dripAmount,
   dripMessage,
   dripReply,
+  dripsLeft,
   hourlyCapFrom,
   laneFor,
   parseDripRequest,
@@ -57,6 +57,10 @@ const GAS_PRICE = parseGwei("102"); // eth_gasPrice on Monad mainnet, 2026-09-27
 const MAX_FEE = parseGwei("122"); // the drip's own transfer: base fee x 1.2 + tip
 const FILLED = parseGwei("152"); // eth_fillTransaction's maxFeePerGas on Monad mainnet, 2026-09-27
 const BID = walletBid(FILLED); // what viem bids for the passkey account's publish: 182.4 gwei
+/** What one drip counts for today: its amount, and its transfer's gas at the fee cap (0.01677995232 MON). */
+const PER_DRIP = dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * MAX_FEE;
+/** What one drip is charged: its transfer's gas at the price paid, 102 gwei (0.01635995232 MON, as the chain showed). */
+const CHARGED = dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * GAS_PRICE;
 
 /** A request that passes every rule: a new account, a healthy wallet with a quiet day behind it. */
 const observation = async (over: Partial<DripObservation> = {}): Promise<DripObservation> => ({
@@ -166,18 +170,33 @@ test("the drip covers the publish at the fee cap the wallet bids, never less tha
   assert.equal(formatEther(DRIP_CAP_WEI), "0.02");
 });
 
-test("the day's spend is the wallet's own balance difference, unless a top-up hides it", () => {
+test("the window's spend counts the wallet's drips at today's cost, or its balance difference when that is more", () => {
   const one = parseEther("1");
-  assert.equal(spentInWindow({ balanceThen: one, balanceNow: one, nonceThen: 3, nonceNow: 3 }), 0n);
-  // three drips of 0.013 MON: measured
-  const three = parseEther("0.039");
-  assert.equal(spentInWindow({ balanceThen: one, balanceNow: one - three, nonceThen: 0, nonceNow: 3 }), three);
-  // three drips but the balance rose (topped up by 1 MON): counted at the most a drip can cost
-  assert.equal(spentInWindow({ balanceThen: one, balanceNow: one + one - three, nonceThen: 0, nonceNow: 3 }), 3n * MAX_OUT_PER_DRIP);
-  // a wallet first funded inside the window, with no drips yet
-  assert.equal(spentInWindow({ balanceThen: 0n, balanceNow: one, nonceThen: 0, nonceNow: 0 }), 0n);
-  assert.ok(MIN_OUT_PER_DRIP < dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * GAS_PRICE, "a real drip is never below the minimum");
-  assert.ok(MAX_OUT_PER_DRIP > DRIP_CAP_WEI + TRANSFER_GAS * MAX_FEE, "nor above the maximum");
+  const window = (balanceNow: bigint, drips: number, balanceThen = one) => spentInWindow({ balanceThen, balanceNow, nonceThen: 0, nonceNow: drips, perDrip: PER_DRIP });
+  assert.equal(window(one, 0), 0n);
+  // three drips, charged at the gas price: counted at today's cost with the transfer's fee cap, a little more
+  assert.equal(window(one - 3n * CHARGED, 3), 3n * PER_DRIP);
+  assert.ok(3n * PER_DRIP > 3n * CHARGED);
+  // three drips sent while fees were higher: the balance moved more than today's cost, and that counts
+  assert.equal(window(one - parseEther("0.06"), 3), parseEther("0.06"));
+  // a wallet first funded inside the window: its drips count, its funding does not hide them
+  assert.equal(window(one, 0, 0n), 0n);
+  assert.equal(window(one - 2n * CHARGED, 2, 0n), 2n * PER_DRIP);
+  // a drip never counts for less than at Monad's minimum base fee, so a day admits at most 39, whatever the fees
+  assert.equal(spentInWindow({ balanceThen: one, balanceNow: one, nonceThen: 0, nonceNow: 1, perDrip: 1n }), MIN_OUT_PER_DRIP);
+  assert.equal(Number(DAILY_CAP_WEI / MIN_OUT_PER_DRIP), 39);
+  assert.ok(MIN_OUT_PER_DRIP < CHARGED, "a real drip is never below the minimum");
+});
+
+test("MON sent to the drip wallet never raises the window's spend, and never hides a drip", () => {
+  const one = parseEther("1");
+  const after12 = one - 12n * CHARGED;
+  const spent = (came: bigint) => spentInWindow({ balanceThen: one, balanceNow: after12 + came, nonceThen: 0, nonceNow: 12, perDrip: PER_DRIP });
+  // anyone can send MON to it: a wei, the 0.045 MON that four dripped accounts could send back, a 1 MON top-up
+  for (const came of [0n, 1n, parseEther("0.045"), parseEther("0.2"), one]) {
+    assert.ok(spent(came) <= spent(0n), `${formatEther(came)} MON sent in raised the spend`);
+    assert.equal(spent(came), 12n * PER_DRIP, `${formatEther(came)} MON sent in hid a drip`);
+  }
 });
 
 test("a new, empty account with a valid signature gets exactly one publish's drip", async () => {
@@ -230,9 +249,10 @@ test("the daily cap counts every drip of the last 24 hours, fees included", asyn
   });
   assert.equal(decideDrip(await observation({ wallet: wallet(room, 28) })).ok, true);
   await refused({ wallet: wallet(room + 1n, 28) }, "DAILY_CAP");
-  // a top-up inside the window cannot buy more drips than the cap allows at their maximum cost
-  const topped = { balance: one + one, nonce: 13, pendingNonce: 13, recentNonce: 13, dayAgo: { balance: one, nonce: 0 }, hourAgo: { balance: one + one, nonce: 13 } };
-  await refused({ wallet: topped }, "DAILY_CAP");
+  // a top-up inside the window hides no drip: they are counted, so the day still stops at 29 drips at today's fees
+  const topped = (drips: number) => ({ balance: one + one, nonce: drips, pendingNonce: drips, recentNonce: drips, dayAgo: { balance: one, nonce: 0 }, hourAgo: { balance: one + one, nonce: drips } });
+  assert.equal(decideDrip(await observation({ wallet: topped(28) })).ok, true);
+  await refused({ wallet: topped(29) }, "DAILY_CAP");
 });
 
 test("the cap is 0.5 MON; an environment variable can only lower it on mainnet", () => {
@@ -271,14 +291,14 @@ test("only the drip route imports the server module that holds the drip key", ()
 // ---- one scripted caller, many fresh accounts ------------------------------------------------------------------------
 // Any fresh key passes every per-account rule, and the per-IP limits are per instance or per region, so what bounds a
 // script that makes accounts in a loop is what the chain shows of the drip wallet: its spend over the last hour and the
-// last day. Below, a script asks for a drip every second for a whole day, each time with the wallet's real history
-// (every drip it got moved the balance and the nonce), and a judge comes last.
+// last day. Below, a script asks for a drip every 30 seconds for a whole day, each time with the wallet's real history
+// (every drip it got moved the balance and the nonce, charged at the gas price as on chain), and a judge comes last.
 
 type Snapshot = { readonly t: number; readonly balance: bigint; readonly nonce: number };
 
 /** The wallet's history, as the drip reads it: its state now, an hour ago and a day ago (seconds from the start). */
-const ledger = (balance: bigint) => {
-  const history: Snapshot[] = [{ t: -DAY_SECONDS * 2, balance, nonce: 0 }];
+const ledger = (balance: bigint, startNonce = 0) => {
+  const history: Snapshot[] = [{ t: -DAY_SECONDS * 2, balance, nonce: startNonce }];
   const at = (t: number) => history.filter((h) => h.t <= t).at(-1)!;
   const state = (now: number): DripObservation["wallet"] => {
     const cur = history.at(-1)!;
@@ -293,19 +313,23 @@ const ledger = (balance: bigint) => {
       hourAgo: { balance: hour.balance, nonce: hour.nonce },
     };
   };
+  /** A new account asks at `now`: what the route would answer, and the drip's transfer when it pays. */
   const ask = async (now: number, lane: DripLane, reserve: boolean) => {
     const d = decideDrip(await observation({ lane, reserve, wallet: state(now) }));
     if (d.ok && !("funded" in d)) {
       const cur = history.at(-1)!;
-      history.push({ t: now, balance: cur.balance - d.amount - d.fee, nonce: cur.nonce + 1 });
+      history.push({ t: now, balance: cur.balance - d.amount - TRANSFER_GAS * GAS_PRICE, nonce: cur.nonce + 1 });
       return "dripped";
     }
     return d.ok ? "funded" : d.code;
   };
-  return { ask };
+  /** MON sent TO the wallet at `now`, by anyone: the balance rises, the nonce does not move. */
+  const receive = (now: number, amount: bigint) => {
+    const cur = history.at(-1)!;
+    history.push({ t: now, balance: cur.balance + amount, nonce: cur.nonce });
+  };
+  return { ask, receive, state };
 };
-
-const PER_DRIP = dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * MAX_FEE; // what one drip takes out of the wallet today
 
 test("a script asking with fresh accounts all day gets at most the hour's limit each hour, and a judge still gets a drip", async () => {
   const wallet = ledger(parseEther("1"));
@@ -322,7 +346,11 @@ test("a script asking with fresh accounts all day gets at most the hour's limit 
   }
   const hourMax = Number(HOURLY_CAP_WEI / PER_DRIP);
   const dayMax = Number(publicDailyCap(DAILY_CAP_WEI, true) / PER_DRIP);
+  // five an hour at today's fees (each drip counted at its transfer's fee cap, not the lower price it is charged:
+  // counted at the charge, the hour paid six), and twenty in the day
+  assert.deepEqual([hourMax, dayMax], [5, 20]);
   assert.ok(perHour.every((n) => n <= hourMax), `at most ${hourMax} drips an hour: ${perHour.join(",")}`);
+  assert.equal(perHour[0], hourMax, "the first hour pays its limit");
   assert.equal(perHour.reduce((a, b) => a + b, 0), dayMax, "the public lane stops at 70% of the day's cap");
   assert.ok(perHour[0]! < Number(DAILY_CAP_WEI / PER_DRIP), "the first hour's burst does not take the day");
   assert.deepEqual([...refusals].sort(), ["DAILY_CAP", "HOURLY_CAP"]);
@@ -349,6 +377,69 @@ test("the judges' lane is bound by the daily cap, not by the hour's limit", asyn
   assert.equal(got, Number(DAILY_CAP_WEI / PER_DRIP), "a burst of judges' requests is not held to the hour");
   assert.ok(got > Number(HOURLY_CAP_WEI / PER_DRIP));
   assert.equal(await wallet.ask(61, "judge", true), "DAILY_CAP");
+});
+
+test("MON sent to the drip wallet cannot shut the judges' lane: 12 public drips, then 0.045 MON sent in, and judges get drips all day", async () => {
+  // the wallet as it is on mainnet: 0.97 MON after its first two transfers
+  const wallet = ledger(parseEther("0.97"), 2);
+  // a script takes 12 public drips with fresh accounts, one request every 30 s
+  let got = 0;
+  let t = 0;
+  for (; got < 12; t += 30) if ((await wallet.ask(t, "public", true)) === "dripped") got++;
+  // then four of those accounts send 0.045 MON back: the balance rises, the nonce does not move
+  wallet.receive(t, parseEther("0.045"));
+  // counted at the most a drip can cost after a rise in the balance, 12 x 0.041 MON left no room in the day for these
+  for (const h of [3, 6, 12, 18, 22]) assert.equal(await wallet.ask(h * HOUR_SECONDS, "judge", true), "dripped", `a judge at +${h} h`);
+  // and the public lane keeps the rest of its share: it stops once the day's drips (every lane's) reach 70% of the cap,
+  // 20 at today's fees, and 12 + 5 are taken
+  let more = 0;
+  for (let s = 0; s < 40; s++) if ((await wallet.ask(23 * HOUR_SECONDS + s * 30, "public", true)) === "dripped") more++;
+  assert.equal(more, 3);
+});
+
+test("a top-up inside the day buys no drip beyond the day's cap: the drips are counted, not the balance", async () => {
+  const wallet = ledger(parseEther("1"));
+  for (let i = 0; i < 13; i++) assert.equal(await wallet.ask(i, "judge", true), "dripped");
+  wallet.receive(100, parseEther("1"));
+  let more = 0;
+  while ((await wallet.ask(200 + more, "judge", true)) === "dripped") more++;
+  assert.equal(13 + more, Number(DAILY_CAP_WEI / PER_DRIP), "29 in the day at today's fees, top-up or not");
+  assert.equal(13 + more, 29);
+});
+
+test("dripsLeft() is what the route pays: stepping its rule forward predicts each lane's drips from the chain's state", async () => {
+  // 12 public drips over two hours, then MON sent in; the figures are read at 2 h 30 min, as scripts/drip-status.ts reads them
+  for (const lane of ["public", "judge"] as const) {
+    const wallet = ledger(parseEther("0.97"), 2);
+    let got = 0;
+    for (let t = 0; got < 12; t += 30) if ((await wallet.ask(t, "public", true)) === "dripped") got++;
+    const T = 2 * HOUR_SECONDS + 30 * 60;
+    wallet.receive(T - 60, parseEther("0.045"));
+    const o = await observation({ lane, reserve: true, wallet: wallet.state(T) });
+    const predicted = { now: dripsLeft(o, CHARGED), day: dripsLeft(o, CHARGED, { newHourEachDrip: true }) };
+    // the route, asked by new accounts one second apart
+    let burst = 0;
+    while ((await wallet.ask(T + burst, lane, true)) === "dripped") burst++;
+    assert.equal(predicted.now, burst, `${lane}: predicted ${predicted.now} now, the route paid ${burst}`);
+    if (lane === "public") {
+      assert.equal(burst, 3, "two drips in the last hour leave three in it");
+      assert.equal(predicted.day, 8, "the public's 20, less the 12 taken");
+      // spread over the hours that follow, the route pays exactly the day's figure
+      let spread = burst;
+      for (let h = 1; h < 20; h++) if ((await wallet.ask(T + h * HOUR_SECONDS, lane, true)) === "dripped") spread++;
+      assert.equal(spread, predicted.day);
+    } else {
+      assert.equal(burst, 17, "the judges' lane: the day's 29, less the 12 taken");
+      assert.equal(predicted.day, predicted.now, "the judges' lane is not held to the hour");
+    }
+  }
+});
+
+test("DRIP_HOURLY_CAP_MON=0 switches the public lane off and leaves the judges' link paying", async () => {
+  const off = hourlyCapFrom("0", 143);
+  assert.equal(off, 0n);
+  await refused({ hourlyCap: off, reserve: true }, "HOURLY_CAP");
+  assert.equal(decideDrip(await observation({ hourlyCap: off, lane: "judge", reserve: true })).ok, true);
 });
 
 test("the hour's limit is read from the chain: no hour-old state, no public drip; the judges' lane does not need it", async () => {

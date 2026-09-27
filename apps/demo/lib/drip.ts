@@ -25,10 +25,10 @@ export const BID_HEADROOM_TENTHS = 11n;
 /** At most 0.5 MON leaves the drip wallet in any 24 hours: drips and their fees together. */
 export const DAILY_CAP_WEI = parseEther("0.5");
 /**
- * At most 0.1 MON leaves the drip wallet for requests without the judges' pass in any hour (about six drips at a 100
- * gwei base fee). Any fresh key passes the per-account rules and the per-IP limits hold per region at best, so without
- * this a burst of new accounts from many IPs could spend the day in minutes. With it, what an hour spent is free again an
- * hour later.
+ * At most 0.1 MON leaves the drip wallet for requests without the judges' pass in any hour (five drips at a 100 gwei
+ * base fee, each counted at its transfer's fee cap: spentInWindow). Any fresh key passes the per-account rules and the
+ * per-IP limits hold per region at best, so without this a burst of new accounts from many IPs could spend the day in
+ * minutes. With it, what an hour spent is free again an hour later.
  */
 export const HOURLY_CAP_WEI = parseEther("0.1");
 /**
@@ -43,10 +43,11 @@ export const JUDGE_PASS_MIN_LENGTH = 16;
 export const WINDOW_MINUTES = 5;
 /** Monad's minimum base fee, 100 MON-gwei (docs.monad.xyz, gas pricing). */
 export const MIN_BASE_FEE = 100n * 10n ** 9n;
-/** The least one drip can take out of the wallet: 1.5 publishes at the minimum base fee, plus its transfer's gas. */
+/**
+ * The least one drip can count for (spentInWindow): 1.5 publishes and its transfer's gas, at the minimum base fee. So
+ * however the fees move and whatever MON is sent in, the daily cap admits at most 0.5 MON / this = 39 drips a day.
+ */
 export const MIN_OUT_PER_DRIP = (PUBLISH_GAS * MIN_BASE_FEE * 3n) / 2n + TRANSFER_GAS * MIN_BASE_FEE;
-/** The most one drip can take out: the 0.02 MON cap, plus its transfer's gas at ten times the minimum base fee. */
-export const MAX_OUT_PER_DRIP = DRIP_CAP_WEI + TRANSFER_GAS * MIN_BASE_FEE * 10n;
 /** How far back the daily cap looks. */
 export const DAY_SECONDS = 86_400;
 /** How far back the hourly cap looks. */
@@ -172,16 +173,22 @@ export const dripAmount = (gasPrice: bigint, bidFeePerGas: bigint): bigint => {
 };
 
 /**
- * What left the drip wallet in the window, from its own history: `measured` is its balance then minus now. Every one of
- * the window's `count` transactions (nonce now minus nonce then) is a drip, and each takes at least MIN_OUT_PER_DRIP;
- * a smaller `measured` means MON came in during the window (a top-up), which hides spending, so the window is then
- * counted at MAX_OUT_PER_DRIP per drip instead.
+ * What left the drip wallet in the window, counted from what only the wallet itself can move. Its nonce now minus its
+ * nonce then is the number of drips it sent (it sends nothing else), and each counts for `perDrip`, what one drip takes
+ * out at today's fees (its amount, and its transfer's gas at the fee cap: more than the gas it is charged), never less
+ * than MIN_OUT_PER_DRIP. `measured`, its balance then minus now, counts instead when it is more: drips sent when fees
+ * were higher.
+ *
+ * MON sent TO the wallet only lowers `measured`, so it can neither raise the count nor hide a drip. Anyone can send MON
+ * to it: when a rise in the balance switched every drip of the window to its most (0.041 MON), 0.045 MON sent in after
+ * twelve public drips shut the judges' lane for the rest of the day. A drip sent at higher fees, in a window that also
+ * took MON in, counts at today's cost; the day still admits at most 39 drips (MIN_OUT_PER_DRIP).
  */
-export const spentInWindow = (h: { balanceThen: bigint; balanceNow: bigint; nonceThen: number; nonceNow: number }): bigint => {
-  const count = BigInt(Math.max(0, h.nonceNow - h.nonceThen));
+export const spentInWindow = (h: { balanceThen: bigint; balanceNow: bigint; nonceThen: number; nonceNow: number; perDrip: bigint }): bigint => {
+  const per = h.perDrip > MIN_OUT_PER_DRIP ? h.perDrip : MIN_OUT_PER_DRIP;
+  const counted = BigInt(Math.max(0, h.nonceNow - h.nonceThen)) * per;
   const measured = h.balanceThen - h.balanceNow;
-  if (count === 0n) return measured > 0n ? measured : 0n;
-  return measured >= count * MIN_OUT_PER_DRIP ? measured : count * MAX_OUT_PER_DRIP;
+  return measured > counted ? measured : counted;
 };
 
 /** Everything the server observed before deciding. Amounts in wei. */
@@ -254,18 +261,38 @@ export const decideDrip = (o: DripObservation): DripDecision => {
     return refuse(503, "DRIP_BUSY", "the drip sent a transfer a moment ago; try again in two seconds");
   if (o.wallet.balance < amount + fee) return refuse(503, "DRIP_EMPTY", "the drip wallet is empty");
   if (!o.wallet.dayAgo) return refuse(503, "CAP_UNVERIFIABLE", "the RPC no longer holds the drip wallet's state from a day ago, so the daily cap cannot be checked");
-  const spent = spentInWindow({ balanceThen: o.wallet.dayAgo.balance, balanceNow: o.wallet.balance, nonceThen: o.wallet.dayAgo.nonce, nonceNow: o.wallet.nonce });
+  // what this drip takes out, and what each drip of the window counts for
   const out = amount + fee;
+  const spent = spentInWindow({ balanceThen: o.wallet.dayAgo.balance, balanceNow: o.wallet.balance, nonceThen: o.wallet.dayAgo.nonce, nonceNow: o.wallet.nonce, perDrip: out });
   if (spent + out > o.dailyCap) return refuse(429, "DAILY_CAP", "the drip has paid out its daily limit; try again tomorrow");
   if (o.lane === "public") {
     // what the judges' link keeps for itself, and the hour's limit, bind only a request without the judges' pass
     if (spent + out > publicDailyCap(o.dailyCap, o.reserve))
       return refuse(429, "DAILY_CAP", "the drip has paid out its daily limit for the public (the rest is kept for the judges' link); try again tomorrow");
     if (!o.wallet.hourAgo) return refuse(503, "CAP_UNVERIFIABLE", "no RPC holds the drip wallet's state from an hour ago, so the hourly limit cannot be checked");
-    const hour = spentInWindow({ balanceThen: o.wallet.hourAgo.balance, balanceNow: o.wallet.balance, nonceThen: o.wallet.hourAgo.nonce, nonceNow: o.wallet.nonce });
+    const hour = spentInWindow({ balanceThen: o.wallet.hourAgo.balance, balanceNow: o.wallet.balance, nonceThen: o.wallet.hourAgo.nonce, nonceNow: o.wallet.nonce, perDrip: out });
     if (hour + out > o.hourlyCap) return refuse(429, "HOURLY_CAP", "the drip has paid out its limit for this hour; try again in an hour");
   }
   return { ok: true, amount, fee, spent };
+};
+
+/**
+ * How many more drips the route would pay, found by stepping its own rule (decideDrip) forward from what the chain
+ * shows now: at each step a new, empty account asks, and the wallet has sent one more transfer, which took `charged`
+ * (a drip and its gas at the price it is charged). The steps come one after another, so the public lane stops at the
+ * hour's limit; with `newHourEachDrip` every step starts a quiet hour, which gives what the public lane has left in the
+ * day. At most `max`.
+ */
+export const dripsLeft = (o: DripObservation, charged: bigint, opts: { newHourEachDrip?: boolean; max?: number } = {}): number => {
+  const max = opts.max ?? 100;
+  for (let k = 0; k < max; k++) {
+    const nonce = o.wallet.nonce + k;
+    const balance = o.wallet.balance - BigInt(k) * charged;
+    const wallet = { ...o.wallet, balance, nonce, pendingNonce: nonce, recentNonce: nonce, ...(opts.newHourEachDrip ? { hourAgo: { balance, nonce } } : {}) };
+    const d = decideDrip({ ...o, wallet, account: { hasKey: false, balance: 0n, nonce: 0 }, alreadyDripped: false });
+    if (!d.ok || "funded" in d) return k;
+  }
+  return max;
 };
 
 /**
