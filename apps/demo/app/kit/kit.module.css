@@ -313,7 +313,10 @@
 }
 
 .replayStage {
-  /* room above for the letter when it stands out of the envelope */
+  /* room above for the letter when it stands out of the envelope; the envelope sits on the stage's floor, which
+     keeps the open envelope's height while the letter is in the pocket (Replay.tsx) */
+  display: grid;
+  align-content: end;
   padding-top: 8px;
 }
 

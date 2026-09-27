@@ -30,6 +30,36 @@ export function EnvelopeReplay({ recipient, epoch, fingerprint, text }: ReplayPr
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
+  // The stage keeps the height of the open envelope (its letter standing out) while the letter is in the pocket, so
+  // the envelope sits on the same line and the controls stay where they were pressed: a pointer that pressed "Seal
+  // it" is still over the controls when "Open it" applies (scripts/checks/replay-still.mjs). Measured, not
+  // assumed: the letter's height follows the text, the font and the stage's width. A new width measures again.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const stage = stageRef.current;
+    const figure = stage?.firstElementChild;
+    if (!stage || !figure) return;
+    let width = -1;
+    let tallest = 0;
+    const fit = () => {
+      if (stage.clientWidth !== width) {
+        width = stage.clientWidth;
+        tallest = 0;
+        stage.style.minHeight = "";
+      }
+      const cs = getComputedStyle(stage);
+      const h = figure.getBoundingClientRect().height + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      if (h > tallest + 0.5) {
+        tallest = h;
+        stage.style.minHeight = `${Math.ceil(h)}px`;
+      }
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(stage);
+    ro.observe(figure);
+    return () => ro.disconnect();
+  }, []);
+
   const seal: WaxSealState =
     stage === "sealing" ? "pressing" : stage === "sealed" ? "pressed" : stage === "cracking" ? "cracking" : stage === "opened" ? "cracked" : "absent";
   const flap = stage === "open" || stage === "opened" ? "open" : "closed";
@@ -54,7 +84,7 @@ export function EnvelopeReplay({ recipient, epoch, fingerprint, text }: ReplayPr
 
   return (
     <div className={styles.replay}>
-      <div className={styles.replayStage}>
+      <div className={styles.replayStage} ref={stageRef}>
         <Envelope
           recipient={recipient}
           epoch={epoch}
