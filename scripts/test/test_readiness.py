@@ -421,6 +421,70 @@ class History(TempRepo):
         self.assertEqual(self.found("no private key or PEM block in the git history")[0], "PASS")
 
 
+class GitHubActions(TempRepo):
+    """--online: each workflow's latest run on main, read with a stand-in for gh."""
+
+    REPO = "edycutjong/letterlock"
+
+    def setUp(self):
+        super().setUp()
+        (self.root / ".github" / "workflows").mkdir(parents=True)
+        for wf in ("ci.yml", "contracts.yml"):
+            (self.root / ".github" / "workflows" / wf).write_text("on: push\n")
+        (self.root / "package.json").write_text(json.dumps({"repository": {"type": "git", "url": f"git+https://github.com/{self.REPO}.git"}}))
+
+    def gh(self, runs: dict, annotation: str = ""):
+        """runs: workflow file -> its latest run, or None for a workflow with no run."""
+        calls = []
+
+        def run(args, cwd=None, capture_output=True, text=True):
+            calls.append(args)
+            if args[1:3] == ["run", "list"]:
+                latest = runs[args[args.index("--workflow") + 1]]
+                return subprocess.CompletedProcess(args, 0, json.dumps([latest] if latest else []), "")
+            if args[1] == "api" and args[2].endswith("/jobs"):
+                return subprocess.CompletedProcess(args, 0, "108590645976\n", "")
+            if args[1] == "api" and args[2].endswith("/annotations"):
+                return subprocess.CompletedProcess(args, 0, annotation + "\n", "")
+            raise AssertionError(args)
+        return run, calls
+
+    def latest(self, conclusion="success", status="completed"):
+        return {"databaseId": 36308822058, "status": status, "conclusion": conclusion, "headSha": "b9eef9c8399f",
+                "url": f"https://github.com/{self.REPO}/actions/runs/36308822058"}
+
+    def check(self, run, which=lambda name: "/usr/local/bin/" + name):
+        R.check_ci_online(run=run, which=which)
+        return self.found(R.CI_TITLE)
+
+    def test_green_workflows_pass(self):
+        run, calls = self.gh({"ci.yml": self.latest(), "contracts.yml": self.latest()})
+        status, detail = self.check(run)
+        self.assertEqual(status, "PASS")
+        self.assertIn("ci.yml: success on b9eef9c", detail)
+        self.assertIn(["/usr/local/bin/gh", "run", "list", "--repo", self.REPO, "--workflow", "contracts.yml", "--branch", "main", "--limit", "1",
+                       "--json", "databaseId,status,conclusion,headSha,url"], calls)
+
+    def test_a_run_github_never_started_fails_with_its_reason(self):
+        why = "The job was not started because recent account payments have failed or your spending limit needs to be increased."
+        run, _ = self.gh({"ci.yml": self.latest("failure"), "contracts.yml": self.latest()}, annotation=why)
+        status, detail = self.check(run)
+        self.assertEqual(status, "FAIL")
+        self.assertIn(f"ci.yml: failure on b9eef9c, https://github.com/{self.REPO}/actions/runs/36308822058: {why}", detail)
+
+    def test_a_workflow_that_never_ran_fails(self):
+        run, _ = self.gh({"ci.yml": self.latest(), "contracts.yml": None})
+        status, detail = self.check(run)
+        self.assertEqual(status, "FAIL")
+        self.assertIn(f"contracts.yml: no run on GitHub yet (gh workflow run contracts.yml --repo {self.REPO} starts one)", detail)
+
+    def test_a_run_in_progress_is_a_warning_and_no_gh_is_a_warning(self):
+        run, _ = self.gh({"ci.yml": self.latest(None, "in_progress"), "contracts.yml": self.latest()})
+        self.assertEqual(self.check(run)[0], "WARN")
+        R.results.clear()
+        self.assertEqual(self.check(None, which=lambda name: None), ("WARN", "gh is not installed"))
+
+
 class PrivateToolOutput(TempRepo):
     TITLE_FILES = "no private tool output (graphify-out/, .impeccable/, brag-output/, PRODUCT.md, DESIGN.md)"
     TITLE_HISTORY = "no agent file or private tool output in the git history"

@@ -25,6 +25,8 @@ Checks (FAIL blocks a submission, WARN is worth a look):
   fixtures     fixtures/envelopes.json exists; a complete mainnet seed run is recorded: status "sent and read back", to
                the directory deployments/143.json names, with at least 5 drops (WARN until one is)
   license      LICENSE at the root
+  ci           (--online) the latest run on main of each workflow in .github/workflows succeeded on GitHub, read with
+               gh: the README's badge shows ci.yml's, and a workflow that never ran there has proved nothing there
   public repo  no CLAUDE.md, AGENTS.md or .claude/, no private tool output (graphify-out/, .impeccable/,
                brag-output/, PRODUCT.md, DESIGN.md), no .env file, no private key or PEM block, and no name of a
                private planning note (read from the folder next to the repository, never spelled out here), in the
@@ -829,6 +831,68 @@ def check_fixtures(deployments: dict[str, dict] | None = None) -> None:
         record("fixtures", "WARN", title, f"{len(runs)} run(s), none complete: {why}" if runs else "the file records no run")
 
 
+# ---------------------------------------------------------------------------------------------------------- ci
+CI_TITLE = "GitHub Actions: the latest run on main of each workflow succeeded (online)"
+
+
+def github_repo() -> str | None:
+    """owner/name of the GitHub repository package.json names."""
+    try:
+        url = str((json.loads((ROOT / "package.json").read_text()).get("repository") or {}).get("url", ""))
+    except (OSError, ValueError, AttributeError):
+        return None
+    m = re.search(r"github\.com[/:]([\w.-]+/[\w.-]+?)(?:\.git)?/?$", url)
+    return m.group(1) if m else None
+
+
+def check_ci_online(run=subprocess.run, which=shutil.which) -> None:
+    """The latest run on main of each workflow, read with gh (installed and signed in; the repository may be private).
+    A failed run names its first failure annotation: a job GitHub never started says why there."""
+    workflows = sorted(p.name for p in (ROOT / ".github" / "workflows").glob("*.y*ml"))
+    repo = github_repo()
+    if not workflows:
+        return
+    exe = which("gh")
+    if not exe or not repo:
+        record("ci", "WARN", CI_TITLE, "gh is not installed" if not exe else "package.json names no GitHub repository")
+        return
+
+    def gh(*args: str) -> str:
+        proc = run([exe, *args], cwd=ROOT, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(((proc.stderr or "").strip().splitlines() or [f"gh exited {proc.returncode}"])[-1][:200])
+        return proc.stdout
+
+    failed, pending, passed = [], [], []
+    for wf in workflows:
+        try:
+            runs = json.loads(gh("run", "list", "--repo", repo, "--workflow", wf, "--branch", "main", "--limit", "1",
+                                 "--json", "databaseId,status,conclusion,headSha,url") or "[]")
+            if not runs:
+                failed.append(f"{wf}: no run on GitHub yet (gh workflow run {wf} --repo {repo} starts one)")
+                continue
+            r = runs[0]
+            where = f"{str(r.get('headSha'))[:7]}, {r.get('url')}"
+            if r.get("status") != "completed":
+                pending.append(f"{wf}: {r.get('status')} on {where}")
+            elif r.get("conclusion") == "success":
+                passed.append(f"{wf}: success on {where}")
+            else:
+                why = ""
+                try:
+                    job = gh("api", f"repos/{repo}/actions/runs/{r.get('databaseId')}/jobs", "--jq", ".jobs[0].id").strip()
+                    if job:
+                        why = gh("api", f"repos/{repo}/check-runs/{job}/annotations", "--jq",
+                                 '[.[] | select(.annotation_level == "failure") | .message][0] // ""').strip()
+                except RuntimeError:
+                    pass
+                failed.append(f"{wf}: {r.get('conclusion')} on {where}" + (f": {why[:200]}" if why else ""))
+        except (OSError, RuntimeError, ValueError) as e:
+            failed.append(f"{wf}: gh could not read its runs: {e}")
+    status = "FAIL" if failed else "WARN" if pending else "PASS"
+    record("ci", status, CI_TITLE, "; ".join(failed + pending + passed))
+
+
 # ---------------------------------------------------------------------------------------------------------- public repo
 KEY_RX = re.compile(r"(PRIVATE_KEY|SECRET_KEY|MNEMONIC)\s*[:=]\s*[\"']?(0x)?[0-9a-fA-F]{64}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----")
 AGENT_FILE = re.compile(r"(^|/)(CLAUDE|AGENTS)\.md$|(^|/)\.claude/")
@@ -990,7 +1054,8 @@ def check_gitleaks(run=subprocess.run, which=shutil.which) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--online", action="store_true", help="also fetch the live app, the docs' external links, each video's oEmbed record and both directories' code")
+    ap.add_argument("--online", action="store_true", help="also fetch the live app, the docs' external links, each video's oEmbed record, "
+                    "both directories' code, and each workflow's latest run on GitHub")
     args = ap.parse_args()
 
     files = publishable_files()
@@ -1003,6 +1068,8 @@ def main() -> int:
     check_docs(consts, deployments, bench, args.online)
     check_placeholders(files)
     check_fixtures(deployments)
+    if args.online:
+        check_ci_online()
     check_public(files)
     check_gitleaks()
 
@@ -1010,7 +1077,7 @@ def main() -> int:
     dirty = " with uncommitted changes" if git("status", "--porcelain") else ""
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     print(f"Letterlock submission readiness · {now} · {head}{dirty}{' · online' if args.online else ''}\n")
-    order = ["docs", "placeholders", "deployments", "bench", "fixtures", "license", "public repo"]
+    order = ["docs", "placeholders", "deployments", "bench", "fixtures", "license", "ci", "public repo"]
     for section in order:
         rows = [r for r in results if r[0] == section]
         if not rows:
