@@ -1,10 +1,13 @@
 // What each SDK error means to the person in front of the page, and what they can do about it.
 // Meanings follow docs/SPEC.md §5; a slip never shows a code without its recovery.
-import type { LetterlockErrorCode } from "letterlock";
+import type { ChainErrorCode, LetterlockErrorCode } from "letterlock";
 import { groupFingerprint } from "./keystrip.ts";
 
-/** Every SDK failure a person can meet in the flow. INPUT_INVALID is a form error, shown beside the field instead. */
-export type SlipCode = Exclude<LetterlockErrorCode, "INPUT_INVALID">;
+/**
+ * Every SDK failure a person can meet in the flow: the protocol's codes and the chain client's (the pages publish,
+ * drop and read the directory). INPUT_INVALID is a form error, shown beside the field instead.
+ */
+export type SlipCode = Exclude<LetterlockErrorCode, "INPUT_INVALID"> | ChainErrorCode;
 
 export const SLIP_CODES = [
   "PRF_UNSUPPORTED",
@@ -13,6 +16,9 @@ export const SLIP_CODES = [
   "EPOCH_MISMATCH",
   "WRONG_KEY",
   "TAMPERED",
+  "INSUFFICIENT_FUNDS",
+  "CHAIN_UNAVAILABLE",
+  "NOT_AGENT_OWNER",
 ] as const satisfies readonly SlipCode[];
 
 /** Values a slip can quote. Each is optional: without it the sentence stays true, only less specific. */
@@ -25,6 +31,13 @@ export type SlipValues = {
   sealedTo?: string;
   /** the fingerprint the chosen passkey derives */
   derived?: string;
+  /** the passkey account that would pay for a transaction */
+  account?: string;
+  /** what that account holds, and about what the transaction needs, in MON */
+  balance?: string;
+  needed?: string;
+  /** why the gas drip did not pay, in its own words */
+  drip?: string;
 };
 
 export type SlipCopy = {
@@ -93,5 +106,30 @@ export const SLIP_COPY: Record<SlipCode, SlipCopy> = {
     meaning: () =>
       "The envelope failed its authentication check: it was changed after it was sealed. No part of it was decrypted.",
     recovery: () => "Don’t trust this copy. If you know who sent it, ask them to seal the note again.",
+  },
+  INSUFFICIENT_FUNDS: {
+    reason: "Not enough postage.",
+    box: "Postage due",
+    meaning: (v) =>
+      `Posting is a Monad transaction, paid in MON by ${v.account ? `your passkey account ${v.account}` : "your passkey account"}, and it holds ${
+        v.balance === undefined ? "too little" : `${v.balance} MON`
+      }${v.needed ? `, where this needs about ${v.needed} MON` : ""}.${v.drip ? ` The gas drip did not pay: ${v.drip}.` : ""} Nothing was sent.`,
+    recovery: (v) =>
+      `Send ${v.needed ? `at least ${v.needed} MON` : "a little MON"} to ${v.account ?? "your passkey account"} from any wallet, then press the button again.`,
+  },
+  CHAIN_UNAVAILABLE: {
+    reason: "The register did not answer.",
+    box: "No answer from the register",
+    meaning: () =>
+      "Monad’s RPC gave no answer, so nothing is known either way. This is not the same as “no key”: the key may well be there.",
+    recovery: () => "Try again in a moment. If a transaction link was shown, open it before sending anything again.",
+    action: "Try again",
+  },
+  NOT_AGENT_OWNER: {
+    reason: "Not the agent’s owner.",
+    box: "Not the agent’s owner",
+    meaning: () =>
+      "Only the account that owns an ERC-8004 agent in the identity registry may post that agent’s key, and this account does not own it.",
+    recovery: () => "Post the key from the account that owns the agent, or check the agent id.",
   },
 };

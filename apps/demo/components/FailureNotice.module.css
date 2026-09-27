@@ -1,0 +1,29 @@
+.note {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--ink);
+  border-left-width: 4px;
+  border-radius: 2px;
+}
+
+.head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.text {
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.action {
+  margin-top: 4px;
+}

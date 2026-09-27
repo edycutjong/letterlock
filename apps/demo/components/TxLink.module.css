@@ -1,0 +1,12 @@
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.link svg {
+  flex: none;
+}

@@ -14,7 +14,7 @@ import { Postmark } from "@/components/Postmark";
 import { RegisterTable, type RegisterRow } from "@/components/RegisterTable";
 import { CRACK_MS, PRESS_MS, WaxSeal } from "@/components/WaxSeal";
 import { Wordmark } from "@/components/Wordmark";
-import { TESTNET_TEST_KEY } from "@/lib/deployment.ts";
+import { DIRECTORY, SMOKE_KEYS } from "@/lib/deployment.ts";
 import { SLIP_CODES } from "@/lib/error-copy.ts";
 import { EXAMPLE_AGENTS, currentKey, failureValues, letter, persona } from "@/lib/examples.ts";
 import { postmarkDate } from "@/lib/format.ts";
@@ -111,13 +111,15 @@ export default function Kit() {
     { id: "n", addressee: nadia.address, epoch: 1, fingerprint: nadia.keys[0]!.fingerprint, posted: { kind: "example" }, example: true },
     { id: "k1", addressee: kai.address, epoch: 1, fingerprint: kai.keys[0]!.fingerprint, posted: { kind: "example" }, state: "superseded", example: true },
   ];
+  // the deploy smoke test's key on the directory this build points at: a real line, with its real transaction
+  const smoke = SMOKE_KEYS[0]!;
   const liveRow: RegisterRow = {
     id: "live",
-    addressee: TESTNET_TEST_KEY.address,
-    epoch: TESTNET_TEST_KEY.epoch,
-    fingerprint: TESTNET_TEST_KEY.fingerprint,
-    posted: { kind: "tx", hash: TESTNET_TEST_KEY.txHash, href: TESTNET_TEST_KEY.txUrl, block: TESTNET_TEST_KEY.block, network: "Testnet" },
-    note: "Test key: random bytes stood in for a passkey",
+    addressee: smoke.recipient,
+    epoch: smoke.epoch,
+    fingerprint: smoke.fingerprint,
+    posted: { kind: "tx", hash: smoke.txHash, href: smoke.txUrl, block: smoke.block, network: DIRECTORY.network },
+    note: "Smoke-test key: random bytes stood in for a passkey",
   };
 
   return (
@@ -129,7 +131,7 @@ export default function Kit() {
           </>
         }
         lede="The postal register’s parts, each drawn in every state it can be in. Red appears only in wax: the seal, and the word “lock”. Airmail blue marks what is open. Everything else is ink, pencil and ruling on manila."
-        example="Addresses, keys and letters here are examples made by the SDK. The testnet key and its transaction link are real."
+        example={`Addresses, keys and letters here are examples made by the SDK. The ${DIRECTORY.network} smoke-test key and its transaction link are real.`}
       />
 
       <div className={styles.layout}>
@@ -264,23 +266,23 @@ export default function Kit() {
 
           <Section id="address-card" title="AddressCard" lede="The address line, the key as a bar strip and in hex, the epoch, and where the key was posted.">
             <div className={styles.row2}>
-              <Specimen name="posted" detail="real: the testnet directory’s test key" plain>
+              <Specimen name="posted" detail={`real: the ${DIRECTORY.network} directory’s smoke-test key`} plain>
                 <AddressCard
                   title="Encryption address"
                   headingLevel={3}
-                  address={TESTNET_TEST_KEY.address}
-                  fingerprint={TESTNET_TEST_KEY.fingerprint}
-                  epoch={TESTNET_TEST_KEY.epoch}
+                  address={smoke.recipient as `0x${string}`}
+                  fingerprint={smoke.fingerprint}
+                  epoch={smoke.epoch}
                   posted={{
                     kind: "tx",
-                    hash: TESTNET_TEST_KEY.txHash,
-                    href: TESTNET_TEST_KEY.txUrl,
-                    block: TESTNET_TEST_KEY.block,
-                    at: TESTNET_TEST_KEY.updatedAt,
-                    network: "Monad testnet",
+                    hash: smoke.txHash,
+                    href: smoke.txUrl,
+                    block: smoke.block,
+                    at: smoke.updatedAt,
+                    network: DIRECTORY.network,
                   }}
-                  postmark={{ top: "Monad testnet", bottom: postmarkDate(TESTNET_TEST_KEY.updatedAt), center: String(TESTNET_TEST_KEY.epoch), centerLabel: "Epoch" }}
-                  footnote="A test key: the SDK’s derivation over random bytes standing in for a passkey. No passkey was used."
+                  postmark={{ top: DIRECTORY.network, bottom: postmarkDate(smoke.updatedAt), center: String(smoke.epoch), centerLabel: "Epoch" }}
+                  footnote="A smoke-test key: the SDK’s derivation over random bytes standing in for a passkey. No passkey was used."
                 />
               </Specimen>
               <Specimen name="example" detail="not posted" plain>
@@ -315,8 +317,8 @@ export default function Kit() {
             <Specimen name="full" detail="found line inked blue · rotated line ruled through · rows stamped Example" plain>
               <RegisterTable caption="Example register, every column" captionHidden rows={rows} layout="full" />
             </Specimen>
-            <Specimen name="posted, real" detail="the testnet directory’s one line, with its transaction" plain>
-              <RegisterTable caption="Testnet register" captionHidden rows={[liveRow]} layout="full" />
+            <Specimen name="posted, real" detail={`the ${DIRECTORY.network} directory’s smoke-test line, with its transaction`} plain>
+              <RegisterTable caption={`${DIRECTORY.network} register`} captionHidden rows={[liveRow]} layout="full" />
             </Specimen>
             <div className={styles.row2}>
               <Specimen name="compact" detail="below 1024 px: addressee, epoch, key" plain>
@@ -341,7 +343,11 @@ export default function Kit() {
                   values={failureValues(code)}
                   example
                   action={
-                    code === "PRF_UNSUPPORTED" || code === "PASSKEY_FAILED" || code === "WRONG_KEY" || code === "EPOCH_MISMATCH" ? (
+                    code === "CHAIN_UNAVAILABLE" ? (
+                      <Button tone="outline" size="md">
+                        Try again
+                      </Button>
+                    ) : code === "PRF_UNSUPPORTED" || code === "PASSKEY_FAILED" || code === "WRONG_KEY" || code === "EPOCH_MISMATCH" ? (
                       <PasskeyButton tone={code === "EPOCH_MISMATCH" ? "airmail" : "ink"} size="md">
                         {code === "PRF_UNSUPPORTED" ? "Try another passkey" : code === "PASSKEY_FAILED" ? "Try again" : code === "WRONG_KEY" ? "Choose another passkey" : "Open with passkey"}
                       </PasskeyButton>
@@ -439,10 +445,10 @@ export default function Kit() {
           <Section id="marks" title="Postmark, strip, stamp" lede="Ink marks struck on the paper. The strip is a postal 4-state bar code of the key fingerprint: 32 bars, two bits each, the same 16 digits as the hex beside it.">
             <div className={styles.row3}>
               <Specimen name="Postmark" code detail="ring only">
-                <Postmark top="Letterlock register" bottom="Monad testnet" center="1" centerLabel="Epoch" size={128} tilt={-8} />
+                <Postmark top="Letterlock register" bottom={DIRECTORY.network} center="1" centerLabel="Epoch" size={128} tilt={-8} />
               </Specimen>
               <Specimen name="Postmark" code detail="with cancellation bars">
-                <Postmark top="Monad testnet" bottom={postmarkDate(TESTNET_TEST_KEY.updatedAt)} center="1" centerLabel="Epoch" bars="left" size={112} tilt={-6} />
+                <Postmark top={DIRECTORY.network} bottom={postmarkDate(smoke.updatedAt)} center="1" centerLabel="Epoch" bars="left" size={112} tilt={-6} />
               </Specimen>
               <Specimen name="Wordmark" code detail="outlined; “lock” is wax">
                 <Wordmark height={48} />

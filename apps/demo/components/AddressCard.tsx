@@ -7,15 +7,22 @@ import { FingerprintText, KeyStrip } from "./KeyStrip";
 import { Postmark, type PostmarkProps } from "./Postmark";
 import styles from "./AddressCard.module.css";
 
-/** Where the key's publish transaction stands. Example cards are never linked: nothing in them is on chain. */
+/**
+ * Where the key's publish transaction stands. Example cards are never linked: nothing in them is on chain. `none`: the
+ * passkey exists but its key is not in the register yet; `unknown`: the key is there, and the scan for its transaction
+ * found nothing (or has not finished).
+ */
 export type Posted =
   | { kind: "tx"; hash: `0x${string}`; href: string; block?: number; at?: number; network: string }
   | { kind: "pending" }
+  | { kind: "none" }
+  | { kind: "unknown"; at?: number; network: string }
   | { kind: "example" };
 
 export type AddressCardProps = {
   address: `0x${string}`;
-  fingerprint: string;
+  /** the key's fingerprint; left out while no key is known for the address (none posted, or not derived here yet) */
+  fingerprint?: string;
   epoch: number;
   posted: Posted;
   /** stamps the card "Example" */
@@ -68,8 +75,14 @@ export function AddressCard({
         <div className={styles.row}>
           <dt className="label-caps">Key</dt>
           <dd className={styles.key}>
-            <KeyStrip fingerprint={fingerprint} tone="open" height={13} />
-            <FingerprintText fingerprint={fingerprint} />
+            {fingerprint ? (
+              <>
+                <KeyStrip fingerprint={fingerprint} tone="open" height={13} />
+                <FingerprintText fingerprint={fingerprint} />
+              </>
+            ) : (
+              <span className={styles.muted}>None in the register yet</span>
+            )}
           </dd>
         </div>
         <div className={styles.row}>
@@ -100,6 +113,14 @@ export function AddressCard({
 
 export function PostedValue({ posted }: { posted: Posted }) {
   if (posted.kind === "example") return <span className={styles.muted}>Not posted: example card</span>;
+  if (posted.kind === "none") return <span className={styles.muted}>Not posted yet</span>;
+  if (posted.kind === "unknown")
+    return (
+      <span className={styles.when}>
+        {posted.network}
+        {posted.at !== undefined && <> · {formatUtc(posted.at)}</>}
+      </span>
+    );
   if (posted.kind === "pending")
     return (
       <span className={styles.pending}>

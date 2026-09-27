@@ -1,0 +1,4 @@
+{
+  "about": "Keys in the directories that the app's own tests posted: a browser's virtual authenticator (Chrome DevTools) stood in for a passkey and was deleted after the run, so nothing sealed to these keys can ever be opened. The register marks their lines.",
+  "keys": []
+}

@@ -11,15 +11,17 @@ const sdkCodes = (union: "LetterlockErrorCode" | "ChainErrorCode") => {
   return [...body.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]!);
 };
 
-test("every SDK protocol error code except INPUT_INVALID (a form error) has a slip", () => {
+test("every SDK error code except INPUT_INVALID (a form error) has a slip: the protocol's and the chain client's", () => {
   const codes = sdkCodes("LetterlockErrorCode");
   assert.ok(codes.length >= 7, `read ${codes.length} codes from the SDK`);
-  assert.deepEqual([...SLIP_CODES].sort(), codes.filter((c) => c !== "INPUT_INVALID").sort());
+  const chain = sdkCodes("ChainErrorCode");
+  assert.ok(chain.length >= 3, `read ${chain.length} chain codes from the SDK`);
+  assert.deepEqual([...SLIP_CODES].sort(), [...codes.filter((c) => c !== "INPUT_INVALID"), ...chain].sort());
 });
 
-// The chain client's codes (publish, resolve, drop, inbox) are their own union in the SDK. No page calls the chain
-// client yet, so no slip shows them; this fails when the SDK adds one, or when a page starts calling the chain
-// client, whatever the import form, which is when its failures need slips.
+// The chain client's codes (publish, resolve, drop, inbox) are their own union in the SDK. The pages call the chain
+// client, so each of its codes has a slip (above); the guard below finds the pages that call it, whatever the import
+// form, and a page that calls it must be able to show a slip.
 const CHAIN_CLIENT = /\b(letterlock|meraAccount|toLetterlockError)\b/;
 /** the ways a source can reach the chain client at run time; `import type` is erased and reaches nothing */
 const callsChainClient = (src: string): boolean => {
@@ -56,15 +58,20 @@ test("the chain-client guard recognises every import form", () => {
     assert.equal(callsChainClient(src), false, src);
 });
 
-test("the chain client's codes are not slips yet, and no page calls the chain client", () => {
+test("the chain client is created in one module, and its failures reach the slips through one classifier", () => {
   assert.deepEqual(sdkCodes("ChainErrorCode").sort(), ["CHAIN_UNAVAILABLE", "INSUFFICIENT_FUNDS", "NOT_AGENT_OWNER"]);
   const sources = ["app", "components", "lib"].flatMap((dir) =>
     readdirSync(new URL(`../${dir}/`, import.meta.url), { recursive: true, encoding: "utf8" })
       .filter((f) => /\.tsx?$/.test(f))
       .map((f) => ({ f: `${dir}/${f}`, src: readFileSync(new URL(`../${dir}/${f}`, import.meta.url), "utf8") })),
   );
-  const callers = sources.filter(({ src }) => callsChainClient(src)).map(({ f }) => f);
-  assert.deepEqual(callers, [], "a page calls the chain client: give its failures (CHAIN_UNAVAILABLE, INSUFFICIENT_FUNDS, NOT_AGENT_OWNER) slips");
+  // letterlock() is called in lib/client.ts only; pages reach it through that module's accessors
+  const creators = sources.filter(({ src }) => /\bletterlock\s*\(/.test(src)).map(({ f }) => f);
+  assert.deepEqual(creators, ["lib/client.ts"]);
+  // every module that imports the accessors also imports the failure classifier, which maps each code to its slip
+  const users = sources.filter(({ src }) => /from\s*["']@\/lib\/client\.ts["']/.test(src) && /\b(passkeyClient|readClient|scanClient)\b/.test(src));
+  assert.ok(users.length >= 1, `${users.length} modules use the chain client`);
+  for (const { f, src } of users) assert.match(src, /toFailure|FailureNotice/, `${f} uses the chain client and shows none of its failures`);
 });
 
 test("every slip has a reason, a box line, a meaning and a recovery, with and without quoted values", () => {
