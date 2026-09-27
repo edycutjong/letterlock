@@ -6,7 +6,7 @@
 
   <p>One passkey, one encryption address, on every device the passkey syncs to.</p>
 
-  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 25.578 ms over N = 1,000 (<code>pnpm bench</code>), and 687 tests pass (<code>pnpm verify</code>).</p>
+  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 25.578 ms over N = 1,000 (<code>pnpm bench</code>), and 691 tests pass (<code>pnpm verify</code>).</p>
 
   <br/>
 
@@ -155,7 +155,7 @@ Every mainnet transaction, with what it proves, is in [DEMO.md](DEMO.md#what-hap
 
 | Metric | Value |
 |---|---|
-| Tests | `pnpm verify`: 687 passed, 0 failed, 9 skipped, in 8 suites (SDK 222, contracts 111, PRF spike 30, app 99, agent 95, offline 73, scripts 32, readiness 25); the 9 skipped are the SDK's live checks, which pass 9 of 9 with `LIVE=1` |
+| Tests | `pnpm verify`: 691 passed, 0 failed, 9 skipped, in 8 suites (SDK 222, contracts 111, PRF spike 30, app 99, agent 95, offline 73, scripts 32, readiness 29); the 9 skipped are the SDK's live checks, which pass 9 of 9 with `LIVE=1` |
 | Latency | resolve + seal p50 25.578 ms, p95 29.636 ms, p99 32.436 ms against Monad mainnet's public RPC, N = 1,000, 0 failed calls ([bench/RESULTS.md](bench/RESULTS.md)) |
 | Sealing cost | seal alone (HPKE, local CPU) p50 3.534 ms |
 | Gas, mainnet receipts | publish 70,863 · drop of 490 bytes 45,780 · `publishForAgent` 108,799 (first key) and 74,652 (rotation) |
@@ -163,7 +163,7 @@ Every mainnet transaction, with what it proves, is in [DEMO.md](DEMO.md#what-hap
 | Contract | 111 forge tests: unit, fuzz, invariant, mainnet fork against the live registry, gas snapshots |
 | End to end | the whole flow on testnet in Chromium with a PRF-capable virtual authenticator, and a live check on mainnet that published a passkey account's key ([records](apps/demo/e2e-results)) |
 | Design QA | 25 checks and axe on 6 routes at 1280 and 390 px: 0 failures, 0 violations |
-| Secrets | gitleaks over every commit ([.gitleaks.toml](.gitleaks.toml)): no leaks; keys live only in Vercel environment variables |
+| Secrets | gitleaks over every commit ([.gitleaks.toml](.gitleaks.toml)): no leaks. The drip's and the agent's keys live in Vercel's sensitive environment variables and with the operator, never in the repository or a page's bundle |
 
 ### Attacks defeated
 

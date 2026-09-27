@@ -85,7 +85,7 @@ pnpm bench           # resolve + seal against Monad mainnet, 5 runs of 200
 pnpm readiness       # the submission checklist
 ```
 
-`pnpm verify` on 2026-09-27 (Node v22.22.0, forge 1.8.3), 687 passed, 0 failed, 9 skipped:
+`pnpm verify` on 2026-09-27 (Node v22.22.0, forge 1.8.3), 691 passed, 0 failed, 9 skipped:
 
 | Step | Passed | Skipped |
 |---|---|---|
@@ -96,7 +96,7 @@ pnpm readiness       # the submission checklist
 | Reference agent, with anvil | 95 | 0 |
 | Offline seal and open, with the network taken away by the OS | 73 | 0 |
 | Scripts: the seed script on anvil, the network guards | 32 | 0 |
-| Readiness checks | 25 | 0 |
+| Readiness checks | 29 | 0 |
 
 `pnpm bench` on 2026-09-27 against the public RPC, N = 1,000 (5 runs of 200):
 **resolve + seal p50 25.578 ms, p95 29.636 ms, p99 32.436 ms**. Sealing alone took p50 3.534 ms; resolve alone,
