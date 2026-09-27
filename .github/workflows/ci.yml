@@ -1,0 +1,57 @@
+name: ci
+
+# pnpm verify: the SDK (with its anvil chain tests), the contracts, the PRF spike's unit tests, the demo app's tests, the
+# offline seal/open with the envelope fixture replay, and the seed script on anvil; one screen of exact counts at the end.
+# No secret is used or needed.
+
+on:
+  push:
+    paths-ignore:
+      - "docs/assets/**"
+      - "apps/demo/qa/**"
+  pull_request:
+    paths-ignore:
+      - "docs/assets/**"
+      - "apps/demo/qa/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Foundry is installed below, so the SDK's chain tests and the seed script's test must run on anvil, never skip.
+      LETTERLOCK_REQUIRE_ANVIL: "1"
+      # LETTERLOCK_REQUIRE_FORK stays unset: the Monad mainnet fork tests skip, with the RPC error, when rpc.monad.xyz is
+      # unreachable from the runner, so an RPC outage does not fail CI (the mainnet deploy pre-flight sets it).
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.3
+
+      # the version comes from package.json's packageManager field
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v7
+        with:
+          # 22.18 or later runs TypeScript directly (the scripts and the node:test suites)
+          node-version: 22.22.0
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: pnpm verify --markdown "$GITHUB_STEP_SUMMARY"

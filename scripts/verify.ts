@@ -4,6 +4,7 @@
 //   pnpm verify --only sdk,forge   some steps (sdk, forge, spike, demo, offline, seed)
 //   pnpm verify --skip forge
 //   pnpm verify --json <file>      also write the summary as JSON
+//   pnpm verify --markdown <file>  also append it as a Markdown table (CI: $GITHUB_STEP_SUMMARY)
 //
 // Steps, in order (each runs the package's own test command):
 //   sdk      packages/letterlock   pnpm test (vitest: unit tests, and chain tests on anvil when Foundry is installed)
@@ -17,7 +18,7 @@
 // line. A step fails when its command exits non-zero, when a test failed, when its counts cannot be read, or when it
 // ran no test. The exit code is 1 if any step failed. Full output of every step: the log folder printed at the end.
 import { spawn } from "node:child_process";
-import { createWriteStream, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, createWriteStream, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -125,7 +126,7 @@ const STEPS: Step[] = [
   },
 ];
 
-const { values: opts } = parseArgs({ options: { only: { type: "string" }, skip: { type: "string" }, json: { type: "string" } } });
+const { values: opts } = parseArgs({ options: { only: { type: "string" }, skip: { type: "string" }, json: { type: "string" }, markdown: { type: "string" } } });
 const keys = (v?: string) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined);
 const only = keys(opts.only);
 const skip = keys(opts.skip) ?? [];
@@ -207,6 +208,22 @@ console.log([
   ]),
 ].join("\n"));
 
+if (opts.markdown) {
+  const cell = (r: Row) => [r.counts?.passed ?? "-", r.counts?.failed ?? "-", r.counts?.skipped ?? "-", r.counts?.total ?? "-"].join(" | ");
+  appendFileSync(opts.markdown, [
+    `### pnpm verify: ${allOk ? "PASS" : "FAIL"}`,
+    "",
+    `node ${process.version} · forge ${forgeVersion} · ${head}${dirty ? " with uncommitted changes" : ""}`,
+    "",
+    "| step | result | passed | failed | skipped | total |",
+    "|---|---|---|---|---|---|",
+    ...rows.map((r) => `| ${r.name} | ${r.ok ? "PASS" : `FAIL: ${r.error}`} | ${cell(r)} |`),
+    `| **all steps** | **${allOk ? "PASS" : "FAIL"}** | ${total.passed} | ${total.failed} | ${total.skipped} | ${total.total} |`,
+    "",
+    ...rows.flatMap((r) => (r.counts?.notes ?? []).map((n) => `- ${r.key}: ${n}`)),
+    "",
+  ].join("\n"));
+}
 if (opts.json) {
   writeFileSync(opts.json, `${JSON.stringify({ startedAt: started.toISOString(), node: process.version, forge: forgeVersion, head, dirty, ok: allOk, total, steps: rows }, null, 2)}\n`);
 }
