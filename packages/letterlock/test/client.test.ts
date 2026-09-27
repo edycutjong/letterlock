@@ -2,25 +2,28 @@
 import { parseEventLogs, zeroAddress, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
+import * as sdk from "../src/index.ts";
 import {
   LETTERLOCK_RP_ID,
   createEncryptionAddress,
-  deriveKeyPair,
+  deriveFromPasskey,
   fingerprint,
   isLetterlockError,
   letterlockAbi,
+  meraAccount,
   open,
   seal,
   toHex,
   type ChainErrorCode,
   type LetterlockErrorCode,
 } from "../src/index.ts";
-import { Fault, anvil, client, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs, standIn } from "./anvil/context.ts";
+import { Fault, agentStandIn, anvil, client, ctx, faultyAbi, fund, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs, standIn } from "./anvil/context.ts";
 import { rpcProxy } from "./anvil/proxy.ts";
 import { softAuthenticator } from "./soft-authenticator.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
-const prf = (n: number) => new Uint8Array(32).fill(n);
+// looked up at call time, so this file still loads (and the test fails, not the file) against a build without it
+const deriveForAgent = (o: Parameters<typeof sdk.deriveForAgent>[0]) => sdk.deriveForAgent(o);
 const codeOf = async (p: Promise<unknown>): Promise<string> =>
   p.then(() => "no error", (e: unknown) => (isLetterlockError(e) ? e.code : `not a LetterlockError: ${String(e)}`));
 const rejects = async (p: Promise<unknown>, code: LetterlockErrorCode | ChainErrorCode) => expect(await codeOf(p)).toBe(code);
@@ -261,7 +264,7 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
   });
 
   it("the owner publishes; agent:<id> resolves to that key", async () => {
-    const keys = standIn(16, 1);
+    const keys = agentStandIn(16, agentId, 1);
     const r = await client().publishForAgent({ account: owner, agentId, keys });
     expect(r.recipient).toBe(`agent:${agentId}`);
     const key = await client().resolve(`agent:${agentId}`);
@@ -274,30 +277,31 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
     const other = newAgentId();
     const acct = await fundedAccount();
     await sendAs(ctx.ok ? ctx.registry : zeroAddress, registryAbi, "mint", [acct.address, other]);
-    await client().publishForAgent({ account: acct, agentId: `agent:${other}`, keys: standIn(17, 1) });
-    await client().publishForAgent({ account: acct, agentId: String(other), keys: standIn(18, 2) });
-    await client().publishForAgent({ account: acct, agentId: Number(other), keys: standIn(19, 3) });
+    await client().publishForAgent({ account: acct, agentId: `agent:${other}`, keys: agentStandIn(17, other, 1) });
+    await client().publishForAgent({ account: acct, agentId: String(other), keys: agentStandIn(18, other, 2) });
+    await client().publishForAgent({ account: acct, agentId: Number(other), keys: agentStandIn(19, other, 3) });
     expect((await client().resolve(`agent:${other}`)).epoch).toBe(3);
-    await rejects(client().publishForAgent({ account: acct, agentId: -1, keys: standIn(19, 4) }), "INPUT_INVALID");
-    await rejects(client().publishForAgent({ account: acct, agentId: (1n << 256n) - 1n, keys: standIn(19, 4) }), "INPUT_INVALID");
+    await rejects(client().publishForAgent({ account: acct, agentId: -1, keys: agentStandIn(19, other, 4) }), "INPUT_INVALID");
+    await rejects(client().publishForAgent({ account: acct, agentId: (1n << 256n) - 1n, keys: agentStandIn(19, other, 4) }), "INPUT_INVALID");
   });
 
   it("a non-owner → NOT_AGENT_OWNER; an agent nobody owns → NOT_AGENT_OWNER", async () => {
     const stranger = await fundedAccount();
-    await rejects(client().publishForAgent({ account: stranger, agentId, keys: standIn(20, 2) }), "NOT_AGENT_OWNER");
-    await rejects(client().publishForAgent({ account: stranger, agentId: newAgentId(), keys: standIn(20, 1) }), "NOT_AGENT_OWNER");
+    await rejects(client().publishForAgent({ account: stranger, agentId, keys: agentStandIn(20, agentId, 2) }), "NOT_AGENT_OWNER");
+    const unowned = newAgentId();
+    await rejects(client().publishForAgent({ account: stranger, agentId: unowned, keys: agentStandIn(20, unowned, 1) }), "NOT_AGENT_OWNER");
   });
 
   it("the key follows the NFT: after a transfer the old key no longer resolves, and the new owner continues the epochs", async () => {
     const id = newAgentId();
     const [seller, buyer] = [await fundedAccount(), await fundedAccount()];
     await sendAs(ctx.ok ? ctx.registry : zeroAddress, registryAbi, "mint", [seller.address, id]);
-    await client().publishForAgent({ account: seller, agentId: id, keys: standIn(21, 1) });
+    await client().publishForAgent({ account: seller, agentId: id, keys: agentStandIn(21, id, 1) });
     await sendAs(ctx.ok ? ctx.registry : zeroAddress, registryAbi, "transfer", [id, buyer.address]);
     await rejects(client().resolve(`agent:${id}`), "NO_KEY_PUBLISHED");
     await rejects(client().sealTo(`agent:${id}`, utf8("to the old owner?")), "NO_KEY_PUBLISHED");
-    await rejects(client().publishForAgent({ account: buyer, agentId: id, keys: standIn(22, 1) }), "EPOCH_MISMATCH");
-    await client().publishForAgent({ account: buyer, agentId: id, keys: standIn(22, 2) });
+    await rejects(client().publishForAgent({ account: buyer, agentId: id, keys: agentStandIn(22, id, 1) }), "EPOCH_MISMATCH");
+    await client().publishForAgent({ account: buyer, agentId: id, keys: agentStandIn(22, id, 2) });
     expect((await client().resolve(`agent:${id}`)).epoch).toBe(2);
   });
 
@@ -306,7 +310,7 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
     const ll = client({ directory: ctx.directoryNoAgents });
     const acct = await fundedAccount();
     await rejects(ll.resolve("agent:1"), "INPUT_INVALID");
-    await rejects(ll.publishForAgent({ account: acct, agentId: 1n, keys: standIn(23, 1) }), "INPUT_INVALID");
+    await rejects(ll.publishForAgent({ account: acct, agentId: 1n, keys: agentStandIn(23, 1n, 1) }), "INPUT_INVALID");
     const env = await seal({ chainId: 143, directory: ctx.directoryNoAgents, to: { recipient: "agent:1", publicKey: standIn(23, 1).publicKey, epoch: 1 }, plaintext: utf8("x") });
     await rejects(ll.drop({ account: acct, envelope: env }), "INPUT_INVALID");
   });
@@ -333,6 +337,40 @@ describe.skipIf(noChain)("an RPC that refuses JSON-RPC batches (rpc-mainnet.mona
   });
 });
 
+describe.skipIf(noChain)("an agent's key is its own, never its owner's (the agent id is in the derivation)", () => {
+  it("a key derived for the owner's address is refused for the agent; deriveForAgent's key cannot open the owner's notes", async () => {
+    if (!ctx.ok) return;
+    const dev = softAuthenticator();
+    const { keys: ownerKeys, credential } = await createEncryptionAddress({ rp: { id: LETTERLOCK_RP_ID, name: "Letterlock" }, user: { name: "ops", displayName: "Operator" }, webAuthnClient: dev });
+    const owner = await meraAccount({ rpId: LETTERLOCK_RP_ID, credential, webAuthnClient: dev });
+    await fund(owner.address, "1");
+    await client().publish({ account: owner, keys: ownerKeys });
+    const agentId = newAgentId();
+    await sendAs(ctx.registry, registryAbi, "mint", [owner.address, agentId]);
+
+    // the owner's own epoch-1 key, as deriveFromPasskey gives it: never an agent's key
+    const own = await deriveFromPasskey({ rpId: LETTERLOCK_RP_ID, epoch: 1, credential, webAuthnClient: dev });
+    expect(toHex(own.publicKey)).toBe(toHex(ownerKeys.publicKey));
+    await rejects(client().publishForAgent({ account: owner, agentId, keys: own }), "INPUT_INVALID");
+    // nor the owner's key labelled as the agent's by hand: the directory holds it as the owner's
+    await rejects(client().publishForAgent({ account: owner, agentId, keys: { ...own, agentId } }), "INPUT_INVALID");
+
+    const agentKeys = await deriveForAgent({ rpId: LETTERLOCK_RP_ID, agentId, epoch: 1, credential, webAuthnClient: dev });
+    await rejects(client().publishForAgent({ account: owner, agentId: agentId + 1n, keys: agentKeys }), "INPUT_INVALID"); // another agent's
+    await rejects(client().publish({ account: owner, keys: agentKeys }), "INPUT_INVALID"); // an agent's key is not an address key
+    await client().publishForAgent({ account: owner, agentId, keys: agentKeys });
+    const [a, b] = [await client().resolve(owner.address), await client().resolve(`agent:${agentId}`)];
+    expect(toHex(b.publicKey)).toBe(toHex(agentKeys.publicKey));
+    expect(toHex(b.publicKey)).not.toBe(toHex(a.publicKey));
+
+    // the agent's server holds agentKeys: the owner's own notes stay closed to it
+    const note = await client().sealTo(owner.address, utf8("the owner's private note"));
+    await rejects(open(note, agentKeys), "WRONG_KEY");
+    expect(new TextDecoder().decode(await open(await client().sealTo(`agent:${agentId}`, utf8("a task")), agentKeys))).toBe("a task");
+    owner.end();
+  });
+});
+
 describe.skipIf(noChain)("a registry that cannot answer (RegistryCallFailed): unknown, never 'no key'", () => {
   it.each([["EmptyRevert", Fault.EmptyRevert], ["OutOfGas", Fault.OutOfGas], ["ErrorString", Fault.ErrorString], ["Panic", Fault.Panic]])(
     "ownerOf fails with %s → resolve, sealTo, drop and publishForAgent throw CHAIN_UNAVAILABLE", async (_, fault) => {
@@ -341,7 +379,7 @@ describe.skipIf(noChain)("a registry that cannot answer (RegistryCallFailed): un
       const acct = await fundedAccount();
       const id = newAgentId();
       await sendAs(ctx.faultyRegistry, faultyAbi, "mint", [acct.address, id]);
-      const keys = standIn(24, 1);
+      const keys = agentStandIn(24, id, 1);
       await ll.publishForAgent({ account: acct, agentId: id, keys });
       const env = await ll.sealTo(`agent:${id}`, utf8("x"));
       await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [fault]);
@@ -349,7 +387,7 @@ describe.skipIf(noChain)("a registry that cannot answer (RegistryCallFailed): un
         await rejects(ll.resolve(`agent:${id}`), "CHAIN_UNAVAILABLE");
         await rejects(ll.sealTo(`agent:${id}`, utf8("x")), "CHAIN_UNAVAILABLE");
         await rejects(ll.drop({ account: acct, envelope: env }), "CHAIN_UNAVAILABLE");
-        await rejects(ll.publishForAgent({ account: acct, agentId: id, keys: standIn(25, 2) }), "CHAIN_UNAVAILABLE");
+        await rejects(ll.publishForAgent({ account: acct, agentId: id, keys: agentStandIn(25, id, 2) }), "CHAIN_UNAVAILABLE");
       } finally {
         await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [Fault.None]);
       }

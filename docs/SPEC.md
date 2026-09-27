@@ -28,13 +28,25 @@ sk             = HKDF-SHA256(ikm = prf, salt = "letterlock/v1",
 pk             = X25519(sk, 9)                                                published as bytes32
 fingerprint    = hex(SHA-256(pk)[0..8])
 ```
+An ERC-8004 agent's key (§8) comes from its owner's passkey with the agent id in both labels:
+```
+agentSalt(id, epoch) = SHA-256("letterlock/hpke/v1/agent:" ‖ decimal(id) ‖ "/" ‖ decimal(epoch))    id ∈ [0, 2^256 − 2]
+prf                  = PRF(passkey, agentSalt(id, epoch))
+sk                   = HKDF-SHA256(ikm = prf, salt = "letterlock/v1",
+                                   info = "letterlock/v1/x25519/agent:" ‖ decimal(id) ‖ "/" ‖ decimal(epoch), L = 32)
+```
 - Letterlock's salt namespace is disjoint from mera's account salt `SHA-256("mera.prf.salt.v1")`: the
   encryption key and the passkey wallet key are unrelated.
+- An agent's key is unrelated to its owner's own key and to the owner's other agents' keys, so the agent's server
+  can hold its `sk` without being able to open anything sealed to the owner, and the owner's passkey re-derives it
+  on any device. An address label has only digits after the prefix and an agent label starts with `agent:`, so the
+  two never collide. The owner of an agent is public anyway (the registry's `ownerOf`, the publishing transaction):
+  distinct keys stop key sharing, not that link.
 - Rotation is `epoch + 1`: a new salt gives an unrelated PRF output. Every earlier epoch stays re-derivable, so
   old envelopes keep opening.
 - Nothing secret is persisted by Letterlock. `openWithPasskey` zeroes its copy of `sk` after use (best effort:
   copies inside the crypto libraries and mera's PRF output are out of reach, and JS cannot guarantee erasure).
-  `deriveFromPasskey` returns `sk` to the caller, who owns wiping it.
+  `deriveFromPasskey` and `deriveForAgent` return `sk` to the caller, who owns wiping it.
 
 ## 3. Envelope
 ```json
@@ -62,10 +74,11 @@ lp(x) = u16(len(x)) ‖ x;  integers big-endian;  recipient = lower-cased 0x-add
 | Call | Passkey prompt | Notes |
 |---|---|---|
 | `createEncryptionAddress` | 1 (2 if the authenticator skips PRF at creation) | returns epoch-1 key + credential metadata |
-| `deriveFromPasskey(epoch)` | 1 | pass the stored credential to pin the passkey |
+| `deriveFromPasskey(epoch)` | 1 | the passkey's own key; pass the stored credential to pin the passkey |
+| `deriveForAgent(agentId, epoch)` | 1 | an agent's key (§2), from its owner's passkey; the key carries `agentId` |
 | `seal(to, plaintext)` | none | anyone may seal to a published key |
 | `open(envelope, keys)` | none | with an already-derived key |
-| `openWithPasskey(envelope)` | 1 | validates the envelope first (no prompt wasted), derives `envelope.epoch`, opens, wipes its `sk` copy |
+| `openWithPasskey(envelope)` | 1 | validates the envelope first (no prompt wasted), derives the key for `envelope.recipient` (an agent's for `agent:<id>`) and `envelope.epoch`, opens, wipes its `sk` copy |
 
 The chain client, `letterlock({ chain: "monad" | "monad-testnet", rpcUrl?, directory?, rpId? })`, carries the §8
 directory addresses as constants. A `directory` passed in must carry a valid EIP-55 checksum (or be all lower-case).
@@ -80,7 +93,7 @@ either. It sends one JSON-RPC request per HTTP request, never a batch: some Mona
 | `sealTo(to, plaintext)` | none | `resolve` + `seal` |
 | `publish({ account, keys })` | none | `publish(pub, epoch)` from `account`; simulated first, so a refused call costs no gas |
 | `rotate({ account, credential })` | 1 | reads the account's epoch e, derives e + 1 (§2), publishes it, wipes `sk` |
-| `publishForAgent({ account, agentId, keys })` | none | `publishForAgent`; the epoch follows the agent's record across owners (§8) |
+| `publishForAgent({ account, agentId, keys })` | none | `publishForAgent`; the epoch follows the agent's record across owners (§8). Takes only a key derived for that agent (`deriveForAgent`), never one derived for an address, and never the account's own key in the directory; `publish` never takes an agent's key |
 | `drop({ account, envelope })` | none | sends the §3 wire form to the envelope's own recipient; chain and directory must be the client's |
 | `inbox(to, { fromBlock?, toBlock? })` | none | `Dropped` logs for `(to, NO_AGENT)` or `(address(0), agentId)`, from the deploy block by default, in pages the RPC accepts; bytes that are not an envelope for `to` on this chain and directory are returned as `rejected`, never as envelopes. `toBlock` defaults to the `finalized` block: a Finalized block is never replaced, so a poll resumed from `toBlock + 1` misses nothing. `"latest"` (Monad's Proposed block) and `"safe"` (Voted) reach closer to the head, where a drop can still vanish or move; the result's `finalizedBlock` says how far a scan is final |
 | `meraAccount({ rpId, credential })` | 1 | the passkey's EVM account (§7) as a viem account backed by a mera signing session |
@@ -127,7 +140,7 @@ recipient, epoch, directory or chain.
   `LETTERLOCK_RP_ID` (`letterlock-app.vercel.app`). Keys derived on another origin (localhost, preview deploys)
   cannot be re-derived in production. The chain client refuses `publish`, `rotate` and `publishForAgent` when its
   rpId is another one, unless it was created with `unsafeAllowAnyRpId: true`, for tests. It publishes a key only
-  when the key carries the client's rpId: keys from `createEncryptionAddress` and `deriveFromPasskey` record theirs,
+  when the key carries the client's rpId: keys from `createEncryptionAddress`, `deriveFromPasskey` and `deriveForAgent` record theirs,
   and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it could come from any passkey.
   `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another rpId. Reads and seals are not
   pinned: sealing needs no passkey.
@@ -197,7 +210,7 @@ directory `0x4DE866601eA5eA35Eb142394Df12bFA936A4b5D4` (commit `d15fe63`, before
 - `epoch` must be exactly the stored epoch + 1 (`EpochNotNext(current, given)`): the first key is epoch 1, and each
   rotation adds 1, as in §2. Reaching epoch n takes n publishes, so no single call can use up the epoch range.
 - An agent has one epoch sequence across owners. A new owner publishes `agentKeyRecord(agentId).epoch + 1`, derived
-  from its own passkey (§2).
+  from its own passkey with the agent's salt (§2), never its own address key.
 - `NO_AGENT = 2^256 − 1` marks "no agent": it is `KeyPublished.agentId` for an address key and `toAgent` in `drop`
   for an address recipient. Agent id 0 is a real ERC-8004 id, so the marker cannot be 0; `publishForAgent` rejects
   `NO_AGENT` (`AgentIdReserved`).

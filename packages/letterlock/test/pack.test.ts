@@ -8,7 +8,6 @@ import { build } from "esbuild";
 import { beforeAll, describe, expect, it } from "vitest";
 import { VERSION } from "../src/index.ts";
 import { anvil, client, fundedAccount, noChain, standIn } from "./anvil/context.ts";
-import { deriveKeyPair } from "../src/index.ts";
 
 const pkgDir = fileURLToPath(new URL("..", import.meta.url));
 const dist = (f: string) => fileURLToPath(new URL(`../dist/${f}`, import.meta.url));

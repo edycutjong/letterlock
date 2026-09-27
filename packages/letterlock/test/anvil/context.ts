@@ -3,7 +3,7 @@
 import { createPublicClient, createTestClient, createWalletClient, http, parseAbi, parseEther, zeroAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { inject } from "vitest";
-import { LETTERLOCK_RP_ID, deriveKeyPair, letterlock, letterlockAbi, type LetterlockConfig } from "../../src/index.ts";
+import { LETTERLOCK_RP_ID, deriveAgentKeyPair, deriveKeyPair, letterlock, letterlockAbi, type LetterlockConfig } from "../../src/index.ts";
 import { DEPLOYER, startAnvil } from "./global-setup.ts";
 
 export const ctx = inject("anvil");
@@ -38,6 +38,10 @@ export const fund = async (address: Address, mon = "10") => testClient().setBala
  * production client publishes it.
  */
 export const standIn = (fill: number, epoch = 1) => ({ ...deriveKeyPair(new Uint8Array(32).fill(fill), epoch), rpId: LETTERLOCK_RP_ID });
+
+/** The same stand-in for an ERC-8004 agent's key (deriveAgentKeyPair: the agent id in the derivation), as deriveForAgent() labels it. */
+export const agentStandIn = (fill: number, agentId: bigint, epoch = 1) =>
+  ({ ...deriveAgentKeyPair(new Uint8Array(32).fill(fill), agentId, epoch), rpId: LETTERLOCK_RP_ID });
 
 /** A new random key with MON on anvil. */
 export const fundedAccount = async (mon = "10"): Promise<PrivateKeyAccount> => {

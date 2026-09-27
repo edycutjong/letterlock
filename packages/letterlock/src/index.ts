@@ -1,11 +1,11 @@
 export * from "./errors.ts";
-export { deriveKeyPair, fingerprint, prfSaltFor, MAX_EPOCH, type EncryptionKeyPair } from "./derive.ts";
-export { seal, open, parseEnvelope, encodeEnvelope, decodeEnvelope, infoFor, canonicalRecipient, suite, type Envelope, type EnvelopeHeader, type Recipient, type SealParams, type RecipientKey } from "./envelope.ts";
-export { createEncryptionAddress, deriveFromPasskey, openWithPasskey, type CreateAddressOptions, type DeriveOptions, type OpenWithPasskeyOptions, type PasskeyKeyPair } from "./passkey.ts";
+export { deriveKeyPair, deriveAgentKeyPair, fingerprint, prfSaltFor, agentPrfSaltFor, MAX_EPOCH, type EncryptionKeyPair, type AgentKeyPair } from "./derive.ts";
+export { seal, open, parseEnvelope, encodeEnvelope, decodeEnvelope, infoFor, canonicalRecipient, toAgentId, suite, type Envelope, type EnvelopeHeader, type Recipient, type SealParams, type RecipientKey } from "./envelope.ts";
+export { createEncryptionAddress, deriveFromPasskey, deriveForAgent, openWithPasskey, type CreateAddressOptions, type DeriveOptions, type DeriveForAgentOptions, type OpenWithPasskeyOptions, type PasskeyKeyPair, type AgentPasskeyKeyPair } from "./passkey.ts";
 export { toB64url, fromB64url, toHex, fromHex } from "./bytes.ts";
 export { letterlockAbi } from "./abi.ts";
 export { DEPLOYMENTS, LETTERLOCK_RP_ID, NO_AGENT, MAX_ENVELOPE_BYTES, type Deployment, type LetterlockChain } from "./deployments.ts";
-export { letterlock, toAgentId, type LetterlockClient, type LetterlockConfig, type ResolvedKey, type PublishableKey, type PublishResult, type DropResult, type WriteResult, type Signer } from "./client.ts";
+export { letterlock, type LetterlockClient, type LetterlockConfig, type ResolvedKey, type PublishableKey, type PublishResult, type DropResult, type WriteResult, type Signer } from "./client.ts";
 export { meraAccount, MERA_ACCOUNT_PATH, type MeraAccount, type MeraAccountOptions } from "./account.ts";
 export { toLetterlockError } from "./chain-errors.ts";
 export type { InboxOptions, InboxResult, InboxEnvelope, RejectedDrop, InboxBlockTag } from "./inbox.ts";

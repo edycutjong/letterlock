@@ -2,6 +2,7 @@ import { Chacha20Poly1305 } from "@hpke/chacha20poly1305";
 import { CipherSuite, HkdfSha256 } from "@hpke/core";
 import { DhkemX25519HkdfSha256 } from "@hpke/dhkem-x25519";
 import { concat, fromB64url, fromHex, lp, toB64url, uintBE, utf8 } from "./bytes.ts";
+import { NO_AGENT } from "./deployments.ts";
 import { fingerprint, type EncryptionKeyPair } from "./derive.ts";
 import { LetterlockError } from "./errors.ts";
 
@@ -46,6 +47,17 @@ export const canonicalRecipient = (r: string): Recipient => {
   // a 64-hex-digit value pasted as a recipient may be a private key: never echo one into an error message
   const shown = typeof r === "string" ? JSON.stringify(r.replace(/[0-9a-fA-F]{64}/g, "[64 hex digits]")) : typeof r;
   throw new LetterlockError("INPUT_INVALID", `recipient must be 0x<40 hex> or agent:<id>, got ${shown}`);
+};
+
+/** `agent:<id>`, `<id>`, a number or a bigint → the agent id, below the NO_AGENT marker. */
+export const toAgentId = (agent: bigint | number | string): bigint => {
+  const text = typeof agent === "string" ? (agent.startsWith("agent:") ? agent : `agent:${agent}`) : undefined;
+  let id: bigint;
+  if (text !== undefined) id = BigInt(canonicalRecipient(text).slice("agent:".length));
+  else if (typeof agent === "bigint" || (typeof agent === "number" && Number.isSafeInteger(agent))) id = BigInt(agent);
+  else throw new LetterlockError("INPUT_INVALID", `agent id must be a non-negative integer, got ${String(agent)}`);
+  if (id < 0n || id >= NO_AGENT) throw new LetterlockError("INPUT_INVALID", `agent id must be in 0..2^256 - 2, got ${id}`);
+  return id;
 };
 
 const checkHeader = (h: EnvelopeHeader): void => {

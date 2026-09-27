@@ -7,7 +7,7 @@
 // On anvil the account is funded with anvil_setBalance; on Monad it needs MON for gas.
 import { parseEventLogs } from "viem";
 import { describe, expect, it } from "vitest";
-import { LETTERLOCK_RP_ID, createEncryptionAddress, fingerprint, letterlockAbi, meraAccount, toHex } from "../src/index.ts";
+import { LETTERLOCK_RP_ID, createEncryptionAddress, fingerprint, letterlockAbi, meraAccount, open, toHex } from "../src/index.ts";
 import { client, fund, fundedAccount, noChain, publicClient, testClient } from "./anvil/context.ts";
 import { softAuthenticator } from "./soft-authenticator.ts";
 
@@ -81,17 +81,21 @@ describe.skipIf(noChain)("publish → resolve → seal → drop → inbox → op
     await fund(owner.address, "1");
     const agentId = newAgentId();
     await sendAs(ctx.registry, registryAbi, "mint", [owner.address, agentId]);
-    const { deriveFromPasskey } = await import("../src/index.ts");
-    const agentKeys = await deriveFromPasskey({ rpId: LETTERLOCK_RP_ID, epoch: 1, credential, webAuthnClient: dev });
+    // the agent's key comes from the owner's passkey with the agent id in the derivation: its server can hold the
+    // secret (open(envelope, agentKeys)) without it opening anything sealed to the owner
+    const { deriveForAgent } = await import("../src/index.ts");
+    const agentKeys = await deriveForAgent({ rpId: LETTERLOCK_RP_ID, agentId, epoch: 1, credential, webAuthnClient: dev });
     const r = await client().publishForAgent({ account: owner, agentId, keys: agentKeys });
-    agentKeys.secretKey.fill(0);
     const sender = await fundedAccount("1");
     const env = await client().sealTo(`agent:${agentId}`, utf8("summarise the 10:40 call"));
     await client().drop({ account: sender, envelope: env });
     await testClient().mine({ blocks: 2 }); // finalized
     const inbox = await client().inbox(`agent:${agentId}`, { fromBlock: r.blockNumber });
     expect(inbox.envelopes).toHaveLength(1);
-    expect(text(await client().open(inbox.envelopes[0]!.envelope, { credential, webAuthnClient: dev }))).toBe("summarise the 10:40 call");
+    expect(text(await open(inbox.envelopes[0]!.envelope, agentKeys))).toBe("summarise the 10:40 call"); // the agent's server
+    agentKeys.secretKey.fill(0);
+    // and the owner's passkey, on any device: open() derives the agent's key for an agent:<id> envelope
+    expect(text(await client().open(inbox.envelopes[0]!.envelope, { credential, webAuthnClient: dev.syncedTo() }))).toBe("summarise the 10:40 call");
     owner.end();
   });
 });

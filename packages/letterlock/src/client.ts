@@ -18,7 +18,7 @@ import { letterlockAbi } from "./abi.ts";
 import { answeredByCode, toLetterlockError } from "./chain-errors.ts";
 import { DEPLOYMENTS, LETTERLOCK_RP_ID, MAX_ENVELOPE_BYTES, NO_AGENT, type LetterlockChain } from "./deployments.ts";
 import { MAX_EPOCH, fingerprint } from "./derive.ts";
-import { canonicalRecipient, encodeEnvelope, seal, type Envelope, type Recipient, type RecipientKey } from "./envelope.ts";
+import { canonicalRecipient, encodeEnvelope, seal, toAgentId, type Envelope, type Recipient, type RecipientKey } from "./envelope.ts";
 import { LetterlockError } from "./errors.ts";
 import { readInbox, type InboxOptions, type InboxResult } from "./inbox.ts";
 import { deriveFromPasskey, openWithPasskey } from "./passkey.ts";
@@ -55,9 +55,11 @@ export type ResolvedKey = RecipientKey & {
 
 /**
  * What publish needs: the public half, its epoch, and the rpId it was derived under, which must be the client's (the
- * keys createEncryptionAddress() and deriveFromPasskey() return carry it). Only `unsafeAllowAnyRpId` accepts no rpId.
+ * keys createEncryptionAddress(), deriveFromPasskey() and deriveForAgent() return carry it). Only `unsafeAllowAnyRpId`
+ * accepts no rpId. `agentId` marks an agent's key (deriveForAgent, deriveAgentKeyPair): publishForAgent() takes only a
+ * key marked for that agent, and publish() never takes one.
  */
-export type PublishableKey = { readonly publicKey: Uint8Array; readonly epoch: number; readonly rpId?: string };
+export type PublishableKey = { readonly publicKey: Uint8Array; readonly epoch: number; readonly rpId?: string; readonly agentId?: bigint };
 
 export type WriteResult = {
   readonly transactionHash: Hex;
@@ -93,7 +95,10 @@ export type LetterlockClient = {
   publish(o: { account: Signer; keys: PublishableKey }): Promise<PublishResult>;
   /** One passkey prompt: derive the next epoch's key (1 when none) and publish it. Old envelopes keep opening. */
   rotate(o: { account: Signer; credential?: PasskeyCredentialMetadata; webAuthnClient?: WebAuthnClient }): Promise<PublishResult>;
-  /** Publish an ERC-8004 agent's key; the account must own the agent. Epochs continue across owners. */
+  /**
+   * Publish an ERC-8004 agent's key; the account must own the agent. The key must come from deriveForAgent() for this
+   * agent: never the owner's own key. Epochs continue across owners.
+   */
   publishForAgent(o: { account: Signer; agentId: bigint | number | string; keys: PublishableKey }): Promise<PublishResult>;
   /** Emit an envelope on the directory (the demo transport). The recipient must have a key now. */
   drop(o: { account: Signer; envelope: Envelope }): Promise<DropResult>;
@@ -102,17 +107,6 @@ export type LetterlockClient = {
 };
 
 const CHAINS = { monad, "monad-testnet": monadTestnet } as const;
-
-/** `agent:<id>`, `<id>`, a number or a bigint → the agent id, below the NO_AGENT marker. */
-export const toAgentId = (agent: bigint | number | string): bigint => {
-  const text = typeof agent === "string" ? (agent.startsWith("agent:") ? agent : `agent:${agent}`) : undefined;
-  let id: bigint;
-  if (text !== undefined) id = BigInt(canonicalRecipient(text).slice("agent:".length));
-  else if (typeof agent === "bigint" || (typeof agent === "number" && Number.isSafeInteger(agent))) id = BigInt(agent);
-  else throw new LetterlockError("INPUT_INVALID", `agent id must be a non-negative integer, got ${String(agent)}`);
-  if (id < 0n || id >= NO_AGENT) throw new LetterlockError("INPUT_INVALID", `agent id must be in 0..2^256 - 2, got ${id}`);
-  return id;
-};
 
 /**
  * A Letterlock client for one chain and directory.
@@ -212,16 +206,25 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       throw new LetterlockError("INPUT_INVALID",
         `${action}: rpId "${rpId}" is not the production rpId "${LETTERLOCK_RP_ID}". A key derived under another rpId can never be re-derived in production, so every note sealed to it would be unopenable`);
   };
-  const checkKey = (keys: PublishableKey, action: string) => {
+  /** `forAgent`: the agent publishForAgent() writes, which the key must have been derived for; undefined for publish(). */
+  const checkKey = (keys: PublishableKey, action: string, forAgent?: bigint) => {
     if (!keys || !(keys.publicKey instanceof Uint8Array) || keys.publicKey.length !== 32)
       throw new LetterlockError("INPUT_INVALID", `${action}: keys.publicKey must be the 32-byte X25519 public key`);
     if (!Number.isInteger(keys.epoch) || keys.epoch < 1 || keys.epoch > MAX_EPOCH)
       throw new LetterlockError("INPUT_INVALID", `${action}: keys.epoch must be an integer in 1..${MAX_EPOCH}, got ${keys.epoch}`);
+    // An agent's key is derived with the agent id in its salt (docs/SPEC.md §2). The owner's own key would hand whoever
+    // holds the agent's secret every note sealed to the owner, and link the two publicly.
+    if (forAgent === undefined && keys.agentId !== undefined)
+      throw new LetterlockError("INPUT_INVALID", `${action}: this key was derived for agent ${String(keys.agentId)}; publish it with publishForAgent`);
+    if (forAgent !== undefined && keys.agentId !== forAgent)
+      throw new LetterlockError("INPUT_INVALID", keys.agentId === undefined
+        ? `${action}: this key was not derived for agent ${forAgent}. Derive it with deriveForAgent({ agentId: ${forAgent}, epoch }): a key from deriveFromPasskey() is the owner's own, and whoever holds the agent's secret could open every note sealed to the owner`
+        : `${action}: this key was derived for agent ${String(keys.agentId)}, not agent ${forAgent}`);
     // The key must say where it was derived: a key rebuilt as { publicKey, epoch } has lost that, and could come from
     // any passkey. Only unsafeAllowAnyRpId (tests) takes a key without an rpId; none takes a key from another rpId.
     if (keys.rpId === undefined && config.unsafeAllowAnyRpId !== true)
       throw new LetterlockError("INPUT_INVALID",
-        `${action}: the key carries no rpId. Pass the key createEncryptionAddress() or deriveFromPasskey() returned (it records the rpId "${rpId}" it was derived under), not one rebuilt from its fields`);
+        `${action}: the key carries no rpId. Pass the key createEncryptionAddress(), deriveFromPasskey() or deriveForAgent() returned (it records the rpId "${rpId}" it was derived under), not one rebuilt from its fields`);
     if (keys.rpId !== undefined && keys.rpId !== rpId)
       throw new LetterlockError("INPUT_INVALID", `${action}: the key was derived under rpId "${keys.rpId}", and this client publishes for "${rpId}"`);
   };
@@ -313,10 +316,15 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
 
     async publishForAgent({ account, agentId, keys }) {
       pinned("publishForAgent");
-      checkKey(keys, "publishForAgent");
       const id = toAgentId(agentId);
-      addressOf(account, "publishForAgent");
+      checkKey(keys, `publishForAgent ${id}`, id);
+      const owner = addressOf(account, "publishForAgent");
       await requireAgentPath(`publishForAgent ${id}`);
+      // however the key was labelled, never the account's own published key
+      const [ownKey] = await read(`keyOf(${owner})`, () =>
+        publicClient.readContract({ address: directory, abi: letterlockAbi, functionName: "keyOf", args: [owner] }));
+      if (BigInt(ownKey) !== 0n && ownKey.toLowerCase() === bytesToHex(keys.publicKey))
+        throw new LetterlockError("INPUT_INVALID", `publishForAgent ${id}: this is ${owner}'s own key in the directory; an agent's key must be derived for the agent (deriveForAgent)`);
       const r = await send(account, "publishForAgent", [id, bytesToHex(keys.publicKey), keys.epoch], `publishForAgent ${id} epoch ${keys.epoch}`);
       return publishResult(r, `agent:${id}`, keys);
     },

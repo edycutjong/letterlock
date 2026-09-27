@@ -7,7 +7,7 @@ import { generatePrivateKey } from "viem/accounts";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../src/cli/program.ts";
-import { VERSION, decodeEnvelope, deriveKeyPair, fingerprint, open, toHex } from "../src/index.ts";
+import { VERSION, decodeEnvelope, fingerprint, open, toHex } from "../src/index.ts";
 import { client, ctx, fund, fundedAccount, noChain, standIn } from "./anvil/context.ts";
 
 type Result = { code: number; stdout: string; stderr: string };

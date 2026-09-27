@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { toHex, utf8 } from "../src/bytes.ts";
 import { open, seal } from "../src/envelope.ts";
 import { isLetterlockError } from "../src/errors.ts";
-import { createEncryptionAddress, deriveFromPasskey, openWithPasskey } from "../src/passkey.ts";
+import { createEncryptionAddress, deriveForAgent, deriveFromPasskey, openWithPasskey } from "../src/passkey.ts";
 import { softAuthenticator } from "./soft-authenticator.ts";
 
 const rp = { id: "letterlock.test", name: "Letterlock" };
@@ -91,7 +91,7 @@ describe("passkey → encryption address (via mera)", () => {
     const first = await createEncryptionAddress({ rp, user, webAuthnClient: dev });   // e.g. an old passkey
     const second = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
     const env = await seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
-      to: { recipient: "agent:7", publicKey: second.keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
+      to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: second.keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
     const e = await openWithPasskey(env, { rpId: rp.id, credential: first.credential, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
     expect(isLetterlockError(e, "WRONG_KEY")).toBe(true);
     expect(await openWithPasskey(env, { rpId: rp.id, credential: second.credential, webAuthnClient: dev })).toEqual(utf8("hi"));
@@ -101,7 +101,7 @@ describe("passkey → encryption address (via mera)", () => {
     const dev = softAuthenticator();
     const { keys, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
     const env = await seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
-      to: { recipient: "agent:7", publicKey: keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
+      to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: keys.publicKey, epoch: 1 }, plaintext: utf8("hi") });
     const before = dev.calls.get;
     for (const bad of [{ ...env, ct: "not base64!" }, { ...env, chainId: 0 }]) {
       const e = await openWithPasskey(bad, { rpId: rp.id, credential, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
@@ -110,13 +110,43 @@ describe("passkey → encryption address (via mera)", () => {
     expect(dev.calls.get).toBe(before);
   });
 
+  it("deriveForAgent: the owner's passkey derives each agent a key of its own, the same on every synced device", async () => {
+    const mac = softAuthenticator();
+    const { keys: own, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: mac });
+    const a = await deriveForAgent({ rpId: rp.id, agentId: 10260n, epoch: 1, credential, webAuthnClient: mac });
+    const again = await deriveForAgent({ rpId: rp.id, agentId: "agent:10260", epoch: 1, credential, webAuthnClient: mac.syncedTo() });
+    const other = await deriveForAgent({ rpId: rp.id, agentId: 10261, epoch: 1, credential, webAuthnClient: mac });
+    expect(toHex(again.publicKey)).toBe(toHex(a.publicKey));
+    expect(toHex(a.publicKey)).not.toBe(toHex(own.publicKey));
+    expect(toHex(other.publicKey)).not.toBe(toHex(a.publicKey));
+    expect([a.agentId, a.epoch, a.rpId]).toEqual([10260n, 1, rp.id]);
+    // what the agent's server holds does not open the owner's own notes
+    const ownNote = await seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
+      to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: own.publicKey, epoch: 1 }, plaintext: utf8("mine") });
+    const e = await open(ownNote, a).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "WRONG_KEY")).toBe(true);
+  });
+
+  it("openWithPasskey derives the agent's key for an agent:<id> envelope, and the address key otherwise", async () => {
+    const dev = softAuthenticator();
+    const { keys: own, credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
+    const agent = await deriveForAgent({ rpId: rp.id, agentId: 7, epoch: 1, credential, webAuthnClient: dev });
+    const dir = "0x00000000000000000000000000000000000000aa" as const;
+    const toAgent = await seal({ chainId: 143, directory: dir, to: { recipient: "agent:7", publicKey: agent.publicKey, epoch: 1 }, plaintext: utf8("task") });
+    const toOwner = await seal({ chainId: 143, directory: dir, to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: own.publicKey, epoch: 1 }, plaintext: utf8("note") });
+    expect(await openWithPasskey(toAgent, { rpId: rp.id, credential, webAuthnClient: dev })).toEqual(utf8("task"));
+    expect(await openWithPasskey(toOwner, { rpId: rp.id, credential, webAuthnClient: dev })).toEqual(utf8("note"));
+    const e = await deriveForAgent({ rpId: rp.id, agentId: -1, epoch: 1, webAuthnClient: dev }).then(() => null, (x: unknown) => x);
+    expect(isLetterlockError(e, "INPUT_INVALID")).toBe(true);
+  });
+
   it("openWithPasskey derives the envelope's own epoch, so notes sealed before a rotation still open", async () => {
     const dev = softAuthenticator();
     const { credential } = await createEncryptionAddress({ rp, user, webAuthnClient: dev });
     const k2 = await deriveFromPasskey({ rpId: rp.id, epoch: 2, credential, webAuthnClient: dev });
     const k1 = await deriveFromPasskey({ rpId: rp.id, epoch: 1, credential, webAuthnClient: dev });
     const mk = (k: typeof k1, t: string) => seal({ chainId: 143, directory: "0x00000000000000000000000000000000000000aa",
-      to: { recipient: "agent:7", publicKey: k.publicKey, epoch: k.epoch }, plaintext: utf8(t) });
+      to: { recipient: "0x4d2c0f6aa3b91e7ca4e8b1c0dd8ff2a1b3c4d5e6", publicKey: k.publicKey, epoch: k.epoch }, plaintext: utf8(t) });
     const [old, cur] = await Promise.all([mk(k1, "before rotation"), mk(k2, "after rotation")]);
     expect(new TextDecoder().decode(await openWithPasskey(old, { rpId: rp.id, credential, webAuthnClient: dev }))).toBe("before rotation");
     expect(new TextDecoder().decode(await openWithPasskey(cur, { rpId: rp.id, credential, webAuthnClient: dev }))).toBe("after rotation");

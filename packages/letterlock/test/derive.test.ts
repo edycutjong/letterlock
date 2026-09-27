@@ -1,7 +1,7 @@
 import { x25519 } from "@noble/curves/ed25519.js";
 import { describe, expect, it } from "vitest";
 import { toHex } from "../src/bytes.ts";
-import { deriveKeyPair, fingerprint, prfSaltFor } from "../src/derive.ts";
+import { agentPrfSaltFor, deriveAgentKeyPair, deriveKeyPair, fingerprint, prfSaltFor } from "../src/derive.ts";
 import { isLetterlockError } from "../src/errors.ts";
 
 const prf = Uint8Array.from({ length: 32 }, (_, i) => i);
@@ -46,5 +46,29 @@ describe("derivation", () => {
 
   it("rejects a PRF output that is not 32 bytes as PRF_UNSUPPORTED", () => {
     expect(() => deriveKeyPair(new Uint8Array(31), 1)).toThrow(/PRF_UNSUPPORTED/);
+  });
+});
+
+describe("an ERC-8004 agent's key (the agent id in the salt and in the HKDF info)", () => {
+  it("pins the agent derivation (golden values, computed from the formula with @noble directly)", () => {
+    expect(toHex(agentPrfSaltFor(10260n, 1))).toBe("99ee899df83f5ad5c2848f5dacee4fd00c9908b7dc62785506c59fc75b000d59");
+    const k = deriveAgentKeyPair(prf, 10260n, 1);
+    expect(toHex(k.publicKey)).toBe("ad53f0bc457b503d1cf29d27924a0c3d9286429779e4fd1fc8c795804d86aa5d");
+    expect(fingerprint(k.publicKey)).toBe("3698ae3b767dec51");
+    expect([k.agentId, k.epoch]).toEqual([10260n, 1]);
+  });
+
+  it("is never the owner's own key: another salt, and another key even from the same PRF output", () => {
+    for (const e of [1, 2]) {
+      expect(toHex(agentPrfSaltFor(10260n, e))).not.toBe(toHex(prfSaltFor(e)));
+      expect(toHex(deriveAgentKeyPair(prf, 10260n, e).publicKey)).not.toBe(toHex(deriveKeyPair(prf, e).publicKey));
+    }
+    expect(toHex(deriveAgentKeyPair(prf, 1n, 1).publicKey)).not.toBe(toHex(deriveAgentKeyPair(prf, 2n, 1).publicKey)); // nor another agent's
+    expect(toHex(agentPrfSaltFor(1n, 23))).not.toBe(toHex(agentPrfSaltFor(12n, 3))); // "agent:1/23" vs "agent:12/3"
+  });
+
+  it.each([-1n, (1n << 256n) - 1n, 5 as never, "5" as never])("rejects agent id %s as INPUT_INVALID", (id) => {
+    expect(() => agentPrfSaltFor(id, 1)).toThrow(/INPUT_INVALID/);
+    expect(() => deriveAgentKeyPair(prf, id, 1)).toThrow(/INPUT_INVALID/);
   });
 });
