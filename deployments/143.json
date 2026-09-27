@@ -32,6 +32,7 @@
     "card": "ERC-8004 registration-v1 file with A2A-style skills (seal-a-memory, answer-a-sealed-task), served with HTTP 200 by the Vercel project letterlock-agent from examples/agent-memory, which also serves the agent's endpoints POST /remember, POST /task and GET /health. The card URL is unchanged since registration (no setAgentURI); since 2026-09-27 it says active: true",
     "cardSource": "examples/agent-memory/public/.well-known/agent-card.json",
     "indexedBy": "https://trust8004.xyz/agents/143:10260",
+    "indexStatus": "stale, and no evidence that the agent is live: on 2026-09-27 at 03:55 UTC trust8004 still showed the card as it fetched it at registration (metadataUpdatedAt 1790459115000, block 108289775), which says 'Status: not live yet'. It fetches a card again only on an onchain Registered, MetadataSet or URIUpdated event, and its page's refresh button reads its own index again; no such event has been emitted since registration. examples/agent-memory/scripts/set-agent-uri.ts simulates setAgentURI(10260, the same URL) from the owner (71,772 gas); sending it takes the owner's key",
     "service": {
       "url": "https://letterlock-agent.vercel.app",
       "source": "examples/agent-memory",
