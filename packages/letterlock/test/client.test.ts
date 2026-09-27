@@ -14,7 +14,8 @@ import {
   type ChainErrorCode,
   type LetterlockErrorCode,
 } from "../src/index.ts";
-import { Fault, client, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs } from "./anvil/context.ts";
+import { Fault, anvil, client, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, registryAbi, sendAs } from "./anvil/context.ts";
+import { rpcProxy } from "./anvil/proxy.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 const prf = (n: number) => new Uint8Array(32).fill(n);
@@ -240,6 +241,23 @@ describe.skipIf(noChain)("agents (ERC-8004 path, test-double registry at the mai
 
   it("the built-in testnet directory refuses agent recipients without a chain call", async () => {
     await rejects(client({ chain: "monad-testnet", directory: undefined, rpcUrl: "http://127.0.0.1:9" }).resolve("agent:10260"), "INPUT_INVALID");
+  });
+});
+
+describe.skipIf(noChain)("an RPC that refuses JSON-RPC batches (rpc-mainnet.monadinfra.com: HTTP 403 for any batch)", () => {
+  it("resolve, sealTo, publish, drop and inbox each send one request per HTTP request, and work", async () => {
+    const proxy = await rpcProxy(anvil().rpcUrl, { refuseBatches: true });
+    try {
+      const ll = client({ rpcUrl: proxy.url });
+      const account = await fundedAccount();
+      const keys = deriveKeyPair(prf(40), 1);
+      const published = await ll.publish({ account, keys });
+      expect((await ll.resolve(account.address)).epoch).toBe(1);
+      const dropped = await ll.drop({ account, envelope: await ll.sealTo(account.address, utf8("through a strict RPC")) });
+      const box = await ll.inbox(account.address, { fromBlock: published.blockNumber, toBlock: dropped.blockNumber });
+      expect(box.envelopes.map((e) => e.transactionHash)).toEqual([dropped.transactionHash]);
+      expect(proxy.stats.batches).toBe(0);
+    } finally { await proxy.close(); }
   });
 });
 

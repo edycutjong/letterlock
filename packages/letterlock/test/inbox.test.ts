@@ -1,13 +1,13 @@
 // inbox(): Dropped logs, read in pages the RPC accepts. Monad's public RPCs cap eth_getLogs ranges (rpc.monad.xyz
 // answered "-32614 eth_getLogs is limited to a 100 range" for 1,000 blocks on 2026-09-27; rpc3 "Block range is too
-// large"; rpc-mainnet.monadinfra.com "block range too large"). A proxy in front of anvil reproduces each refusal.
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
+// large"; rpc-mainnet.monadinfra.com "block range too large", and HTTP 403 for any JSON-RPC batch). A proxy in front
+// of anvil reproduces each refusal.
 import { toHex, type Address } from "viem";
 import { beforeAll, describe, expect, it } from "vitest";
 import { NO_AGENT, deriveKeyPair, isLetterlockError, letterlockAbi, seal, type Envelope } from "../src/index.ts";
 import { narrowRange } from "../src/inbox.ts";
 import { anvil, client, ctx, fundedAccount, noChain, publicClient, sendAs, testClient } from "./anvil/context.ts";
+import { rpcError, rpcProxy } from "./anvil/proxy.ts";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 
@@ -24,40 +24,28 @@ describe("narrowRange", () => {
   });
 });
 
-type Refusal = { readonly code: number; readonly message: (limit: number) => string };
+type Refusal = { readonly code: number; readonly message: (limit: number) => string; readonly refuseBatches?: boolean };
 const REFUSALS: Record<string, Refusal> = {
   "rpc.monad.xyz (QuickNode)": { code: -32614, message: (n) => `eth_getLogs is limited to a ${n} range` },
   "rpc3.monad.xyz (Ankr)": { code: -32062, message: () => "Block range is too large" },
-  "rpc-mainnet.monadinfra.com": { code: -32602, message: () => "block range too large" },
+  "rpc-mainnet.monadinfra.com": { code: -32602, message: () => "block range too large", refuseBatches: true },
 };
 
-/** Forwards JSON-RPC to anvil, refusing eth_getLogs over `limit` blocks the way the named RPC does. */
+/** Forwards JSON-RPC to anvil, refusing eth_getLogs over `limit` blocks (and batches, where it does) the way the named RPC does. */
 const rangeLimitedProxy = async (upstream: string, limit: number, refusal: Refusal) => {
   const stats = { getLogs: 0, refused: 0 };
-  const forward = async (req: { id: unknown; method: string; params: unknown[] }) => {
-    if (req.method === "eth_getLogs") {
+  const proxy = await rpcProxy(upstream, {
+    refuseBatches: refusal.refuseBatches ?? false,
+    intercept: (req) => {
+      if (req.method !== "eth_getLogs") return undefined;
       stats.getLogs++;
       const f = req.params[0] as { fromBlock: string; toBlock: string };
-      if (BigInt(f.toBlock) - BigInt(f.fromBlock) >= BigInt(limit)) {
-        stats.refused++;
-        return { jsonrpc: "2.0", id: req.id, error: { code: refusal.code, message: refusal.message(limit) } };
-      }
-    }
-    const r = await fetch(upstream, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
-    return r.json();
-  };
-  const server: Server = createServer((req, res) => {
-    let body = "";
-    req.on("data", (c: Buffer) => (body += c.toString()));
-    req.on("end", async () => {
-      const parsed = JSON.parse(body) as unknown;
-      const reply = Array.isArray(parsed) ? await Promise.all(parsed.map(forward)) : await forward(parsed as never);
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(reply));
-    });
+      if (BigInt(f.toBlock) - BigInt(f.fromBlock) < BigInt(limit)) return undefined;
+      stats.refused++;
+      return rpcError(req, refusal.code, refusal.message(limit));
+    },
   });
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, stats, close: () => new Promise((r) => server.close(r)) };
+  return { ...proxy, stats };
 };
 
 describe.skipIf(noChain)("inbox", () => {

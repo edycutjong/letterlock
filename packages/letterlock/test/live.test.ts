@@ -27,6 +27,12 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
     expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch, key.kid, key.updatedAt]).toEqual([a.publishedKey, a.epoch, a.kid, a.updatedAt]);
   });
 
+  it("resolve('agent:10260') through rpc-mainnet.monadinfra.com, which refuses JSON-RPC batches with HTTP 403", async () => {
+    const a = r.smokeTest.agentKey!;
+    const key = await letterlock({ chain: "monad", rpcUrl: "https://rpc-mainnet.monadinfra.com" }).resolve(`agent:${a.agentId}`);
+    expect([`0x${Buffer.from(key.publicKey).toString("hex")}`, key.epoch]).toEqual([a.publishedKey, a.epoch]);
+  });
+
   it("inbox(deployer) at the drop block finds the smoke test's envelope", async () => {
     const box = await ll.inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock });
     expect(box.envelopes.map((e) => [e.transactionHash, e.bytes, e.envelope.kid])).toEqual([[r.dropTx, r.smokeTest.envelopeBytes, r.smokeTest.kid]]);

@@ -125,7 +125,9 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
   const deployBlock = config.deployBlock ?? (builtIn ? deployment.deployBlock : undefined);
   const rpId = config.rpId ?? LETTERLOCK_RP_ID;
   const viemChain = CHAINS[config.chain];
-  const transport = http(config.rpcUrl ?? deployment.rpcUrl, { batch: true });
+  // One JSON-RPC request per HTTP request, never a batch: rpc-mainnet.monadinfra.com, one of the public RPCs in Monad's
+  // docs, answers any batch (even a batch of one) with HTTP 403 "Restricted JSON RPC method".
+  const transport = http(config.rpcUrl ?? deployment.rpcUrl);
   const publicClient = createPublicClient({
     chain: viemChain,
     transport,
