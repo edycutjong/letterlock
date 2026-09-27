@@ -23,6 +23,7 @@ import {
   spentInWindow,
   unixMinute,
   verifyDripSignature,
+  walletBid,
   type DripObservation,
   type DripRequest,
 } from "../lib/drip.ts";
@@ -41,7 +42,9 @@ const signed = async (o: { by?: typeof account; address?: `0x${string}`; chainId
 };
 
 const GAS_PRICE = parseGwei("102"); // eth_gasPrice on Monad mainnet, 2026-09-27: base fee 100 + tip 2
-const MAX_FEE = parseGwei("122"); // viem's bid: base fee × 1.2 + tip
+const MAX_FEE = parseGwei("122"); // the drip's own transfer: base fee x 1.2 + tip
+const FILLED = parseGwei("152"); // eth_fillTransaction's maxFeePerGas on Monad mainnet, 2026-09-27
+const BID = walletBid(FILLED); // what viem bids for the passkey account's publish: 182.4 gwei
 
 /** A request that passes every rule: a new account, a healthy wallet with a quiet day behind it. */
 const observation = async (over: Partial<DripObservation> = {}): Promise<DripObservation> => ({
@@ -55,6 +58,7 @@ const observation = async (over: Partial<DripObservation> = {}): Promise<DripObs
   account: { hasKey: false, balance: 0n, nonce: 0 },
   gasPrice: GAS_PRICE,
   maxFeePerGas: MAX_FEE,
+  bidFeePerGas: BID,
   wallet: { balance: parseEther("1"), nonce: 0, pendingNonce: 0, recentNonce: 0, dayAgo: { balance: parseEther("1"), nonce: 0 } },
   dailyCap: DAILY_CAP_WEI,
   ...over,
@@ -120,14 +124,24 @@ test("only the account's own EIP-191 signature over this exact message verifies"
   assert.equal(await verifyDripSignature({ ...r, signature: `0x${"00".repeat(65)}` }), false);
 });
 
-test("the drip is 1.5 × the measured publish gas at the current gas price, capped at 0.02 MON", () => {
+test("the drip covers the publish at the fee cap the wallet bids, never less than 1.5 x its gas at the gas price, capped at 0.02 MON", () => {
   assert.equal(PUBLISH_GAS, 70_863n);
-  assert.equal(dripAmount(GAS_PRICE), (70_863n * parseGwei("102") * 3n) / 2n);
-  assert.equal(formatEther(dripAmount(GAS_PRICE)), "0.010842039");
-  assert.equal(dripAmount(parseGwei("1000")), DRIP_CAP_WEI);
+  assert.equal(BID, parseGwei("182.4"), "viem multiplies the filled fee by 1.2");
+  // the first live drip on mainnet was 1.5 x 70,863 x 102 gwei, and the RPC refused the publish that followed:
+  // the account held less than 70,863 x 182.4 gwei ("Signer had insufficient balance")
+  const byPrice = (70_863n * parseGwei("102") * 3n) / 2n;
+  assert.equal(formatEther(byPrice), "0.010842039");
+  assert.ok(byPrice < publishNeeds(BID), "1.5 x the gas price alone does not pay for the bid");
+  assert.equal(formatEther(publishNeeds(BID)), "0.0129254112");
+  // so the drip is the bid's need plus 10%
+  assert.equal(dripAmount(GAS_PRICE, BID), (publishNeeds(BID) * 11n) / 10n);
+  assert.equal(formatEther(dripAmount(GAS_PRICE, BID)), "0.01421795232");
+  assert.ok(dripAmount(GAS_PRICE, BID) >= publishNeeds(BID));
+  // where the wallet bids less than 1.5 x the gas price, the price rule decides
+  assert.equal(dripAmount(GAS_PRICE, MAX_FEE), byPrice);
+  // and never over the cap
+  assert.equal(dripAmount(parseGwei("1000"), parseGwei("1000")), DRIP_CAP_WEI);
   assert.equal(formatEther(DRIP_CAP_WEI), "0.02");
-  // at today's prices the drip pays for the publish at the fee cap viem bids, with room to spare
-  assert.ok(dripAmount(GAS_PRICE) > publishNeeds(MAX_FEE));
 });
 
 test("the day's spend is the wallet's own balance difference, unless a top-up hides it", () => {
@@ -140,7 +154,7 @@ test("the day's spend is the wallet's own balance difference, unless a top-up hi
   assert.equal(spentInWindow({ balanceThen: one, balanceNow: one + one - three, nonceThen: 0, nonceNow: 3 }), 3n * MAX_OUT_PER_DRIP);
   // a wallet first funded inside the window, with no drips yet
   assert.equal(spentInWindow({ balanceThen: 0n, balanceNow: one, nonceThen: 0, nonceNow: 0 }), 0n);
-  assert.ok(MIN_OUT_PER_DRIP < dripAmount(GAS_PRICE) + TRANSFER_GAS * GAS_PRICE, "a real drip is never below the minimum");
+  assert.ok(MIN_OUT_PER_DRIP < dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * GAS_PRICE, "a real drip is never below the minimum");
   assert.ok(MAX_OUT_PER_DRIP > DRIP_CAP_WEI + TRANSFER_GAS * MAX_FEE, "nor above the maximum");
 });
 
@@ -148,7 +162,7 @@ test("a new, empty account with a valid signature gets exactly one publish's dri
   const d = decideDrip(await observation());
   assert.equal(d.ok, true);
   if (d.ok && !("funded" in d)) {
-    assert.equal(d.amount, dripAmount(GAS_PRICE));
+    assert.equal(d.amount, dripAmount(GAS_PRICE, BID));
     assert.equal(d.fee, TRANSFER_GAS * MAX_FEE);
     assert.equal(d.spent, 0n);
   } else assert.fail("expected a drip");
@@ -165,7 +179,7 @@ test("each rule refuses on its own", async () => {
   await refused({ account: { ...good.account, hasKey: true } }, "HAS_KEY");
   await refused({ account: { ...good.account, nonce: 1 } }, "NOT_NEW");
   await refused({ account: { ...good.account, balance: 1n } }, "ALREADY_FUNDED");
-  await refused({ gasPrice: parseGwei("400"), maxFeePerGas: parseGwei("480") }, "GAS_TOO_HIGH");
+  await refused({ gasPrice: parseGwei("400"), maxFeePerGas: parseGwei("480"), bidFeePerGas: parseGwei("720") }, "GAS_TOO_HIGH");
   await refused({ wallet: { ...good.wallet, pendingNonce: 1 } }, "DRIP_BUSY");
   await refused({ wallet: { ...good.wallet, nonce: 5, pendingNonce: 5, recentNonce: 4, dayAgo: { balance: parseEther("1.1"), nonce: 0 } } }, "DRIP_BUSY");
   await refused({ wallet: { ...good.wallet, balance: parseEther("0.01") } }, "DRIP_EMPTY");
@@ -174,18 +188,18 @@ test("each rule refuses on its own", async () => {
 });
 
 test("an account that already holds enough for a publish is told so, and nothing is sent", async () => {
-  const d = decideDrip(await observation({ account: { hasKey: false, balance: publishNeeds(MAX_FEE), nonce: 0 } }));
+  const d = decideDrip(await observation({ account: { hasKey: false, balance: publishNeeds(BID), nonce: 0 } }));
   assert.deepEqual(d, { ok: true, amount: 0n, funded: true });
 });
 
 test("the daily cap counts every drip of the last 24 hours, fees included", async () => {
   const one = parseEther("1");
-  const next = dripAmount(GAS_PRICE) + TRANSFER_GAS * MAX_FEE;
+  const next = dripAmount(GAS_PRICE, BID) + TRANSFER_GAS * MAX_FEE;
   // spent so far: exactly what leaves room for one more drip, then one wei more
   const room = DAILY_CAP_WEI - next;
   const wallet = (spent: bigint, drips: number) => ({ balance: one - spent, nonce: drips, pendingNonce: drips, recentNonce: drips, dayAgo: { balance: one, nonce: 0 } });
-  assert.equal(decideDrip(await observation({ wallet: wallet(room, 38) })).ok, true);
-  await refused({ wallet: wallet(room + 1n, 38) }, "DAILY_CAP");
+  assert.equal(decideDrip(await observation({ wallet: wallet(room, 28) })).ok, true);
+  await refused({ wallet: wallet(room + 1n, 28) }, "DAILY_CAP");
   // a top-up inside the window cannot buy more drips than the cap allows at their maximum cost
   const topped = { balance: one + one, nonce: 13, pendingNonce: 13, recentNonce: 13, dayAgo: { balance: one, nonce: 0 } };
   await refused({ wallet: topped }, "DAILY_CAP");
@@ -207,7 +221,7 @@ test("a signed request replayed later is refused, however valid its signature", 
   assert.equal(await verifyDripSignature(r), true);
   await refused({ request: r, nowMs: NOW + 6 * 60_000 }, "STALE_SIGNATURE");
   // replayed inside the window after the drip landed: the account now holds MON, so the chain refuses it
-  const after = decideDrip(await observation({ request: r, account: { hasKey: false, balance: dripAmount(GAS_PRICE), nonce: 0 } }));
+  const after = decideDrip(await observation({ request: r, account: { hasKey: false, balance: dripAmount(GAS_PRICE, BID), nonce: 0 } }));
   assert.equal(after.ok && "funded" in after, true);
 });
 

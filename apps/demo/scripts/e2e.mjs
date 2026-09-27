@@ -171,8 +171,9 @@ describe("Letterlock on Monad testnet, in a browser, with a virtual passkey", { 
     const publishTx = txOf(await docket.nth(3).locator("a").first().getAttribute("href"));
     assert.ok(dripTx && publishTx, "the drip and the publish are linked");
     // independently of the page: the chain says the same
-    const [publish, drip, key] = await Promise.all([
+    const [publish, publishSent, drip, key] = await Promise.all([
       chain.getTransactionReceipt({ hash: publishTx }),
+      chain.getTransaction({ hash: publishTx }),
       chain.getTransaction({ hash: dripTx }),
       chain.readContract({
         address: DIRECTORY,
@@ -186,11 +187,24 @@ describe("Letterlock on Monad testnet, in a browser, with a virtual passkey", { 
     assert.equal(drip.from.toLowerCase(), deployer.address.toLowerCase(), "the drip came from the testnet deployer");
     assert.equal(drip.to.toLowerCase(), address.toLowerCase());
     assert.equal(key[1], 1, "keyOf returns epoch 1");
+    // Monad mainnet's RPC takes a transaction only when its sender holds gas limit x fee cap; testnet's does not check,
+    // so the drip's size is checked here against the publish the wallet actually signed
+    assert.ok(drip.value >= publishSent.gas * publishSent.maxFeePerGas, `the drip (${formatEther(drip.value)}) covers the publish's gas x fee cap (${formatEther(publishSent.gas * publishSent.maxFeePerGas)})`);
     // the card prints the key keyOf returns
     const card = page.locator("article").filter({ hasText: "Your encryption address" });
     await card.getByText("Rotating posts epoch 2").waitFor({ timeout: 20_000 });
     assert.ok((await card.innerText()).toLowerCase().includes(address.toLowerCase().slice(2, 12)), "the card shows the address");
-    record("create + drip + publish", { address, dripTx, dripAmount: formatEther(drip.value), publishTx, publishBlock: Number(publish.blockNumber), publishGas: Number(publish.gasUsed), publicKey: key[0] });
+    record("create + drip + publish", {
+      address,
+      dripTx,
+      dripAmount: formatEther(drip.value),
+      publishTx,
+      publishBlock: Number(publish.blockNumber),
+      publishGas: Number(publish.gasUsed),
+      publishFeeCapGwei: Number(publishSent.maxFeePerGas) / 1e9,
+      publishNeeded: formatEther(publishSent.gas * publishSent.maxFeePerGas),
+      publicKey: key[0],
+    });
     assert.deepEqual(A.problems, []);
   });
 

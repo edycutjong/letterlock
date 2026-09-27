@@ -11,6 +11,7 @@ import { monad, monadTestnet } from "viem/chains";
 import { letterlockAbi } from "letterlock";
 import { CHAIN, DEPLOYMENT, SCAN_RPC } from "./chain.ts";
 import { DAY_SECONDS, TRANSFER_GAS, type DripObservation, type DripRequest } from "./drip.ts";
+import { walletBidFeePerGas } from "./fees.ts";
 
 const VIEM_CHAIN = CHAIN === "monad" ? monad : monadTestnet;
 
@@ -108,16 +109,17 @@ const historical = async (address: Address, blockNumber: bigint): Promise<{ bala
   return undefined;
 };
 
-export type ChainState = Pick<DripObservation, "account" | "gasPrice" | "maxFeePerGas" | "wallet">;
+export type ChainState = Pick<DripObservation, "account" | "gasPrice" | "maxFeePerGas" | "bidFeePerGas" | "wallet">;
 
 /** Everything decideDrip() needs from the chain, read in parallel. Throws when the RPC fails (CHAIN_UNAVAILABLE). */
 export const readChainState = async (request: DripRequest, wallet: Address): Promise<ChainState> => {
-  const [key, balance, nonce, gasPrice, fees, head, walletBalance, walletNonce, walletPending, dayAgoBlock] = await Promise.all([
+  const [key, balance, nonce, gasPrice, fees, bidFeePerGas, head, walletBalance, walletNonce, walletPending, dayAgoBlock] = await Promise.all([
     main.readContract({ address: DEPLOYMENT.directory, abi: letterlockAbi, functionName: "keyOf", args: [request.address] }),
     main.getBalance({ address: request.address }),
     main.getTransactionCount({ address: request.address }),
     main.getGasPrice(),
     main.estimateFeesPerGas(),
+    walletBidFeePerGas(main, request.address),
     main.getBlockNumber({ cacheTime: 0 }),
     main.getBalance({ address: wallet }),
     main.getTransactionCount({ address: wallet }),
@@ -133,6 +135,7 @@ export const readChainState = async (request: DripRequest, wallet: Address): Pro
     account: { hasKey: epoch !== 0 || BigInt(pub) !== 0n, balance, nonce },
     gasPrice,
     maxFeePerGas: fees.maxFeePerGas,
+    bidFeePerGas,
     wallet: { balance: walletBalance, nonce: walletNonce, pendingNonce: walletPending, recentNonce, ...(dayAgo ? { dayAgo } : {}) },
   };
 };

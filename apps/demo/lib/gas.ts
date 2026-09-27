@@ -8,17 +8,21 @@ import { bytesToHex, zeroAddress, type Address, type Hex } from "viem";
 import { DEPLOYMENT } from "./chain.ts";
 import { publicClient } from "./client.ts";
 import { PUBLISH_GAS, dripMessage, unixMinute } from "./drip.ts";
+import { walletBidFeePerGas } from "./fees.ts";
 import { DripRefused } from "./failure.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export type Postage = { readonly balance: bigint; readonly needed: bigint };
 
-/** What a transaction of `gas` needs in `address` now, at the fee cap viem bids (base fee × 1.2 + tip). */
+/**
+ * What a transaction of `gas` needs in `address` now: its gas at the fee cap the wallet will bid (lib/fees.ts). The RPC
+ * refuses a transaction whose sender holds less, however little it is then charged.
+ */
 export const postageFor = async (address: Address, gas: bigint): Promise<Postage> => {
   const pc = publicClient();
-  const [balance, fees] = await Promise.all([pc.getBalance({ address }), pc.estimateFeesPerGas()]);
-  return { balance, needed: gas * fees.maxFeePerGas };
+  const [balance, bid] = await Promise.all([pc.getBalance({ address }), walletBidFeePerGas(pc, address)]);
+  return { balance, needed: gas * bid };
 };
 
 export const publishPostage = (address: Address): Promise<Postage> => postageFor(address, PUBLISH_GAS);
@@ -77,9 +81,13 @@ export const waitForFunds = async (address: Address, needed: bigint, timeoutMs =
   const pc = publicClient();
   const until = Date.now() + timeoutMs;
   for (;;) {
-    const head = await pc.getBlockNumber({ cacheTime: 0 });
-    const seen = await pc.getBalance({ address, blockNumber: head > 3n ? head - 3n : head });
-    if (seen >= needed) return seen;
+    try {
+      const head = await pc.getBlockNumber({ cacheTime: 0 });
+      const seen = await pc.getBalance({ address, blockNumber: head > 3n ? head - 3n : head });
+      if (seen >= needed) return seen;
+    } catch {
+      // one failed read (a node a block behind, a dropped request) is not an answer: ask again
+    }
     if (Date.now() > until) throw new DripRefused("NOT_ARRIVED", "the drip’s MON had not arrived after 30 seconds");
     await sleep(500);
   }

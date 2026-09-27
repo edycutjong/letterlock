@@ -10,15 +10,25 @@ import { getAddress, isAddress, isHex, parseEther, verifyMessage, type Address, 
 export const PUBLISH_GAS = 70_863n;
 /** A plain MON transfer: the drip's own transaction. */
 export const TRANSFER_GAS = 21_000n;
-/** The drip is 1.5 × one publish at the current gas price, and never more than 0.02 MON. */
+/** The drip never sends more than 0.02 MON. */
 export const DRIP_CAP_WEI = parseEther("0.02");
+/**
+ * viem prepares a transaction on Monad with the RPC's eth_fillTransaction and multiplies the maxFeePerGas it returns by
+ * 1.2 (its baseFeeMultiplier). The RPC accepts a transaction only when the sender holds its gas limit times that
+ * maxFeePerGas: on 2026-09-27 mainnet filled 152 gwei at a 100 gwei base fee, so a publish bid 182.4 gwei and needed
+ * 70,863 x 182.4 gwei = 0.0129254112 MON in the account, though it is charged 70,863 x 102 gwei. A drip of 1.5 x
+ * 70,863 x 102 gwei (0.010842039 MON) was refused with "Signer had insufficient balance".
+ */
+export const WALLET_FEE_MULTIPLIER_TENTHS = 12n;
+/** Headroom over the bid, in tenths: the base fee may move between the drip and the publish. */
+export const BID_HEADROOM_TENTHS = 11n;
 /** At most 0.5 MON leaves the drip wallet in any 24 hours: drips and their fees together. */
 export const DAILY_CAP_WEI = parseEther("0.5");
 /** A signature names the minute it was made; the server takes it for 5 minutes either side. */
 export const WINDOW_MINUTES = 5;
 /** Monad's minimum base fee, 100 MON-gwei (docs.monad.xyz, gas pricing). */
 export const MIN_BASE_FEE = 100n * 10n ** 9n;
-/** The least one drip can take out of the wallet: a drip at the minimum base fee, plus its transfer's gas. */
+/** The least one drip can take out of the wallet: 1.5 publishes at the minimum base fee, plus its transfer's gas. */
 export const MIN_OUT_PER_DRIP = (PUBLISH_GAS * MIN_BASE_FEE * 3n) / 2n + TRANSFER_GAS * MIN_BASE_FEE;
 /** The most one drip can take out: the 0.02 MON cap, plus its transfer's gas at ten times the minimum base fee. */
 export const MAX_OUT_PER_DRIP = DRIP_CAP_WEI + TRANSFER_GAS * MIN_BASE_FEE * 10n;
@@ -89,14 +99,22 @@ export const verifyDripSignature = async (r: DripRequest): Promise<boolean> => {
   }
 };
 
-/** The drip for one publish: 1.5 × PUBLISH_GAS at `gasPrice`, capped at DRIP_CAP_WEI. */
-export const dripAmount = (gasPrice: bigint): bigint => {
-  const want = (gasPrice * PUBLISH_GAS * 3n) / 2n;
+/** The fee cap viem bids when the RPC's eth_fillTransaction filled `filledMaxFee`: 1.2 times it. */
+export const walletBid = (filledMaxFee: bigint): bigint => (filledMaxFee * WALLET_FEE_MULTIPLIER_TENTHS) / 10n;
+
+/** What one publish needs in the account for the RPC to take it: its gas limit at the fee cap the wallet bids. */
+export const publishNeeds = (bidFeePerGas: bigint): bigint => PUBLISH_GAS * bidFeePerGas;
+
+/**
+ * The drip for one publish: 1.5 x PUBLISH_GAS at the current gas price, or what the publish needs at the wallet's bid
+ * plus 10% if that is more (it is on Monad today), and never more than DRIP_CAP_WEI.
+ */
+export const dripAmount = (gasPrice: bigint, bidFeePerGas: bigint): bigint => {
+  const byPrice = (gasPrice * PUBLISH_GAS * 3n) / 2n;
+  const byBid = (publishNeeds(bidFeePerGas) * BID_HEADROOM_TENTHS) / 10n;
+  const want = byPrice > byBid ? byPrice : byBid;
   return want < DRIP_CAP_WEI ? want : DRIP_CAP_WEI;
 };
-
-/** What one publish needs in the account for the chain to take it: its gas limit at the fee cap the wallet will bid. */
-export const publishNeeds = (maxFeePerGas: bigint): bigint => PUBLISH_GAS * maxFeePerGas;
 
 /**
  * What left the drip wallet in the window, from its own history: `measured` is its balance then minus now. Every one of
@@ -123,7 +141,10 @@ export type DripObservation = {
   readonly alreadyDripped: boolean;
   readonly account: { readonly hasKey: boolean; readonly balance: bigint; readonly nonce: number };
   readonly gasPrice: bigint;
+  /** the fee cap of the drip's own transfer */
   readonly maxFeePerGas: bigint;
+  /** the fee cap the passkey account's wallet will bid for its publish (walletBid of the RPC's filled fee) */
+  readonly bidFeePerGas: bigint;
   readonly wallet: {
     readonly balance: bigint;
     /** nonce at the latest block, and counting pending transactions */
@@ -160,10 +181,10 @@ export const decideDrip = (o: DripObservation): DripDecision => {
   if (early) return early;
   if (o.account.hasKey) return refuse(409, "HAS_KEY", "this account already has a key in the directory; the drip pays only for a first publish");
   if (o.account.nonce > 0) return refuse(409, "NOT_NEW", "this account has sent transactions before; the drip is for new passkey accounts");
-  const needs = publishNeeds(o.maxFeePerGas);
+  const needs = publishNeeds(o.bidFeePerGas);
   if (o.account.balance >= needs) return { ok: true, amount: 0n, funded: true };
   if (o.account.balance > 0n) return refuse(409, "ALREADY_FUNDED", "this account already holds MON; the drip funds an account once, from zero");
-  const amount = dripAmount(o.gasPrice);
+  const amount = dripAmount(o.gasPrice, o.bidFeePerGas);
   const fee = TRANSFER_GAS * o.maxFeePerGas;
   if (amount < needs) return refuse(503, "GAS_TOO_HIGH", "gas is too expensive right now for the capped drip to pay for a publish; try again later");
   if (o.wallet.pendingNonce !== o.wallet.nonce || o.wallet.recentNonce !== o.wallet.nonce)
