@@ -1,5 +1,5 @@
 // ONE real run of the live site on Monad MAINNET, with a virtual passkey. It spends real MON from the gas drip (one
-// drip, about 0.013 MON with its fee) and from the reference agent's wallet (one drop), so it refuses to run twice:
+// drip, about 0.0168 MON with its fee) and from the reference agent's wallet (one drop), so it refuses to run twice:
 // its record, e2e-results/mainnet-live.json, is the proof, and a second run needs --again.
 //
 //   node scripts/live-mainnet.mjs --spend-the-drip-once [--again]
@@ -90,6 +90,8 @@ try {
   assert.equal(dripReceipt.status, "success");
   assert.equal(publish.status, "success");
   assert.equal(publish.from.toLowerCase(), address.toLowerCase(), "msg.sender of the publish is the passkey account");
+  // Monad mainnet's RPC takes a transaction only when its sender holds gas limit x the fee cap it was signed with
+  assert.ok(drip.value >= publishSent.gas * publishSent.maxFeePerGas, `the drip (${formatEther(drip.value)}) covers the publish's gas x fee cap (${formatEther(publishSent.gas * publishSent.maxFeePerGas)})`);
   assert.equal(key[1], 1);
   const dripAfter = await chain.getBalance({ address: DRIP });
   step("create + drip + publish", {
