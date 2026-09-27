@@ -70,7 +70,7 @@ test("the chain client is created in one module, and its failures reach the slip
   assert.deepEqual(creators, ["lib/client.ts"]);
   // every module that imports the accessors also imports the failure classifier, which maps each code to its slip
   const users = sources.filter(({ src }) => /from\s*["']@\/lib\/client\.ts["']/.test(src) && /\b(passkeyClient|readClient|scanClient)\b/.test(src));
-  assert.ok(users.length >= 1, `${users.length} modules use the chain client`);
+  assert.ok(users.length >= 4, `${users.length} modules use the chain client`);
   for (const { f, src } of users) assert.match(src, /toFailure|FailureNotice/, `${f} uses the chain client and shows none of its failures`);
 });
 

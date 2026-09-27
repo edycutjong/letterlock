@@ -13,7 +13,7 @@ const WAX = /var\(--(after|accent|sealed|wax-deep|wax-sheen|color-error|accent-g
 const files = (dir: string): string[] =>
   readdirSync(dir).flatMap((f) => {
     const p = join(dir, f);
-    if (["node_modules", ".next", "qa", "test"].includes(f)) return [];
+    if (["node_modules", ".next", ".next-e2e", "qa", "test", "e2e-results"].includes(f)) return [];
     return statSync(p).isDirectory() ? files(p) : /\.(css|tsx?|svg)$/.test(f) ? [p] : [];
   });
 

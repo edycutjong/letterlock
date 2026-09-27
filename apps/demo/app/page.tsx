@@ -1,18 +1,16 @@
-import { AddressCard } from "@/components/AddressCard";
-import { ExampleNote } from "@/components/ExampleBadge";
-import { ExampleAction } from "@/components/ExampleAction";
 import { ArrowRightIcon } from "@/components/Icons";
 import { PageHead } from "@/components/PageHead";
 import { currentKey, persona } from "@/lib/examples.ts";
+import { AddressDesk } from "./AddressDesk";
 import styles from "./home.module.css";
 
 export default function YourAddress() {
   const maya = persona("Maya");
-  const key = currentKey(maya);
   return (
     <main id="main" className={`page ${styles.main}`}>
-      <section className={styles.hero}>
-        <div className={styles.intro}>
+      <AddressDesk
+        example={{ address: maya.address, key: currentKey(maya) }}
+        intro={
           <PageHead
             size="hero"
             title={
@@ -22,40 +20,14 @@ export default function YourAddress() {
             }
             lede="Your device turns your passkey into an encryption key and posts only its public half to a register on Monad. Anyone can look up your address and seal a note to it. Only your passkey opens it, on any device the passkey syncs to."
           />
-          <div className={styles.cta}>
-            <ExampleAction passkey does="Here your passkey will derive your key, and its public half will be posted to the register.">
-              Create my encryption address
-            </ExampleAction>
-            <p className={styles.fine}>One passkey prompt, two on some browsers. Nothing secret is stored or sent.</p>
-          </div>
-        </div>
-
-        <div className={styles.cardCol}>
-          <AddressCard
-            example
-            address={maya.address}
-            fingerprint={key.fingerprint}
-            epoch={key.epoch}
-            posted={{ kind: "example" }}
-            postmark={{ top: "Letterlock register", bottom: "Example · not posted", center: String(key.epoch), centerLabel: "Epoch" }}
-            actions={
-              <ExampleAction tone="outline" passkey size="md" does="Rotating will derive your epoch 2 key and post it.">
-                Rotate key
-              </ExampleAction>
-            }
-            footnote="Rotating posts epoch 2. Notes sealed to epoch 1 still open: your passkey re-derives every earlier key."
-          />
-          <ExampleNote className={styles.cardNote}>
-            An example address and key, made by the SDK from a labelled string. Not yours, and not on chain.
-          </ExampleNote>
-        </div>
-      </section>
+        }
+      />
 
       <section className={styles.how} aria-labelledby="how-title">
         <h2 id="how-title" className={styles.howTitle}>
           What happens when you press it
         </h2>
-        <ol className={styles.steps}>
+        <ol className={styles.steps3}>
           <li>
             <span className={styles.no} aria-hidden="true">
               1
@@ -69,7 +41,10 @@ export default function YourAddress() {
               2
             </span>
             <h3>Post</h3>
-            <p>The public half goes in the register on Monad, next to your address, as epoch 1.</p>
+            <p>
+              The same passkey derives an account, and the account posts the public half to the register on Monad as epoch 1. A new account holds
+              no MON, so the Letterlock gas drip pays for this first post.
+            </p>
             <code className="data">publish(pk, epoch)</code>
           </li>
           <li>

@@ -1,5 +1,6 @@
 # build output and generated types
 .next/
+.next-e2e/
 next-env.d.ts
 *.tsbuildinfo
 

@@ -1,0 +1,15 @@
+.qr {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+  border-radius: 2px;
+}
+
+.paper {
+  fill: var(--bg-elevated);
+}
+
+.ink {
+  fill: var(--ink);
+}

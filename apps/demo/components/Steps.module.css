@@ -1,0 +1,112 @@
+.steps {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) 24px;
+  align-items: start;
+  gap: 4px 14px;
+  padding: 12px 0;
+}
+
+.step + .step {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+/* step numbers in the body face's light lining figures, as on /judge */
+.no {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: 1.375rem;
+  line-height: 1.1;
+  font-variant-numeric: lining-nums;
+  color: var(--muted);
+}
+
+.step[data-status="active"] .no {
+  color: var(--before);
+}
+
+.body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.step[data-status="todo"] .title {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.detail {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.box {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  color: var(--bg-elevated);
+}
+
+.step[data-status="done"] .box {
+  background: var(--ink);
+}
+
+.step[data-status="todo"] .box {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.step[data-status="skipped"] .box {
+  border-color: var(--muted);
+}
+
+.dash {
+  width: 10px;
+  height: 1.5px;
+  background: var(--muted);
+}
+
+.step[data-status="failed"] .box {
+  border-color: var(--ink);
+  border-style: double;
+  border-width: 3px;
+}
+
+/* the step that is running: an airmail ring turning round its box (still with reduced motion, as a plain ring) */
+.step[data-status="active"] .box {
+  border: 2px solid var(--before);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--before) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .step[data-status="active"] .box {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--before) 6%, transparent);
+  }
+}

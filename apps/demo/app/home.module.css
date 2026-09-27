@@ -20,6 +20,63 @@
   padding-top: 8px;
 }
 
+/* what this device knows, in one plain line above the actions that follow from it */
+.state {
+  max-width: 44ch;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.state:empty {
+  display: none;
+}
+
+.next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+}
+
+/* the flow's docket and its failure take the column's width, up to a readable measure */
+.steps,
+.failure {
+  justify-self: stretch;
+  max-width: 34rem;
+}
+
+.forget {
+  max-width: 48ch;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+/* a text button that reads as a link: underlined, airmail blue under the pointer */
+.textButton {
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--ink) 38%, transparent);
+  text-underline-offset: 0.24em;
+  cursor: pointer;
+  transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
+}
+
+.textButton:hover {
+  color: var(--before);
+  text-decoration-color: currentColor;
+}
+
+.elsewhere {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 44ch;
+}
+
 .fine {
   font-size: var(--fs-small);
   color: var(--muted);
@@ -50,7 +107,7 @@
   letter-spacing: -0.012em;
 }
 
-.steps {
+.steps3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 24px 0 0;
@@ -59,18 +116,18 @@
   border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
 }
 
-.steps li {
+.steps3 li {
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 8px;
   padding: 20px clamp(16px, 2.4vw, 28px) 22px;
 }
 
-.steps li + li {
+.steps3 li + li {
   border-left: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
 }
 
-.steps li:first-child {
+.steps3 li:first-child {
   padding-left: 0;
 }
 
@@ -84,20 +141,20 @@
   color: var(--muted);
 }
 
-.steps h3 {
+.steps3 h3 {
   font-family: var(--font-body);
   font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 
-.steps p {
+.steps3 p {
   font-size: var(--fs-body);
   line-height: 1.55;
   max-width: 34ch;
 }
 
-.steps code {
+.steps3 code {
   justify-self: start;
   margin-top: 6px;
   padding: 3px 8px;
@@ -129,14 +186,14 @@
 }
 
 @media (max-width: 759.98px) {
-  .steps {
+  .steps3 {
     grid-template-columns: minmax(0, 1fr);
   }
-  .steps li,
-  .steps li:first-child {
+  .steps3 li,
+  .steps3 li:first-child {
     padding: 18px 0;
   }
-  .steps li + li {
+  .steps3 li + li {
     border-left: 0;
     border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
   }

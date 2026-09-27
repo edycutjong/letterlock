@@ -186,3 +186,36 @@
     height: 24px;
   }
 }
+
+.fact {
+  max-width: 60ch;
+  font-size: var(--fs-small);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+  overflow-wrap: anywhere;
+}
+
+.docket {
+  max-width: 34rem;
+}
+
+.openRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 28px;
+}
+
+.qr {
+  display: grid;
+  gap: 8px;
+  max-width: 220px;
+  margin: 0;
+}
+
+.qrCaption {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

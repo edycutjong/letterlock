@@ -195,3 +195,130 @@
     gap: 14px;
   }
 }
+
+/* whose inbox: the passkey finds it, or an address typed in */
+.whose {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.readForm {
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) auto;
+  align-items: start;
+  gap: 8px 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* the button sits on the input's line, under the label */
+.readAction {
+  margin-top: calc(var(--fs-label) * 1.3 + 8px);
+}
+
+.readerFoot {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+}
+
+.letterText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+}
+
+.status {
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.item[data-selected] .state::after {
+  content: " · in the reader";
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.paste {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--rule) 90%, transparent);
+}
+
+.paste summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  min-height: var(--tap);
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  transition: color var(--transition-fast);
+}
+
+.paste summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (hover: hover) {
+  .paste summary:hover {
+    color: var(--before);
+  }
+}
+
+.pasteMeta {
+  font-weight: 400;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.pasteForm {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+
+.pasteBox {
+  width: 100%;
+  min-height: 7.5rem;
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background-color: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rule) 95%, var(--muted));
+  border-bottom: 1.5px solid var(--ink);
+  border-radius: 2px 2px 0 0;
+  resize: vertical;
+}
+
+.pasteBox:focus-visible {
+  outline: 2px solid var(--before);
+  outline-offset: 2px;
+}
+
+.pasteError {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+@media (max-width: 639.98px) {
+  .readForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .readAction {
+    margin-top: 0;
+  }
+}

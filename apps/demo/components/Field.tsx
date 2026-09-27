@@ -50,6 +50,11 @@ export function TextField({ label, hint, error, data, className, ...input }: Tex
 type NoteFieldProps = {
   label: string;
   defaultValue?: string;
+  /** controlled: the note's text, with onValueChange */
+  value?: string;
+  onValueChange?: (value: string) => void;
+  name?: string;
+  disabled?: boolean;
   /** the most bytes a note may have; the counter turns to a warning past it */
   maxBytes?: number;
   placeholder?: string;
@@ -61,9 +66,14 @@ type NoteFieldProps = {
  * The note, written on a ruled letter sheet, with its size counted live in UTF-8 bytes (what the envelope carries).
  * The count is read out with the field, not at every key; going over the limit is announced once.
  */
-export function NoteField({ label, defaultValue = "", maxBytes, placeholder, rows = 4, className }: NoteFieldProps) {
+export function NoteField({ label, defaultValue = "", value: controlled, onValueChange, name, disabled, maxBytes, placeholder, rows = 4, className }: NoteFieldProps) {
   const id = useId();
-  const [value, setValue] = useState(defaultValue);
+  const [own, setOwn] = useState(defaultValue);
+  const value = controlled ?? own;
+  const setValue = (v: string) => {
+    if (controlled === undefined) setOwn(v);
+    onValueChange?.(v);
+  };
   const bytes = utf8Bytes(value);
   const over = maxBytes !== undefined && bytes > maxBytes;
   return (
@@ -76,6 +86,8 @@ export function NoteField({ label, defaultValue = "", maxBytes, placeholder, row
         className={styles.note}
         rows={rows}
         value={value}
+        name={name}
+        disabled={disabled}
         placeholder={placeholder}
         onChange={(e) => setValue(e.target.value)}
         aria-describedby={`${id}-count`}

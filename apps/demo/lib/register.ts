@@ -148,3 +148,24 @@ export const findPublish = async (address: Address, epoch: number, updatedAt: nu
   const to = from + 99n < head ? from + 99n : head;
   return match(await readKeyLines({ fromBlock: from, toBlock: to, args: { who: address } }));
 };
+
+/**
+ * The first block at which `address` had a key in the directory, found by reading keyOf at past blocks (a binary
+ * search: about 17 historical eth_calls). No drop to the address can come before it, so an inbox scan starts there.
+ * Undefined when the RPC no longer holds the state that far back.
+ */
+export const firstKeyBlock = async (address: Address, client: PublicClient = publicClient()): Promise<bigint | undefined> => {
+  let lo = BigInt(DEPLOYMENT.deployBlock);
+  let hi = await client.getBlockNumber({ cacheTime: 0 });
+  try {
+    while (lo < hi) {
+      const mid = (lo + hi) / 2n;
+      const [, epoch] = await client.readContract({ address: DEPLOYMENT.directory, abi: letterlockAbi, functionName: "keyOf", args: [address], blockNumber: mid });
+      if (epoch > 0) hi = mid;
+      else lo = mid + 1n;
+    }
+    return lo;
+  } catch {
+    return undefined;
+  }
+};
