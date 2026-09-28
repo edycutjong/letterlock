@@ -1,8 +1,9 @@
-// The app answers on the SDK's pinned rpId host, and the host SDK 0.1.0 pinned sends every request there, so no page
-// is served, and no passkey made, under the old rpId. On Vercel the 308 is vercel.json's, which Vercel's router answers
-// before any file or function; next.config.ts has the same rule for any other server, but Next.js leaves /_next/ out of
-// every redirect it is given, so on its own it served the build's files, and its 404 page, on the old host. The live
-// answers are checked by scripts/smoke.mjs on the production host and by the SDK's LIVE=1 checks.
+// The app answers on the SDK's pinned rpId host, and the host SDK 0.1.0 pinned sends every request for the app there,
+// so no page or file of it is served, and no passkey made, under the old rpId. On Vercel the 308 is vercel.json's,
+// which Vercel's router answers before any file or function; next.config.ts has the same rule for any other server,
+// but Next.js leaves /_next/ out of every redirect it is given, so on its own it served the build's files, and its 404
+// page, on the old host. The live answers are checked by scripts/smoke.mjs on the production host and by the SDK's
+// LIVE=1 checks.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -17,7 +18,7 @@ test("the app's host is the SDK's pinned rpId, and the retired host is the rpId 
   assert.notEqual(RETIRED_HOST, APP_HOST);
 });
 
-test("every request to the retired host, the build's /_next/ files included, is a 308 to the same path on the app's host", async () => {
+test("every request for the app on the retired host, the build's /_next/ files included, is a 308 to the same path on the app's host", async () => {
   // on Vercel: vercel.json, answered by Vercel's router before any file or function
   assert.deepEqual(vercel.redirects?.[0], {
     source: "/(.*)",

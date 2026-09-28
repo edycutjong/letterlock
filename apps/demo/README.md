@@ -3,11 +3,13 @@
 **Live: <https://app.letterlock.edycu.dev>**, on Monad mainnet (chain 143), against the directory
 `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e`. The host is the WebAuthn rpId every Letterlock key is derived under
 (`LETTERLOCK_RP_ID` in the SDK, since 0.1.1): passkeys made anywhere else can never open anything here. The app's
-first host, `letterlock-app.vercel.app` (the rpId SDK 0.1.0 pinned), answers every request, the build's `/_next/`
-files included, with a 308 to the same path and query here: `vercel.json`, which Vercel's router answers before any
-file or function (`next.config.ts` has the same rule for any other server, but Next.js leaves `/_next/` out of its
-redirects), and `test/hosts.test.ts`. So no page or file is served there and no passkey is made under the old rpId;
-an old link, a judges' link with its pass included, lands on the same page here.
+first host, `letterlock-app.vercel.app` (the rpId SDK 0.1.0 pinned), answers every request for the app, any method,
+the build's `/_next/` files included, with a 308 to the same path and query here: `vercel.json`, which Vercel's router
+answers before any file or function (`next.config.ts` has the same rule for any other server, but Next.js leaves
+`/_next/` out of its redirects; Vercel's image service is off, as no page uses it), and `test/hosts.test.ts`. So no
+page or file of the app is served there and no passkey is made under the old rpId; an old link, a judges' link with
+its pass included, lands on the same page here. (Vercel's own paths, such as `/_vercel/…`, answer on every Vercel
+host before a project's rules; none is the app's.)
 
 Every flow calls the `letterlock` SDK in the browser; nothing on these pages is simulated. The only example content
 is the sample card on the home page before this device has an address, and the `/kit` gallery, and both are stamped

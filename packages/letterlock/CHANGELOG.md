@@ -4,8 +4,8 @@
 
 - **The rpId moves to the owner's own domain.** `LETTERLOCK_RP_ID` is now `app.letterlock.edycu.dev`, a subdomain of
   edycu.dev, where the Letterlock app is served. 0.1.0 pinned `letterlock-app.vercel.app`, a Vercel project name,
-  which now answers every request with a 308 to the new host, so no key is made under it. The directories, the
-  envelope format and every API are unchanged.
+  which now answers every request for the app with a 308 to the new host, so no key is made under it. The
+  directories, the envelope format and every API are unchanged.
 - **Keys derived under `letterlock-app.vercel.app` cannot be re-derived under the new rpId**: a PRF output is bound to
   its rpId. The only ones are test keys from the app's live checks, made with virtual passkeys that were deleted after
   each run: the key `0x4f48fbc6ea52aeB96e93EfB2464798d18F84463C` published on mainnet, and the passkey accounts of
