@@ -88,10 +88,10 @@ rows never touched the app (the deploy, the registration, the smoke tests, the o
 
 The live checks drove the production site in Chromium with a WebAuthn virtual authenticator that supports PRF, so
 mera's own client ran every ceremony. Their record is [apps/demo/e2e-results/mainnet-live.json](apps/demo/e2e-results/mainnet-live.json).
-The third stopped after its publish, at a step of the script's own (it pressed Look up before the page had
-hydrated), and its virtual passkey went with the browser, so its key is labelled a test key and its letter stays
-sealed; the judge's step for it, run without a passkey, is
-[apps/demo/e2e-results/judge-agent-live.json](apps/demo/e2e-results/judge-agent-live.json);
+The third stopped after its publish: the script pressed Look up before the page had hydrated, so the browser sent
+the form as `/register?q=…`, which the page then ignored (it reads `q` now). Its virtual passkey went with the
+browser, so its key is labelled a test key and its letter stays sealed; the judge's step for it, run without a
+passkey, is [apps/demo/e2e-results/judge-agent-live.json](apps/demo/e2e-results/judge-agent-live.json);
 the whole flow on testnet, with a rotation and the `TAMPERED`, `PASSKEY_FAILED` and `PRF_UNSUPPORTED` slips, is in
 [apps/demo/e2e-results/testnet.json](apps/demo/e2e-results/testnet.json).
 

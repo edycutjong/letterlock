@@ -179,10 +179,15 @@ pnpm smoke https://app.letterlock.edycu.dev                             # read-o
   register unreadable offers "Post my key" and "Read the register again" and none of a posted key's actions, with
   its slip's heading in order, `/judge` says it is not known whether a letter went out when the agent answers 500 (its
   POST answered inside the browser, never sent), and the first host, `letterlock-app.vercel.app`, answers every route,
-  a query and a POST to `/api/drip` with a 308 to the same path here. 27 of 27 passed on deployment
-  `dpl_29jedP11xhiGbCoJuSthwacpufwP` at https://app.letterlock.edycu.dev (2026-09-27, 21:48 UTC), with
-  `LETTERLOCK_DRIP_JUDGE_PASS` set: the deployment's judges' pass is the one kept with the owner. (At the first host,
-  26 of 26 passed on `dpl_99mjvsFKfLtHtyGwwVntE8f5rVqo`, 2026-09-27, 07:32 UTC.)
+  a query, a POST to `/api/drip`, a script of the build, `/_next/data` and `/_next/image` with a 308 to the same path
+  here. On any host also: `/register?q=<address>` shows `keyOf`'s answer with the field filled in, and the scripts
+  the pages load name no retired host and carry, of the deployment records, only the fields the pages show.
+  29 of 29 passed on deployment `dpl_7aSHG3DQ2oe9ietFseUArpZYX6Pq` (commit `98da5b1`) at
+  https://app.letterlock.edycu.dev (2026-09-28, 00:12 UTC), over 18 scripts, with `LETTERLOCK_DRIP_JUDGE_PASS` set:
+  the deployment's judges' pass is the one kept with the owner. (Before: 27 of 27 on
+  `dpl_29jedP11xhiGbCoJuSthwacpufwP`, 2026-09-27, 21:48 UTC, whose checks did not yet ask for the build's files at the
+  first host, where they answered 200, nor read the scripts, which carried `deployments/143.json` whole; at the first
+  host, 26 of 26 passed on `dpl_99mjvsFKfLtHtyGwwVntE8f5rVqo`, 2026-09-27, 07:32 UTC.)
 - **Live** (`scripts/live-mainnet.mjs`): create and publish on the production site with a virtual passkey; it
   spends a real drip, so it records every run in `e2e-results/mainnet-live.json` and needs `--again` after the first.
   The first two runs were at `letterlock-app.vercel.app`, the rpId SDK 0.1.0 pinned.
@@ -212,7 +217,8 @@ pnpm smoke https://app.letterlock.edycu.dev                             # read-o
   - then the run stopped at a step of its own: it pressed **Look up** on `/register` before React had hydrated the
     page, so the form submitted natively and the result never showed (the register listed the key). The browser
     closed and the virtual passkey with it, so the key is a test key in `lib/known-keys.json`, and the account keeps
-    0.00698992632 MON. The script now waits for hydration before any click; no second create was run.
+    0.00698992632 MON. The script now waits for hydration before any click, and the page reads the form's `?q=`, so
+    a Look up pressed that early now shows its result; no second create was run.
 - **The judge's step 2, no passkey** (`scripts/live-judge-agent.mjs`, one agent drop, recorded in
   `e2e-results/judge-agent-live.json`): `/judge` on https://app.letterlock.edycu.dev, given the third run's address
   as a device that made it would store it, asked the agent at https://agent.letterlock.edycu.dev to write to it. The
