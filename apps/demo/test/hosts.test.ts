@@ -30,6 +30,8 @@ test("every request to the retired host, the build's /_next/ files included, is 
   const source = new RegExp(`^${vercel.redirects[0].source}$`);
   for (const path of ["/", "/judge", "/api/drip", "/_next/static/chunks/main-app.js", "/_next/static/media/a.woff2", "/_next/data/x.json", "/_next/image", "/.well-known/webauthn"])
     assert.equal(source.exec(path)?.[1], path.slice(1), path);
+  // and nothing answers before it: Vercel's image service, which takes /_next/image ahead of any redirect, is off
+  assert.equal(config.images?.unoptimized, true);
   // on any other server: the same rule in next.config.ts, before any other redirect (Next.js leaves /_next/ out of it)
   const rules = await config.redirects!();
   assert.deepEqual(rules[0], {

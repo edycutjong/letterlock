@@ -42,6 +42,9 @@ const config: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   // lib/tokens.ts reads the token sheet when a page renders (every page is rendered per request, for its nonce)
   outputFileTracingIncludes: { "/**": ["./app/tokens.css"] },
+  // No page uses next/image, so Vercel's image service stays off: at /_next/image it answered before any redirect,
+  // on the retired host too (a 400, or a 308 to the source file rather than to the same path)
+  images: { unoptimized: true },
   async redirects() {
     return [
       // first: nothing is served on the retired rpId's host (`has` values are anchored regular expressions)
