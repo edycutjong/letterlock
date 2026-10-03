@@ -1,6 +1,6 @@
 {
   "name": "letterlock",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "A passkey becomes an encryption address on Monad: resolve keyOf(address) and seal data only that passkey can open, on any device it syncs to.",
   "keywords": [
