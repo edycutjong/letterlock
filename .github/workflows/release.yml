@@ -73,6 +73,8 @@ jobs:
           node scripts/release.ts plan | tee /tmp/plan.json
           next=${WANT:-$(jq -r '.next // empty' /tmp/plan.json)}
           if [ -z "$next" ]; then echo "no SDK commit since $(jq -r .last /tmp/plan.json) asks for a release"; exit 0; fi
+          # a typed version reaches git, gh and npm below: only x.y.z goes on
+          if ! [[ "$next" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::version must be x.y.z, got: $next"; exit 1; fi
           if git rev-parse -q --verify "refs/tags/v$next" >/dev/null; then echo "::error::v$next is already tagged"; exit 1; fi
           echo "next=$next" >> "$GITHUB_OUTPUT"
 
@@ -88,16 +90,20 @@ jobs:
 
       - name: Write the version, the CHANGELOG and the stamps; test the SDK
         if: steps.plan.outputs.next
+        env:
+          NEXT: ${{ steps.plan.outputs.next }}
         run: |
-          node scripts/release.ts apply "${{ steps.plan.outputs.next }}"
+          node scripts/release.ts apply "$NEXT"
           node scripts/version-sync.ts --check
           pnpm --filter letterlock typecheck
           pnpm --filter letterlock test
 
       - name: Commit, tag and push
         if: steps.plan.outputs.next
+        env:
+          NEXT: ${{ steps.plan.outputs.next }}
         run: |
-          v="v${{ steps.plan.outputs.next }}"
+          v="v$NEXT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore(release): $v"
@@ -108,8 +114,9 @@ jobs:
         if: steps.plan.outputs.next
         env:
           GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.plan.outputs.next }}
         run: |
-          v="${{ steps.plan.outputs.next }}"
+          v="$NEXT"
           { node scripts/release.ts notes "$v"; echo; echo "npm: [letterlock@$v](https://www.npmjs.com/package/letterlock/v/$v) · CHANGELOG: [packages/letterlock/CHANGELOG.md](https://github.com/${{ github.repository }}/blob/v$v/packages/letterlock/CHANGELOG.md)"; } > /tmp/notes.md
           gh release create "v$v" --title "letterlock v$v" --notes-file /tmp/notes.md --verify-tag --latest
 
