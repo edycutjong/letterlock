@@ -104,10 +104,12 @@ jobs:
         if: inputs.publish && steps.pkg.outputs.exists == 'false'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          V: ${{ steps.pkg.outputs.version }}
         run: |
           npm publish ./dist --provenance --access public
-          sleep 10
-          npm view "letterlock@${{ steps.pkg.outputs.version }}" version dist.attestations.provenance.predicateType
+          # npm takes a few minutes to serve a new version ("Your package is being processed"); the site's deploy needs it
+          for i in $(seq 1 40); do npm view "letterlock@$V" version >/dev/null 2>&1 && break; sleep 15; done
+          npm view "letterlock@$V" version dist.attestations.provenance.predicateType
 
       # the site names the version on npm, so its deploy waits for it (deploy.yml): start it now
       - name: Deploy the site
