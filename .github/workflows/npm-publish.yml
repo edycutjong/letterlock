@@ -1,0 +1,100 @@
+name: npm-publish
+
+# Publishes the SDK and CLI (packages/letterlock) to npm from CI, with provenance: the registry links each version to
+# the commit and the run that built it. Run by hand. With publish unticked it only checks: the tokens authenticate,
+# the staged package is the version in package.json with no "_" field and the pinned rpId, and what would be packed.
+# It publishes the staged folder, never a .tgz (a tarball's local path would be recorded in the manifest), and skips a
+# version npm already has.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to npm (unticked: checks only)"
+        type: boolean
+        default: false
+      deprecate_010:
+        description: "Deprecate 0.1.0, which pins the retired rpId"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write   # npm provenance
+    defaults:
+      run:
+        working-directory: packages/letterlock
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: npm token authenticates
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN" || { echo "::error::the NPM_TOKEN secret is empty or missing"; exit 1; }
+          echo "npm user: $(npm whoami)"
+
+      - name: Vercel token authenticates
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          test -n "$VERCEL_TOKEN" || { echo "::error::the VERCEL_TOKEN secret is empty or missing"; exit 1; }
+          code=$(curl -s -o /tmp/u.json -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" https://api.vercel.com/v2/user)
+          test "$code" = 200 || { echo "::error::Vercel answered $code"; exit 1; }
+          echo "Vercel user: $(jq -r .user.username /tmp/u.json)"
+
+      - name: Build and check the staged package
+        id: pkg
+        run: |
+          pnpm build
+          v=$(jq -r .version dist/package.json)
+          test "$v" = "$(jq -r .version package.json)"
+          test "$(jq -c '[keys[] | select(startswith("_"))]' dist/package.json)" = "[]"
+          grep -q 'LETTERLOCK_RP_ID = "app.letterlock.edycu.dev"' dist/index.d.ts
+          npm pack ./dist --dry-run
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if npm view "letterlock@$v" version >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Publish
+        if: inputs.publish && steps.pkg.outputs.exists == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish ./dist --provenance --access public
+          sleep 10
+          npm view "letterlock@${{ steps.pkg.outputs.version }}" version dist.attestations.provenance.predicateType
+
+      - name: Already on npm
+        if: inputs.publish && steps.pkg.outputs.exists == 'true'
+        run: echo "letterlock@${{ steps.pkg.outputs.version }} is already on npm; nothing published"
+
+      - name: Deprecate 0.1.0
+        if: inputs.deprecate_010
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm deprecate letterlock@0.1.0 "pins the retired rpId letterlock-app.vercel.app: use 0.1.1 or later"
