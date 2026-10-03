@@ -6,7 +6,7 @@ import { toHex, utf8 } from "../src/bytes.ts";
 import { open, seal } from "../src/envelope.ts";
 import { isLetterlockError } from "../src/errors.ts";
 import { createEncryptionAddress, deriveForAgent, deriveFromPasskey, openWithPasskey } from "../src/passkey.ts";
-import { softAuthenticator, zeroedDuring } from "./soft-authenticator.ts";
+import { fixedPrfAuthenticator, softAuthenticator, zeroedDuring } from "./soft-authenticator.ts";
 
 const rp = { id: "letterlock.test", name: "Letterlock" };
 const user = { name: "maya", displayName: "Maya" };
@@ -168,5 +168,22 @@ describe("passkey → encryption address (via mera)", () => {
     const [old, cur] = await Promise.all([mk(k1, "before rotation"), mk(k2, "after rotation")]);
     expect(new TextDecoder().decode(await openWithPasskey(old, { rpId: rp.id, credential, webAuthnClient: dev }))).toBe("before rotation");
     expect(new TextDecoder().decode(await openWithPasskey(cur, { rpId: rp.id, credential, webAuthnClient: dev }))).toBe("after rotation");
+  });
+});
+
+describe("the PRF output mera hands back is wiped once the key is derived", () => {
+  const prfOutput = new Uint8Array(32).fill(9);
+  it("deriveFromPasskey, deriveForAgent and openWithPasskey's derivation zero their copy of the PRF output", async () => {
+    for (const run of [
+      () => deriveFromPasskey({ rpId: rp.id, epoch: 1, webAuthnClient: fixedPrfAuthenticator(prfOutput) }),
+      () => deriveForAgent({ rpId: rp.id, epoch: 1, agentId: 10260n, webAuthnClient: fixedPrfAuthenticator(prfOutput) }),
+    ]) expect(await zeroedDuring(run)).toContain(toHex(prfOutput));
+  });
+
+  it("wiping it leaves the derived key intact", async () => {
+    const a = await deriveFromPasskey({ rpId: rp.id, epoch: 1, webAuthnClient: fixedPrfAuthenticator(prfOutput) });
+    const b = await deriveFromPasskey({ rpId: rp.id, epoch: 1, webAuthnClient: fixedPrfAuthenticator(prfOutput) });
+    expect(toHex(a.secretKey)).toBe(toHex(b.secretKey));
+    expect(a.secretKey.some((x) => x !== 0)).toBe(true);
   });
 });

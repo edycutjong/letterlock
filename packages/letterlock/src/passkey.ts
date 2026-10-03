@@ -42,8 +42,11 @@ export const createEncryptionAddress = async (
 ): Promise<{ credential: PasskeyCredentialMetadata; keys: PasskeyKeyPair }> => {
   try {
     const r = await createPasskeyWithPrfOutput({ ...o, prfSalt: prfSaltFor(1) });
-    const keys = { ...deriveKeyPair(r.prfOutput, 1), rpId: o.rp.id, credentialId: r.credentialId };
-    return { credential: { credentialId: r.credentialId, transports: r.transports }, keys };
+    // mera hands back its own copy of the PRF output: ours to wipe once the key is derived, as meraAccount() does
+    try {
+      const keys = { ...deriveKeyPair(r.prfOutput, 1), rpId: o.rp.id, credentialId: r.credentialId };
+      return { credential: { credentialId: r.credentialId, transports: r.transports }, keys };
+    } finally { r.prfOutput.fill(0); }
   } catch (e) { return toPasskeyError(e); }
 };
 
@@ -69,7 +72,8 @@ const prfOutputFor = (o: Omit<DeriveOptions, "epoch">, prfSalt: Uint8Array<Array
 export const deriveFromPasskey = async (o: DeriveOptions): Promise<PasskeyKeyPair> => {
   try {
     const r = await prfOutputFor(o, prfSaltFor(o.epoch));
-    return { ...deriveKeyPair(r.prfOutput, o.epoch), credentialId: r.credentialId, rpId: o.rpId };
+    try { return { ...deriveKeyPair(r.prfOutput, o.epoch), credentialId: r.credentialId, rpId: o.rpId }; }
+    finally { r.prfOutput.fill(0); }
   } catch (e) { return toPasskeyError(e); }
 };
 
@@ -91,7 +95,8 @@ export const deriveForAgent = async (o: DeriveForAgentOptions): Promise<AgentPas
   try {
     const agentId = toAgentId(o.agentId);
     const r = await prfOutputFor(o, agentPrfSaltFor(agentId, o.epoch));
-    return { ...deriveAgentKeyPair(r.prfOutput, agentId, o.epoch), credentialId: r.credentialId, rpId: o.rpId };
+    try { return { ...deriveAgentKeyPair(r.prfOutput, agentId, o.epoch), credentialId: r.credentialId, rpId: o.rpId }; }
+    finally { r.prfOutput.fill(0); }
   } catch (e) { return toPasskeyError(e); }
 };
 
@@ -100,8 +105,9 @@ export type OpenWithPasskeyOptions = Omit<DeriveOptions, "epoch">;
 /**
  * One passkey prompt → plaintext. Derives the key for the envelope's own recipient (the passkey's own key, or an
  * agent's key for `agent:<id>`: both are bound into the envelope, so an edited recipient fails to open) and its own
- * epoch (old notes keep opening after a rotation), opens, then zeroes its copy of the secret key (best effort:
- * library-internal copies and the PRF output held by mera are outside our reach, and JS cannot guarantee erasure).
+ * epoch (old notes keep opening after a rotation), opens, then zeroes its copy of the secret key; the PRF output mera
+ * returned is zeroed as soon as the key is derived (best effort: copies inside mera, the browser and the crypto
+ * libraries are outside our reach, and JS cannot guarantee erasure).
  */
 export const openWithPasskey = async (env: Envelope, o: OpenWithPasskeyOptions): Promise<Uint8Array> => {
   parseEnvelope(env); // a malformed envelope must not cost the user a passkey prompt

@@ -45,8 +45,9 @@ sk                   = HKDF-SHA256(ikm = prf, salt = "letterlock/v1",
   the publishing transaction): distinct keys stop key sharing, not that link.
 - Rotation is `epoch + 1`: a new salt gives an unrelated PRF output. Every earlier epoch stays re-derivable, so
   old envelopes keep opening.
-- Nothing secret is persisted by Letterlock. `openWithPasskey` zeroes its copy of `sk` after use (best effort:
-  copies inside the crypto libraries and mera's PRF output are out of reach, and JS cannot guarantee erasure).
+- Nothing secret is persisted by Letterlock. The PRF output mera returns (its own copy) is zeroed as soon as the key
+  is derived, and `openWithPasskey` zeroes its copy of `sk` after use (best effort: copies inside mera, the browser and
+  the crypto libraries are out of reach, and JS cannot guarantee erasure).
   `deriveFromPasskey` and `deriveForAgent` return `sk` to the caller, who owns wiping it.
 
 **Server-hosted agents.** An agent that runs on a server has no passkey. It MAY take `prf` from a 32-byte secret
