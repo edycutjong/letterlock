@@ -18,6 +18,8 @@ import { toFailure, type Failure } from "@/lib/failure.ts";
 import { addressLine, formatBytes, formatCount } from "@/lib/format.ts";
 import { groupFingerprint } from "@/lib/keystrip.ts";
 import { useKeyOf, usePoll } from "@/lib/hooks.ts";
+import { advanceScan, type ScanState } from "@/lib/inbox-scan.ts";
+import { firstBlockAt } from "@/lib/register.ts";
 import { useJudgePassFromUrl, useStoredPasskey } from "@/lib/session.ts";
 import styles from "./judge.module.css";
 
@@ -113,25 +115,28 @@ export function JudgeRoute() {
   };
 
   // ---- step 3: the inbox, read live, so the letter shows here as soon as its block is final ----
-  // One scan from the address's first key (no drop can precede it: Letterlock.sol's drop reverts NoKeyPublished), then
-  // each poll reads only the blocks finalized since, as the inbox page does; never the whole chain every 5 s.
+  // One scan from the address's first key (no drop can precede it: Letterlock.sol's drop reverts NoKeyPublished), found
+  // at epoch 1 by a block-header search for the key's publish time, so step 3 waits for no log scan; then each poll
+  // reads only blocks finalized since. lib/inbox-scan.ts never moves back and counts each letter once.
   const [waiting, setWaiting] = useState<{ count: number; finalized: bigint } | undefined>(undefined);
-  const scan = useRef<{ who?: string; next?: bigint; count: number }>({ count: 0 });
-  const lineKnown = onchain.status === "found" && onchain.lineStatus !== "loading";
-  const firstKeyAt = onchain.status === "found" && onchain.key.epoch === 1 && onchain.line ? BigInt(onchain.line.block) : undefined;
+  const scan = useRef<ScanState | undefined>(undefined);
+  const key = onchain.status === "found" ? onchain.key : undefined;
   usePoll(
     async () => {
-      if (!address) return;
-      if (scan.current.who !== address) scan.current = { who: address, count: 0 };
+      if (!address || !key) return;
+      if (scan.current?.who !== address) scan.current = { who: address, seen: new Set() };
       const s = scan.current;
-      const r = await scanClient().inbox(address, { fromBlock: s.next ?? firstKeyAt ?? BigInt(DIRECTORY.deployBlock), blockRange: SCAN_RANGE });
+      const from = s.next ?? (key.epoch === 1
+        ? await firstBlockAt(key.updatedAt).catch(() => BigInt(DIRECTORY.deployBlock))
+        : BigInt(DIRECTORY.deployBlock));
+      const r = await scanClient().inbox(address, { fromBlock: from, blockRange: SCAN_RANGE });
       if (scan.current !== s) return; // the address changed while this scan ran
-      s.count += r.envelopes.length;
-      s.next = (r.toBlock < r.finalizedBlock ? r.toBlock : r.finalizedBlock) + 1n;
-      setWaiting({ count: s.count, finalized: r.finalizedBlock });
+      const n = advanceScan(s, r);
+      scan.current = n;
+      setWaiting({ count: n.seen.size, finalized: (n.next ?? 1n) - 1n });
     },
     5_000,
-    hasKey && lineKnown && SCAN_RANGE >= 1_000_000,
+    hasKey && SCAN_RANGE >= 1_000_000,
   );
 
   const s1: Status = hasKey ? "done" : "next";
