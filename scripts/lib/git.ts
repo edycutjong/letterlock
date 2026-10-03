@@ -15,13 +15,16 @@ export const SDK_RUNTIME_PATHS = ["packages/letterlock/src", "packages/letterloc
 export const SDK_RUNTIME_FIELDS = ["dependencies", "peerDependencies", "optionalDependencies", "exports", "type", "engines"] as const;
 const SDK_MANIFEST = SDK_RUNTIME_PATHS[1];
 
+/** The version string alone: a release commit changes it and nothing a benchmark measures. */
+export const SDK_VERSION_FILE = "packages/letterlock/src/version.ts";
+
 /** The benchmark's own code: what it times and how it reports it. */
 export const BENCH_PATHS = ["scripts/bench.ts", "scripts/lib"] as const;
 
 const git = (...args: string[]): string =>
   execFileSync("git", args, { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
 
-const tryGit = (...args: string[]): string => {
+export const tryGit = (...args: string[]): string => {
   try {
     return git(...args);
   } catch {
@@ -29,7 +32,7 @@ const tryGit = (...args: string[]): string => {
   }
 };
 
-const manifestRuntime = (sha: string): string | undefined => {
+export const manifestRuntime = (sha: string): string | undefined => {
   const text = tryGit("show", `${sha}:${SDK_MANIFEST}`);
   if (!text) return undefined;
   try {
@@ -43,7 +46,7 @@ const manifestRuntime = (sha: string): string | undefined => {
 /** The last commit that changed the SDK's source or its manifest's runtime fields: "<sha>\n<committer date>". */
 const lastSdkRuntimeCommit = (): string => {
   const candidates: string[] = [];
-  const src = git("log", "-1", "--format=%H", "--", SDK_RUNTIME_PATHS[0]);
+  const src = git("log", "-1", "--format=%H", "--", SDK_RUNTIME_PATHS[0], `:(exclude)${SDK_VERSION_FILE}`);
   if (src) candidates.push(src);
   for (const sha of git("log", "--format=%H", "--", SDK_MANIFEST).split("\n").filter(Boolean)) {
     const parent = tryGit("rev-parse", "-q", "--verify", `${sha}^`);

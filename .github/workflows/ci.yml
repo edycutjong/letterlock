@@ -66,6 +66,10 @@ jobs:
           fi
           unshare --user --map-root-user --net true
 
+      # The deck, the landing's release link and the agent card name the SDK's version (scripts/version-sync.ts)
+      - name: Every surface names the package version
+        run: node scripts/version-sync.ts --check
+
       - name: Typecheck
         run: pnpm typecheck
 

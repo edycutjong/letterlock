@@ -6,7 +6,7 @@
 
   <p>One passkey, one encryption address, on every device the passkey syncs to.</p>
 
-  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 28.628 ms over N = 1,000 (<code>pnpm bench</code>), and 714 tests pass in a fresh clone (<code>pnpm verify</code>).</p>
+  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 28.628 ms over N = 1,000 (<code>pnpm bench</code>), and 719 tests pass in a fresh clone (<code>pnpm verify</code>).</p>
 
   <br/>
 
@@ -30,6 +30,7 @@
   [![npm version](https://img.shields.io/npm/v/letterlock?style=flat)](https://www.npmjs.com/package/letterlock)
   [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
   [![CI](https://github.com/edycutjong/letterlock/actions/workflows/ci.yml/badge.svg)](https://github.com/edycutjong/letterlock/actions/workflows/ci.yml)
+  [![Release](https://img.shields.io/github/v/release/edycutjong/letterlock?style=flat)](https://github.com/edycutjong/letterlock/releases)
 
 </div>
 
@@ -165,7 +166,7 @@ every one that emitted a directory event up to block 108,575,659 among them.
 
 | Metric | Value |
 |---|---|
-| Tests | `pnpm verify` in a fresh clone of `e620a8f` on 2026-10-03: 714 passed, 0 failed, 13 skipped, in 8 suites (SDK 225, contracts 111, PRF spike 27, app 102, agent 96, offline 73, scripts 32, readiness 48). Skipped: the SDK's 10 live checks, which pass 10 of 10 with `LIVE=1`, and 3 checks that no file, commit or message names one of the author's private planning notes, which run only next to that folder (there: 717 passed, 10 skipped) |
+| Tests | `pnpm verify` in a fresh clone on 2026-10-03: 719 passed, 0 failed, 13 skipped, in 8 suites (SDK 225, contracts 111, PRF spike 27, app 102, agent 96, offline 73, scripts 37, readiness 48). Skipped: the SDK's 10 live checks, which pass 10 of 10 with `LIVE=1`, and 3 checks that no file, commit or message names one of the author's private planning notes, which run only next to that folder (there: 722 passed, 10 skipped) |
 | Latency | resolve + seal p50 28.628 ms, p95 35.453 ms, p99 55.888 ms against Monad mainnet's public RPC, N = 1,000, 0 failed calls ([bench/RESULTS.md](bench/RESULTS.md)) |
 | Sealing cost | seal alone (HPKE, local CPU) p50 5.653 ms |
 | Gas, mainnet receipts | publish 70,863 · drop of 490 bytes 45,780 · `publishForAgent` 108,799 (first key) and 74,652 (rotation) |
@@ -265,6 +266,17 @@ format, gas snapshots, ABI exports and deployment records. [gitleaks](.github/wo
 patch and every commit message in the history on each push, [CodeQL](.github/workflows/codeql.yml) analyzes the
 TypeScript and the workflows, and [Dependabot](.github/dependabot.yml) proposes grouped monthly updates (no major
 versions). Security reports: [SECURITY.md](.github/SECURITY.md).
+
+**Releases and deploys.** The npm package is what the repository versions: one version names the git tag, the
+[GitHub Release](https://github.com/edycutjong/letterlock/releases), `letterlock` on npm (published from CI with
+provenance), and every surface that shows a version (the deck, the landing's release link, the agent card), which
+`node scripts/version-sync.ts --check` holds equal in CI. After `ci` passes on main,
+[release](.github/workflows/release.yml) reads the Conventional Commits that changed the SDK since the last tag
+(below 1.0.0: `feat` or a breaking change is minor, `fix` or `perf` is patch; docs, tests and tooling release nothing),
+commits the version and its CHANGELOG section, tags it, and publishes the Release and the package
+(`scripts/release.ts`). [deploy](.github/workflows/deploy.yml) then ships the app, the agent and the site to Vercel,
+each only when a path it is built from changed since its production deployment, checks the production domain, and
+rolls back on a failed check.
 
 ## 📁 Project Structure
 

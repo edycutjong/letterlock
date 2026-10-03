@@ -53,6 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SELF = Path(__file__).resolve()
 SDK_RUNTIME_PATHS = ["packages/letterlock/src", "packages/letterlock/package.json"]
 SDK_MANIFEST = "packages/letterlock/package.json"
+SDK_VERSION_FILE = "packages/letterlock/src/version.ts"  # a release commit changes only the version string there
 # The manifest's fields that change what runs: a devDependency, a script or a version-only edit changes no number a
 # benchmark measures (bench imports the SDK's TypeScript source). scripts/lib/git.ts uses the same fields.
 SDK_RUNTIME_FIELDS = ("dependencies", "peerDependencies", "optionalDependencies", "exports", "type", "engines")
@@ -91,7 +92,7 @@ def manifest_runtime(sha: str) -> str | None:
 def last_sdk_runtime_commit() -> str:
     """'<sha>\t<committer date>' of the last commit that changed the SDK's source or its manifest's runtime fields."""
     candidates = []
-    src = git("log", "-1", "--format=%H", "--", SDK_RUNTIME_PATHS[0])
+    src = git("log", "-1", "--format=%H", "--", SDK_RUNTIME_PATHS[0], f":(exclude){SDK_VERSION_FILE}")
     if src:
         candidates.append(src)
     for sha in git("log", "--format=%H", "--", SDK_MANIFEST).split():

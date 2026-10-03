@@ -1,0 +1,121 @@
+name: release
+
+# After ci passes on main: when SDK commits since the last tag ask for a release (scripts/release.ts: Conventional
+# Commits, below 1.0.0 a breaking change or a feat is minor, a fix or perf is patch), commit the version and the
+# CHANGELOG section with every surface stamped (scripts/version-sync.ts), tag vX.Y.Z, publish the GitHub Release
+# with that section as its notes, publish letterlock@X.Y.Z to npm with provenance, then start the deploy. Run by hand
+# with a version to cut that one instead (1.0.0 is cut only this way).
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Cut exactly this version (x.y.z); empty: from the commits"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write   # the release commit, the tag and the GitHub Release
+      id-token: write   # npm provenance
+      actions: write    # start the deploy
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # A newer push has its own ci run, and its release decides for it.
+      - name: main is still the commit ci passed
+        id: head
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -n "$RUN_SHA" ] && [ "$(git rev-parse HEAD)" != "$RUN_SHA" ]; then
+            echo "main moved on from $RUN_SHA; its own ci run releases it"; echo "go=false" >> "$GITHUB_OUTPUT"
+          else echo "go=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.head.outputs.go == 'true'
+
+      - uses: actions/setup-node@v7
+        if: steps.head.outputs.go == 'true'
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        if: steps.head.outputs.go == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Plan the version
+        id: plan
+        if: steps.head.outputs.go == 'true'
+        env:
+          WANT: ${{ inputs.version }}
+        run: |
+          node scripts/release.ts plan | tee /tmp/plan.json
+          next=${WANT:-$(jq -r '.next // empty' /tmp/plan.json)}
+          if [ -z "$next" ]; then echo "no SDK commit since $(jq -r .last /tmp/plan.json) asks for a release"; exit 0; fi
+          if git rev-parse -q --verify "refs/tags/v$next" >/dev/null; then echo "::error::v$next is already tagged"; exit 1; fi
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Write the version, the CHANGELOG and the stamps; test the SDK
+        if: steps.plan.outputs.next
+        run: |
+          node scripts/release.ts apply "${{ steps.plan.outputs.next }}"
+          node scripts/version-sync.ts --check
+          pnpm --filter letterlock typecheck
+          pnpm --filter letterlock test
+
+      - name: Commit, tag and push
+        if: steps.plan.outputs.next
+        run: |
+          v="v${{ steps.plan.outputs.next }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): $v"
+          git tag -a "$v" -m "letterlock $v"
+          git push --atomic origin HEAD:main "$v"
+
+      - name: GitHub Release
+        if: steps.plan.outputs.next
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.plan.outputs.next }}"
+          { node scripts/release.ts notes "$v"; echo; echo "npm: [letterlock@$v](https://www.npmjs.com/package/letterlock/v/$v) · CHANGELOG: [packages/letterlock/CHANGELOG.md](https://github.com/${{ github.repository }}/blob/v$v/packages/letterlock/CHANGELOG.md)"; } > /tmp/notes.md
+          gh release create "v$v" --title "letterlock v$v" --notes-file /tmp/notes.md --verify-tag --latest
+
+      - name: Publish to npm with provenance
+        if: steps.plan.outputs.next
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: packages/letterlock
+        run: |
+          pnpm build
+          test "$(jq -c '[keys[] | select(startswith("_"))]' dist/package.json)" = "[]"
+          npm publish ./dist --provenance --access public
+
+      # A push made with the workflow token starts no workflow, so the deploy is started here.
+      - name: Deploy the stamped surfaces
+        if: steps.plan.outputs.next
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main

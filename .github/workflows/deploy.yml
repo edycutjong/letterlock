@@ -1,0 +1,188 @@
+name: deploy
+
+# Continuous deployment of the three Vercel projects from main, after ci passes (or started by release.yml or by
+# hand). Each project deploys only when a path it is built from changed since the commit its production deployment
+# came from (Vercel records it as gitCommitSha); a deployment without that record deploys. After each deploy the
+# production domain is checked, and a failed check rolls the project back to its previous production deployment.
+# The site deploys only when npm already has the version it names (the deck says "letterlock@X on npm").
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Deploy every project, changed or not"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_RJcQx4a22v5LqjetHv8HhhLY
+  VERCEL_CLI: vercel@62.2.0
+
+jobs:
+  changes:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.c.outputs.app }}
+      agent: ${{ steps.c.outputs.agent }}
+      site: ${{ steps.c.outputs.site }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - id: c
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          head=$(git rev-parse HEAD)
+          # ci passed for RUN_SHA; deploy main only if it is that commit, or the release commit made right on top of it
+          if [ -n "$RUN_SHA" ] && [ "$head" != "$RUN_SHA" ]; then
+            if [ "$(git rev-parse HEAD^)" != "$RUN_SHA" ] || ! git log -1 --format=%s | grep -q '^chore(release): '; then
+              echo "main moved on from $RUN_SHA; its own ci run deploys it"
+              for t in app agent site; do echo "$t=false" >> "$GITHUB_OUTPUT"; done; exit 0
+            fi
+          fi
+          changed() {  # project id, then the paths it is built from
+            local id=$1; shift
+            [ "$FORCE" = true ] && return 0
+            local sha
+            sha=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=$id&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" \
+              | jq -r '.deployments[0].meta.gitCommitSha // empty')
+            [ -z "$sha" ] && { echo "  no recorded commit: deploy"; return 0; }
+            git cat-file -e "$sha^{commit}" 2>/dev/null || { echo "  $sha unknown here: deploy"; return 0; }
+            ! git diff --quiet "$sha" HEAD -- "$@"
+          }
+          echo "app:";   if changed prj_qNpkSz8H4lByuDRCC5IObMQwRWv2 apps/demo packages/letterlock/src packages/letterlock/package.json package.json pnpm-lock.yaml; then echo "app=true" >> "$GITHUB_OUTPUT"; else echo "app=false" >> "$GITHUB_OUTPUT"; fi
+          echo "agent:"; if changed prj_rcXFeojgn0koDf5fVdrZROArUCDK examples/agent-memory packages/letterlock/src packages/letterlock/package.json package.json pnpm-lock.yaml; then echo "agent=true" >> "$GITHUB_OUTPUT"; else echo "agent=false" >> "$GITHUB_OUTPUT"; fi
+          echo "site:";  if changed prj_kqDWrf59cDywua1ruyXeAPBJY5tP site; then echo "site=true" >> "$GITHUB_OUTPUT"; else echo "site=false" >> "$GITHUB_OUTPUT"; fi
+          cat "$GITHUB_OUTPUT"
+
+  app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_PROJECT_ID: prj_qNpkSz8H4lByuDRCC5IObMQwRWv2
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Remember the production deployment to roll back to
+        id: prev
+        run: |
+          url=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" | jq -r '.deployments[0].url // empty')
+          echo "url=$url" >> "$GITHUB_OUTPUT"; echo "production now: ${url:-none}"
+      # Vercel builds it (Root Directory apps/demo, installs only the app's graph); nothing is installed here
+      - name: Deploy
+        run: npx --yes "$VERCEL_CLI" deploy --prod --yes --token "$VERCEL_TOKEN"
+      - name: Check the production domain
+        id: smoke
+        run: |
+          for p in / /judge /seal /open /register; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://app.letterlock.edycu.dev$p"); echo "$code $p"; test "$code" = 200
+          done
+      - name: Roll back on a failed check
+        if: failure() && steps.smoke.conclusion == 'failure'
+        run: test -n "${{ steps.prev.outputs.url }}" && npx --yes "$VERCEL_CLI" rollback "https://${{ steps.prev.outputs.url }}" --yes --token "$VERCEL_TOKEN"
+
+  agent:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_PROJECT_ID: prj_rcXFeojgn0koDf5fVdrZROArUCDK
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    defaults:
+      run:
+        working-directory: examples/agent-memory
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter letterlock-agent-memory...
+      - name: Remember the production deployment to roll back to
+        id: prev
+        run: |
+          url=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" | jq -r '.deployments[0].url // empty')
+          echo "url=$url" >> "$GITHUB_OUTPUT"; echo "production now: ${url:-none}"
+      # a Build Output API directory built here; Vercel only serves it
+      - name: Build and deploy
+        run: node scripts/build.mjs && npx --yes "$VERCEL_CLI" deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+      - name: Check the production domain
+        id: smoke
+        run: |
+          curl -sf https://agent.letterlock.edycu.dev/health | jq -e '.wallet.address' >/dev/null
+          curl -sf https://agent.letterlock.edycu.dev/.well-known/agent-card.json | jq -e --arg v "$(jq -r .version ../../packages/letterlock/package.json)" '.version == $v' >/dev/null
+          echo "health and card ok"
+      - name: Roll back on a failed check
+        if: failure() && steps.smoke.conclusion == 'failure'
+        run: test -n "${{ steps.prev.outputs.url }}" && npx --yes "$VERCEL_CLI" rollback "https://${{ steps.prev.outputs.url }}" --yes --token "$VERCEL_TOKEN"
+
+  site:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_PROJECT_ID: prj_kqDWrf59cDywua1ruyXeAPBJY5tP
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: npm has the version the site names
+        id: npm
+        run: |
+          v=$(jq -r .version packages/letterlock/package.json)
+          if npm view "letterlock@$v" version >/dev/null 2>&1; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::warning::letterlock@$v is not on npm yet; the site, which names it, waits for it"; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Remember the production deployment to roll back to
+        id: prev
+        run: |
+          url=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" | jq -r '.deployments[0].url // empty')
+          echo "url=$url" >> "$GITHUB_OUTPUT"; echo "production now: ${url:-none}"
+      - name: Deploy
+        if: steps.npm.outputs.ok == 'true'
+        working-directory: site
+        run: npx --yes "$VERCEL_CLI" deploy --prod --yes --token "$VERCEL_TOKEN"
+      - name: Check the production domain
+        id: smoke
+        if: steps.npm.outputs.ok == 'true'
+        run: |
+          v=$(jq -r .version packages/letterlock/package.json)
+          curl -sf https://letterlock.edycu.dev/ | grep -q "data-release>Release v$v<"
+          curl -sf https://letterlock.edycu.dev/pitch/ | grep -q "pitch deck v$v<"
+          echo "landing and deck say v$v"
+      - name: Roll back on a failed check
+        if: failure() && steps.smoke.conclusion == 'failure'
+        working-directory: site
+        run: test -n "${{ steps.prev.outputs.url }}" && npx --yes "$VERCEL_CLI" rollback "https://${{ steps.prev.outputs.url }}" --yes --token "$VERCEL_TOKEN"
