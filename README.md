@@ -12,6 +12,7 @@
 
   [![Landing page](https://img.shields.io/badge/%E2%9C%89%EF%B8%8F_Landing-Page-1E1B16?style=for-the-badge)](https://letterlock.edycu.dev)
   [![Pitch deck](https://img.shields.io/badge/%F0%9F%97%82%EF%B8%8F_Pitch-Deck-6E6556?style=for-the-badge)](https://letterlock.edycu.dev/pitch/)
+  [![Pitch video](https://img.shields.io/badge/%F0%9F%8E%AC_Pitch-Video-A3261E?style=for-the-badge)](https://youtu.be/AzKfVczaW_o)
   [![Live App](https://img.shields.io/badge/%F0%9F%9A%80_Live-App-2F5D9E?style=for-the-badge)](https://app.letterlock.edycu.dev)
   [![Judge Path](https://img.shields.io/badge/%E2%9A%96%EF%B8%8F_Judge-Path,_2_min-A3261E?style=for-the-badge)](DEMO.md)
   [![npm](https://img.shields.io/badge/%F0%9F%93%A6_npm-letterlock-CB3837?style=for-the-badge)](https://www.npmjs.com/package/letterlock)
@@ -318,6 +319,7 @@ site/                 the landing page and the pitch deck, at letterlock.edycu.d
 
 ## 📽️ Demo Materials
 
+- **Pitch video (1:53):** <https://youtu.be/AzKfVczaW_o>
 - **Landing page:** <https://letterlock.edycu.dev>, and the pitch deck at <https://letterlock.edycu.dev/pitch/> (both in [site/](site))
 - **Live app:** <https://app.letterlock.edycu.dev>, and the judges' route at <https://app.letterlock.edycu.dev/judge>
 - **The judge's script:** [DEMO.md](DEMO.md): two paths, the mainnet transactions behind each claim (every directory event among them), and how to reproduce the numbers
