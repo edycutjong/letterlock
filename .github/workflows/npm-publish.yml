@@ -56,7 +56,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           test -n "$NODE_AUTH_TOKEN" || { echo "::error::the NPM_TOKEN secret is empty or missing"; exit 1; }
-          echo "npm user: $(npm whoami)"
+          user=$(npm whoami) || { echo "::error::npm rejected NPM_TOKEN (expired, revoked, or not an npm access token)"; exit 1; }
+          echo "npm user: $user"
 
       - name: Vercel token authenticates
         env:
