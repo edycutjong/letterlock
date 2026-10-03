@@ -8,7 +8,23 @@ first device sealed. Automation cannot test this. Chrome's DevTools virtual auth
 passkey's `hmac-secret` between devices, so `run-spike.mjs` has to SKIP that check. It needs one person with a
 Mac and an iPad, which takes about five minutes.
 
-Status: **waiting for the first human run.**
+Status: **Mac → iPad passed on real devices, 2026-10-04**, in the production app rather than this page.
+
+![The iPad: the passkey sheet with "Letterlock · 3 Oct 2026 17:25" selected (the passkey made on the Mac), and the inbox of 0xe5ae…dcda with the Mac's letter opened](../../docs/assets/screens/cross-device-ipad.webp)
+
+- **Made on the Mac:** the passkey "Letterlock · 3 Oct 2026 17:25" and the address `0xe5AeA9f323f7FfA74703FfDcc2732911aeF4DCDa`
+  (key `bd07 cbeb 574c 6c29`, publish tx `0x8262ae…78aded`), in Safari 26.5.2 on macOS 26.5.2, at
+  `app.letterlock.edycu.dev/judge`. Agent 10260 sealed a note to it (drop `0x2135cb…cdb90b`, block 110,157,545) and the
+  Mac opened it (the demo video, 2026-10-03).
+- **Opened on the iPad**, 2026-10-04 06:13 (its own screen recording, 12 s): Safari at
+  `app.letterlock.edycu.dev/open?to=0xe5Ae…CDa`, **Open with passkey**, the system sheet listed three Letterlock
+  passkeys and the Mac's (17:25) was chosen, Face ID, and the same letter opened: "Remember for me: the dentist moved
+  to Thursday at 10:10." Opening it needs the X25519 key the PRF output derives, so the iPad derived the Mac's key from
+  the synced passkey. Nothing from the Mac was stored on the iPad; the passkey came through iCloud Keychain.
+- **Not covered:** the reverse direction (iPad → Mac), hybrid use over a QR code, and a non-Apple provider. The
+  iPadOS version was not recorded. Thread 822523 below reports that the reverse direction can differ.
+
+The steps below remain the way to repeat it on this page, with its own rpId.
 
 ## What is already known (and why the OS versions matter)
 
