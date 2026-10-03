@@ -124,7 +124,7 @@ same command on Ubuntu, with the offline proof in a network namespace; run local
 v0.1.0, it gave that version's fresh-clone counts (705 passed, 0 failed, 12 skipped).
 
 `pnpm bench` on 2026-09-27 at 21:39 UTC (SDK 0.1.1) against the public RPC, N = 1,000 (5 runs of 200):
-**resolve + seal p50 28.628 ms, p95 35.453 ms, p99 55.888 ms**. Sealing alone took p50 5.653 ms; resolve alone,
-one `keyOf` read, p50 22.606 ms, next to a plain `eth_blockNumber` round trip at p50 20.176 ms. Across the 5 runs the
-resolve + seal p50 ranged 28.238–29.065 ms. The method, the machine and every sample are in
+**resolve + seal p50 27.876 ms, p95 34.928 ms, p99 166.123 ms**. Sealing alone took p50 6.981 ms; resolve alone,
+one `keyOf` read, p50 20.443 ms, next to a plain `eth_blockNumber` round trip at p50 18.689 ms. Across the 5 runs the
+resolve + seal p50 ranged 26.717–28.795 ms. The method, the machine and every sample are in
 [bench/RESULTS.md](bench/RESULTS.md) and [bench/results.json](bench/results.json).
