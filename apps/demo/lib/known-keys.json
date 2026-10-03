@@ -1,5 +1,5 @@
 {
-  "about": "Keys in the directories that the app's own tests posted: a browser's virtual authenticator (Chrome DevTools) stood in for a passkey and was deleted after the run, so nothing sealed to these keys can ever be opened. The register marks their lines.",
+  "about": "Keys in the directories that the project posted itself: the app's live checks (a browser's virtual authenticator stood in for a passkey and was deleted after the run, so nothing sealed to those keys can ever be opened) and the keys made while recording the demo video (real passkeys of the builder). The register marks their lines, so none is mistaken for an outside user.",
   "keys": [
     {
       "chainId": 143,
@@ -12,6 +12,24 @@
       "address": "0xCE312a7551Ba51Cb531e4FA4f47Ed7dc5E0f0CA5",
       "txHash": "0x28f3f506813f6f3992a87892bd44c422614990749699b12a1c65467fa6b3312c",
       "note": "Test key from the app’s live check: a browser’s virtual passkey, deleted after the run. Nothing sealed to it can be opened"
+    },
+    {
+      "chainId": 143,
+      "address": "0xe5AeA9f323f7FfA74703FfDcc2732911aeF4DCDa",
+      "txHash": "0x8262aebdddc4070562dcee1d141c2422293136f3e195b263af63da333178aded",
+      "note": "The builder’s own key, made on camera for the demo video: a real passkey in Safari on a Mac, 3 Oct 2026. Not an outside user"
+    },
+    {
+      "chainId": 143,
+      "address": "0xeb409791d8f379091cfa3e2127C03241044FA434",
+      "txHash": "0xca77bb5a9153b96976e80fcb8efb08b2d7c6a1da203c8c1eb75d2b972bac8dd5",
+      "note": "The builder’s own test key: a real passkey made on an iPad while recording the demo video, 3 Oct 2026. Not an outside user"
+    },
+    {
+      "chainId": 143,
+      "address": "0x49077c300A239fc289c7B86a6a7B918306938D5f",
+      "txHash": "0xf26f770593eae177f9c1514ec334f8db4ced091f295e47a868c410e6eed027d4",
+      "note": "The builder’s own test key: a real passkey made on an iPad while recording the demo video, 3 Oct 2026. Not an outside user"
     }
   ]
 }
