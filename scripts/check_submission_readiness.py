@@ -52,6 +52,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SELF = Path(__file__).resolve()
 SDK_RUNTIME_PATHS = ["packages/letterlock/src", "packages/letterlock/package.json"]
+SDK_MANIFEST = "packages/letterlock/package.json"
+# The manifest's fields that change what runs: a devDependency, a script or a version-only edit changes no number a
+# benchmark measures (bench imports the SDK's TypeScript source). scripts/lib/git.ts uses the same fields.
+SDK_RUNTIME_FIELDS = ("dependencies", "peerDependencies", "optionalDependencies", "exports", "type", "engines")
 EXPLORERS = ("monadvision.com", "monadscan.com")
 SKIP_DIRS = ("contracts/lib/", "node_modules/")
 SKIP_FILES = {"pnpm-lock.yaml", "bench/results.json"}
@@ -70,6 +74,38 @@ def git(*args: str) -> str:
         return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return ""
+
+
+def manifest_runtime(sha: str) -> str | None:
+    """The runtime fields of the SDK's manifest at a commit, as canonical JSON; None when it has no manifest."""
+    text = git("show", f"{sha}:{SDK_MANIFEST}")
+    if not text:
+        return None
+    try:
+        m = json.loads(text)
+    except ValueError:
+        return text
+    return json.dumps({k: m.get(k) for k in SDK_RUNTIME_FIELDS}, sort_keys=True)
+
+
+def last_sdk_runtime_commit() -> str:
+    """'<sha>\t<committer date>' of the last commit that changed the SDK's source or its manifest's runtime fields."""
+    candidates = []
+    src = git("log", "-1", "--format=%H", "--", SDK_RUNTIME_PATHS[0])
+    if src:
+        candidates.append(src)
+    for sha in git("log", "--format=%H", "--", SDK_MANIFEST).split():
+        parent = git("rev-parse", "-q", "--verify", f"{sha}^")
+        if not parent or manifest_runtime(sha) != manifest_runtime(parent):
+            candidates.append(sha)
+            break
+    if not candidates:
+        return ""
+    newest = candidates[0]
+    for c in candidates[1:]:
+        if git("rev-list", "-1", f"{newest}..{c}"):  # c is not an ancestor of newest: it came later
+            newest = c
+    return git("log", "-1", "--format=%H%x09%cI", newest)
 
 
 def publishable_files() -> list[str]:
@@ -189,7 +225,7 @@ def check_bench() -> dict | None:
         return None
     res = json.loads(path.read_text())
     generated = dt.datetime.fromisoformat(res["generatedAt"].replace("Z", "+00:00"))
-    last = git("log", "-1", "--format=%H%x09%cI", "--", *SDK_RUNTIME_PATHS)
+    last = last_sdk_runtime_commit()
     ctx = res.get("context") or {}
     measured = (ctx.get("sdk") or {}).get("git") or {}
     lat = res.get("latencyMs", {}).get("resolveAndSeal", {})

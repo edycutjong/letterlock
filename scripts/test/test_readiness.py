@@ -642,6 +642,27 @@ class SeedRecord(TempRepo):
         self.assertIn("1 complete run(s) of 2", detail)
 
 
+class SdkRuntimeCommit(TempRepo):
+    def manifest(self, **fields) -> str:
+        return json.dumps({"name": "letterlock", "version": "0.1.1", **fields})
+
+    def test_a_dev_dependency_bump_does_not_make_the_bench_stale(self):
+        self.commit("packages/letterlock/src/index.ts", "export {};\n")
+        self.commit("packages/letterlock/package.json", self.manifest(dependencies={"viem": "^2"}, devDependencies={"esbuild": "^0.27.7"}))
+        runtime = R.last_sdk_runtime_commit().split("\t")[0]
+        self.commit("packages/letterlock/package.json", self.manifest(dependencies={"viem": "^2"}, devDependencies={"esbuild": "^0.28.1"}))
+        self.assertEqual(R.last_sdk_runtime_commit().split("\t")[0], runtime)
+
+    def test_a_dependency_or_source_change_does(self):
+        self.commit("packages/letterlock/package.json", self.manifest(dependencies={"viem": "^2"}))
+        first = R.last_sdk_runtime_commit().split("\t")[0]
+        self.commit("packages/letterlock/package.json", self.manifest(dependencies={"viem": "^3"}))
+        second = R.last_sdk_runtime_commit().split("\t")[0]
+        self.assertNotEqual(second, first)
+        self.commit("packages/letterlock/src/index.ts", "export const x = 1;\n")
+        self.assertNotEqual(R.last_sdk_runtime_commit().split("\t")[0], second)
+
+
 class Bench(TempRepo):
     def test_failed_calls_or_mismatches_fail_the_bench(self):
         (self.root / "bench").mkdir()
