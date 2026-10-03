@@ -1,0 +1,327 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Letterlock — any app seals data to your address; a wax seal presses shut over one address line; only your passkey breaks it.">
+<!-- STORYBOARD (dur 6s — must equal this file's single master dur)
+  0-10%   steady: manila plate, sealed envelope (= static icon.svg): ink flap, blue airmail edge, wax seal with italic L
+  10-25%  trigger: the seal lifts off and fades; flap swings open; the italic address stroke draws in, airmail blue (open state)   data-story="beat-2"
+  25-55%  mechanism: A wax seal presses shut over one address line; only your passkey breaks it.   data-story="beat-3"
+  55-80%  resolution: sealed state holds; one red ripple ring settles into the paper   data-story="beat-4"
+  80-100% breathe: warm glow under the seal breathes once; story layer seam-fades back to the sealed poster
+-->
+<!--
+  Letterlock · icon-animated.svg (512×512, one 6 s master loop, no text). t=0 is the static icon.svg poster.
+  Timeline (fraction of 6 s → what moves):
+    .10–.145 beat 2  the poster seal lifts toward the viewer and fades; its shadow slides away down-right
+    .11–.15  beat 2  the ink address rule fades (the letter is unsealed)
+    .14–.22  beat 2  flap swings open about its hinge (outer face scaleY 1→0, inner face 0→1)
+    .17–.25  beat 2  the address rule draws in, airmail blue, left to right (mask dashoffset, italic-slanted wipe)
+    .29–.37  beat 3  flap swings shut
+    .37–.41  beat 3  a fresh seal (data-story beat-3) appears above the tip, lifted, and hovers down
+    .41–.46  beat 3  PRESS: 300 ms drop, cubic-bezier(.2,1.4,.4,1) overshoot, rotate −10°→0, then wax squash
+    .455–.49 beat 3  the address rule turns from blue (open) to ink (sealed) under the wax
+    .46–.64  beat 4  one red ripple ring spreads from the wax and settles into the paper
+    1.0 → 0  seam     the fresh seal hands off to the identical poster seal in the same frame (no pop)
+    .80–.95  beat 5  warm glow breathes under the seal; everything is back at poster values by .96
+  Motion split: CSS keyframes (6 s) drive seals / shadow / squash / flap / ink rule, so the reduced-motion guard
+  freezes them; SMIL (6 s) drives the blue draw-in, ripple and glow, and those layers are [data-story] and are
+  hidden under reduced motion — the file then rests on the poster. Blur filters: 3 (seal shadow, paper, glow).
+-->
+<style>
+  .ia-seal, .ia-seal-press, .ia-shadow, .ia-squash, .ia-flap-out, .ia-flap-in { transform-box: fill-box }
+  .ia-seal, .ia-seal-press, .ia-shadow, .ia-squash { transform-origin: 50% 50% }
+  .ia-flap-out { transform-origin: 50% 0% }
+  .ia-flap-in { transform-origin: 50% 100% }
+  .ia-seal     { animation: ia-seal 6s linear infinite }
+  .ia-seal-press { animation: ia-seal-press 6s linear infinite }
+  .ia-shadow   { animation: ia-shadow 6s linear infinite }
+  .ia-squash   { animation: ia-squash 6s linear infinite }
+  .ia-flap-out { animation: ia-flap-out 6s linear infinite }
+  .ia-flap-in  { animation: ia-flap-in 6s linear infinite }
+  .ia-ink-rule { animation: ia-ink-rule 6s linear infinite }
+  @keyframes ia-seal {
+    0%, 10% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(.3,0,.6,1) }
+    12%     { opacity: 1; transform: translate(2px, -10px) scale(1.08) rotate(-3deg); animation-timing-function: cubic-bezier(.4,0,.8,.6) }
+    14.5%, 100% { opacity: 0; transform: translate(4px, -18px) scale(1.16) rotate(-6deg) }
+  }
+  @keyframes ia-seal-press {
+    0%, 37% { opacity: 0; transform: translate(-6px, -30px) scale(1.34) rotate(-13deg); animation-timing-function: cubic-bezier(.2,.4,.4,1) }
+    39%     { opacity: 1; transform: translate(-5px, -25px) scale(1.29) rotate(-11deg); animation-timing-function: linear }
+    41%     { opacity: 1; transform: translate(-5px, -22px) scale(1.26) rotate(-10deg); animation-timing-function: cubic-bezier(.2,1.4,.4,1) }
+    46%, 100% { opacity: 1; transform: none }
+  }
+  @keyframes ia-shadow {
+    0%, 10% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(.3,0,.6,1) }
+    12%     { opacity: .8; transform: translate(10px, 13px) scale(1.08); animation-timing-function: cubic-bezier(.4,0,.8,.6) }
+    14.5%   { opacity: 0; transform: translate(16px, 21px) scale(1.16) }
+    37%     { opacity: 0; transform: translate(22px, 30px) scale(1.3); animation-timing-function: cubic-bezier(.2,.4,.4,1) }
+    39%     { opacity: .45; transform: translate(19px, 27px) scale(1.27); animation-timing-function: linear }
+    41%     { opacity: .5; transform: translate(17px, 24px) scale(1.24); animation-timing-function: cubic-bezier(.2,1.4,.4,1) }
+    46%, 100% { opacity: 1; transform: none }
+  }
+  @keyframes ia-squash {
+    0%, 45%  { transform: none }
+    46.5%    { transform: scale(1.05, .94) }
+    49%      { transform: scale(.985, 1.015) }
+    51.5%, 100% { transform: none }
+  }
+  @keyframes ia-flap-out {
+    0%, 14%  { transform: scaleY(1); animation-timing-function: cubic-bezier(.55,0,.9,.55) }
+    18%, 33% { transform: scaleY(0); animation-timing-function: cubic-bezier(.1,.45,.45,1) }
+    37%, 100% { transform: scaleY(1) }
+  }
+  @keyframes ia-flap-in {
+    0%, 17.9% { opacity: 0; transform: scaleY(0) }
+    18%       { opacity: 1; transform: scaleY(0); animation-timing-function: cubic-bezier(.1,.45,.45,1) }
+    22%, 29%  { opacity: 1; transform: scaleY(1); animation-timing-function: cubic-bezier(.55,0,.9,.55) }
+    33%       { opacity: 1; transform: scaleY(0) }
+    33.1%, 100% { opacity: 0; transform: scaleY(0) }
+  }
+  @keyframes ia-ink-rule {
+    0%, 11%   { opacity: 1 }
+    15%, 45.5% { opacity: 0 }
+    49%, 100% { opacity: 1 }
+  }
+  @media (max-width: 96px) { .ia-grain { display: none } }
+  @media (prefers-reduced-motion: reduce) {
+    *, [data-story] { animation: none !important }
+    [data-story] { display: none }
+  }
+</style>
+<defs>
+  <clipPath id="ia-plate-clip"><rect x="1" y="1" width="510" height="510" rx="108"/></clipPath>
+  <clipPath id="ia-env-clip"><rect x="66" y="126" width="380" height="260" rx="8"/></clipPath>
+  <clipPath id="ia-band-clip"><rect x="78" y="352" width="356" height="18"/></clipPath>
+  <clipPath id="ia-pocket-clip"><path d="M66 126L256 256L446 126Z"/></clipPath>
+  <clipPath id="ia-flapin-clip"><rect x="66" y="0" width="380" height="130"/></clipPath>
+  <filter id="ia-grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".62" numOctaves="2" seed="11" stitchTiles="stitch"/>
+    <feColorMatrix values="0 0 0 0 .118  0 0 0 0 .106  0 0 0 0 .086  0 0 0 1.5 -.62"/>
+    <feComposite in2="SourceGraphic" operator="in"/>
+  </filter>
+  <filter id="ia-paper-soft" x="-10%" y="-10%" width="120%" height="130%">
+    <feGaussianBlur stdDeviation="5"/>
+  </filter>
+  <filter id="ia-glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="15"/>
+  </filter>
+  <linearGradient id="ia-paper" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#F8F4EB"/>
+    <stop offset=".6" stop-color="#F8F4EB"/>
+    <stop offset="1" stop-color="#F3EEE3"/>
+  </linearGradient>
+  <linearGradient id="ia-flap" gradientUnits="userSpaceOnUse" x1="0" y1="126" x2="0" y2="256">
+    <stop offset="0" stop-color="#ECE6D9"/>
+    <stop offset=".22" stop-color="#F3EEE3"/>
+    <stop offset="1" stop-color="#F8F4EB"/>
+  </linearGradient>
+  <!-- the flap's inner face (open): envelope inner fold, shaded toward the hinge -->
+  <linearGradient id="ia-flap-inner" gradientUnits="userSpaceOnUse" x1="0" y1="34" x2="0" y2="126">
+    <stop offset="0" stop-color="#F3EEE3"/>
+    <stop offset=".7" stop-color="#ECE6D9"/>
+    <stop offset="1" stop-color="#CFC4AF"/>
+  </linearGradient>
+  <!-- the pocket: dark at the mouth, the letter sheet catching light below it -->
+  <linearGradient id="ia-pocket" gradientUnits="userSpaceOnUse" x1="0" y1="126" x2="0" y2="166">
+    <stop offset="0" stop-color="#6E6556"/>
+    <stop offset="1" stop-color="#CFC4AF"/>
+  </linearGradient>
+  <mask id="ia-rule-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512" style="mask-type:alpha">
+    <!-- italic-slanted wipe: skewX about the rule's baseline -->
+    <path d="M86 312H426" transform="translate(101.4 0) skewX(-18)" fill="none" stroke="#F8F4EB" stroke-width="64" pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="100">
+      <animate attributeName="stroke-dashoffset" values="100;100;0;0;100;100" keyTimes="0;.17;.25;.5;.52;1" calcMode="spline" keySplines="0 0 1 1;.45 0 .3 1;0 0 1 1;0 0 1 1;0 0 1 1" dur="6s" repeatCount="indefinite"/>
+    </path>
+  </mask>
+  <path id="ia-seal-blob" d="M182.2 102.9C183.1 110.1 179.7 112.5 178.2 117.8C176.8 123 176.8 129.5 173.8 134.4C170.7 139.3 163.2 142 159.9 147.5C156.6 152.9 157.9 163.2 154.2 166.9C150.4 170.5 143.4 167.3 137.4 169.3C131.4 171.4 123.9 177.9 118.3 179.4C112.8 180.8 108.7 177.6 104 178C99.2 178.3 94.6 182.8 90 181.4C85.4 180.1 81.7 171.9 76.6 169.6C71.4 167.4 64 170 59.3 167.8C54.5 165.6 52.9 160.6 48 156.3C43.2 152 33.5 148 30 142.1C26.6 136.1 28.7 127 27.3 120.5C26 113.9 22.3 108.3 21.8 102.7C21.3 97.2 23.4 93 24.4 87.2C25.4 81.4 25.3 73.1 27.8 67.9C30.3 62.6 35.3 60.5 39.3 55.9C43.3 51.3 46.8 44.2 51.6 40.2C56.4 36.2 62.7 34.5 67.9 31.9C73 29.4 77.3 25.8 82.7 25.1C88.2 24.3 93.3 27.5 100.5 27.4C107.7 27.4 119 23.3 125.9 24.8C132.7 26.4 135.9 33.1 141.6 36.9C147.3 40.7 154.8 41.6 160 47.9C165.2 54.2 169.1 65.5 172.8 74.7C176.5 83.9 181.3 95.7 182.2 102.9Z"/>
+  <path id="ia-seal-L" transform="translate(77.68 130) scale(.8)" d="M55.5 0L-4.9 0L-4.9-2L4.1-2L20.6-73L12.1-73L12.1-75L48.3-75L48.3-73L38.9-73L22.4-2L29.5-2Q37.4-2 42.9-4.5Q48.5-7 52.3-11.6Q56.2-16.2 58.7-22.5L60.7-22.5Z"/>
+
+  <clipPath id="ia-seal-blob-clip"><use href="#ia-seal-blob"/></clipPath>
+  <clipPath id="ia-seal-L-clip"><use href="#ia-seal-L"/></clipPath>
+
+  <!-- skirt: the wax slopes down from the rim to the paper -->
+  <radialGradient id="ia-seal-skirt" gradientUnits="userSpaceOnUse" cx="100" cy="100" r="86">
+    <stop offset=".72" stop-color="#A3261E"/>
+    <stop offset="1" stop-color="#7A1B15"/>
+  </radialGradient>
+  <!-- key light from the top-left: sheen at ~35%/30%, ink shade bottom-right -->
+  <linearGradient id="ia-seal-light" x1=".14" y1=".08" x2=".86" y2=".94">
+    <stop offset="0" stop-color="#C4483C" stop-opacity=".95"/>
+    <stop offset=".44" stop-color="#C4483C" stop-opacity="0"/>
+    <stop offset=".58" stop-color="#1E1B16" stop-opacity="0"/>
+    <stop offset="1" stop-color="#1E1B16" stop-opacity=".3"/>
+  </linearGradient>
+  <!-- rim, outer slope: faces the light top-left, turns away bottom-right -->
+  <linearGradient id="ia-seal-rim-out" x1=".12" y1=".08" x2=".88" y2=".92">
+    <stop offset="0" stop-color="#C4483C"/>
+    <stop offset=".42" stop-color="#C4483C"/>
+    <stop offset=".62" stop-color="#A3261E"/>
+    <stop offset="1" stop-color="#7A1B15"/>
+  </linearGradient>
+  <linearGradient id="ia-seal-rim-shade" x1=".12" y1=".08" x2=".88" y2=".92">
+    <stop offset=".5" stop-color="#1E1B16" stop-opacity="0"/>
+    <stop offset="1" stop-color="#1E1B16" stop-opacity=".34"/>
+  </linearGradient>
+  <!-- rim, inner wall down into the pressed face: shaded top-left, lit bottom-right -->
+  <linearGradient id="ia-seal-rim-in" x1=".12" y1=".08" x2=".88" y2=".92">
+    <stop offset="0" stop-color="#7A1B15"/>
+    <stop offset=".45" stop-color="#A3261E"/>
+    <stop offset=".8" stop-color="#C4483C"/>
+    <stop offset="1" stop-color="#C4483C"/>
+  </linearGradient>
+  <linearGradient id="ia-seal-wall-shade" x1=".12" y1=".08" x2=".88" y2=".92">
+    <stop offset="0" stop-color="#1E1B16" stop-opacity=".38"/>
+    <stop offset=".45" stop-color="#1E1B16" stop-opacity="0"/>
+  </linearGradient>
+  <!-- crest glint, strongest top-left -->
+  <linearGradient id="ia-seal-crest" x1=".1" y1=".1" x2=".8" y2=".85">
+    <stop offset="0" stop-color="#F8F4EB" stop-opacity=".5"/>
+    <stop offset=".42" stop-color="#F8F4EB" stop-opacity=".1"/>
+    <stop offset=".7" stop-color="#F8F4EB" stop-opacity="0"/>
+  </linearGradient>
+  <!-- pressed face: flat, so only a faint directional wash -->
+  <linearGradient id="ia-seal-face" x1=".15" y1=".1" x2=".85" y2=".9">
+    <stop offset="0" stop-color="#C4483C" stop-opacity=".38"/>
+    <stop offset=".5" stop-color="#C4483C" stop-opacity="0"/>
+    <stop offset=".7" stop-color="#1E1B16" stop-opacity="0"/>
+    <stop offset="1" stop-color="#1E1B16" stop-opacity=".14"/>
+  </linearGradient>
+  <!-- radial profiles that round each rim slope into its neighbour (luminance masks) -->
+  <radialGradient id="ia-seal-prof-out" gradientUnits="userSpaceOnUse" cx="100" cy="100" r="67">
+    <stop offset=".86" stop-color="#F8F4EB"/>
+    <stop offset="1" stop-color="#F8F4EB" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="ia-seal-prof-in" gradientUnits="userSpaceOnUse" cx="100" cy="100" r="58.5">
+    <stop offset=".8" stop-color="#F8F4EB" stop-opacity="0"/>
+    <stop offset="1" stop-color="#F8F4EB"/>
+  </radialGradient>
+  <mask id="ia-seal-mask-out" maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+    <circle cx="100" cy="100" r="67" fill="url(#ia-seal-prof-out)"/>
+  </mask>
+  <mask id="ia-seal-mask-in" maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+    <circle cx="100" cy="100" r="58.5" fill="url(#ia-seal-prof-in)"/>
+  </mask>
+
+  <filter id="ia-seal-soft" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="3.2"/>
+  </filter>
+
+  <use id="ia-seal-shadow-src" href="#ia-seal-blob" fill="#1E1B16"/>
+
+  <g id="ia-seal-body">
+    <!-- skirt -->
+    <use href="#ia-seal-blob" fill="url(#ia-seal-skirt)"/>
+    <use href="#ia-seal-blob" fill="url(#ia-seal-light)"/>
+    <g clip-path="url(#ia-seal-blob-clip)">
+      <!-- meniscus: the wax thins and darkens where it meets the paper -->
+      <use href="#ia-seal-blob" fill="none" stroke="#7A1B15" stroke-width="3.6" stroke-opacity=".7"/>
+      <!-- lit lip on the top-left edge: the outline shifted down-right survives inside only there -->
+      <use href="#ia-seal-blob" transform="translate(1.7 2.2)" fill="none" stroke="#C4483C" stroke-width="2.4"/>
+    </g>
+    <!-- raised rim: outer slope -->
+    <g mask="url(#ia-seal-mask-out)">
+      <circle cx="100" cy="100" r="62" fill="none" stroke="url(#ia-seal-rim-out)" stroke-width="9"/>
+      <circle cx="100" cy="100" r="62" fill="none" stroke="url(#ia-seal-rim-shade)" stroke-width="9"/>
+    </g>
+    <!-- pressed face -->
+    <circle cx="100" cy="100" r="53" fill="#A3261E"/>
+    <circle cx="100" cy="100" r="53" fill="url(#ia-seal-face)"/>
+    <!-- raised rim: inner wall (spills a soft shadow onto the face at the top-left) -->
+    <g mask="url(#ia-seal-mask-in)">
+      <circle cx="100" cy="100" r="53" fill="none" stroke="url(#ia-seal-rim-in)" stroke-width="11"/>
+      <circle cx="100" cy="100" r="53" fill="none" stroke="url(#ia-seal-wall-shade)" stroke-width="11"/>
+    </g>
+    <circle cx="100" cy="100" r="58.5" fill="none" stroke="url(#ia-seal-crest)" stroke-width="1.8"/>
+    <!-- debossed monogram -->
+    <use href="#ia-seal-L" x="1.1" y="1.3" fill="#C4483C"/>
+    <use href="#ia-seal-L" fill="#7A1B15"/>
+    <g clip-path="url(#ia-seal-L-clip)">
+      <use href="#ia-seal-L" fill="#1E1B16" fill-opacity=".45"/>
+      <use href="#ia-seal-L" x="1.1" y="1.3" fill="#7A1B15"/>
+    </g>
+    <!-- glints -->
+    <path d="M42.9 81.5A60 60 0 0 1 75.6 45.2" fill="none" stroke="#F8F4EB" stroke-opacity=".26" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M48 70A60 60 0 0 1 63.1 52.7" fill="none" stroke="#F8F4EB" stroke-opacity=".42" stroke-width="1.8" stroke-linecap="round"/>
+    <ellipse cx="44.8" cy="50.6" rx="5" ry="1.5" transform="rotate(-47 44.8 50.6)" fill="#F8F4EB" fill-opacity=".24"/>
+  </g>
+</defs>
+
+<!-- plate + register ruling -->
+<rect x="1" y="1" width="510" height="510" rx="108" fill="#F3EEE3" stroke="#CFC4AF" stroke-width="2"/>
+<path d="M44 60H468M44 92H468M44 420H468M44 452H468" fill="none" stroke="#CFC4AF" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#ia-plate-clip)"/>
+
+<!-- envelope body -->
+<rect x="66" y="126" width="380" height="260" rx="8" fill="#1E1B16" opacity=".15" transform="translate(0 8)" filter="url(#ia-paper-soft)"/>
+<rect x="66" y="126" width="380" height="260" rx="8" fill="url(#ia-paper)"/>
+<path d="M60 370L78 352L98 352L80 370ZM92 370L110 352L130 352L112 370ZM124 370L142 352L162 352L144 370ZM156 370L174 352L194 352L176 370ZM188 370L206 352L226 352L208 370ZM220 370L238 352L258 352L240 370ZM252 370L270 352L290 352L272 370ZM284 370L302 352L322 352L304 370ZM316 370L334 352L354 352L336 370ZM348 370L366 352L386 352L368 370ZM380 370L398 352L418 352L400 370ZM412 370L430 352L450 352L432 370Z" fill="#2F5D9E" clip-path="url(#ia-band-clip)"/>
+
+<!-- address rule: ink (sealed) — fades while the letter is open -->
+<g class="ia-ink-rule">
+  <path d="M122 310.4C125.7 310.3 136.9 309.9 144.3 309.5C151.8 309.1 159.2 308.6 166.7 308.1C174.1 307.6 181.6 307.1 189 306.7C196.4 306.2 203.9 305.8 211.3 305.5C218.8 305.2 226.2 304.9 233.7 304.7C241.1 304.6 248.6 304.5 256 304.5C263.4 304.5 270.9 304.7 278.3 304.9C285.8 305.1 293.2 305.4 300.7 305.8C308.1 306.2 315.6 306.6 323 307.1C330.4 307.6 337.9 308.2 345.3 308.7C352.8 309.2 360.2 309.8 367.7 310.2C375.1 310.7 386.3 311.2 390 311.3L390 313.6C386.3 313.7 375.1 314.1 367.7 314.5C360.2 314.9 352.8 315.4 345.3 315.9C337.9 316.4 330.4 316.9 323 317.3C315.6 317.8 308.1 318.2 300.7 318.5C293.2 318.8 285.8 319.1 278.3 319.3C270.9 319.4 263.4 319.5 256 319.5C248.6 319.5 241.1 319.3 233.7 319.1C226.2 318.9 218.8 318.6 211.3 318.2C203.9 317.8 196.4 317.4 189 316.9C181.6 316.4 174.1 315.8 166.7 315.3C159.2 314.8 151.8 314.2 144.3 313.8C136.9 313.3 125.7 312.8 122 312.7Z" fill="#1E1B16"/>
+  <path d="M127 310.8C115 310.7 108.5 314.1 107.8 319.8L110.8 319.9C111.2 315.6 116.5 312.9 127 312.7ZM385 313.2C397 313.3 403.5 309.9 404.2 304.3L401.2 304.1C400.8 308.4 395.5 311.1 385 311.3Z" fill="#1E1B16"/>
+  <path d="M109 322.2m-4.3 0a4.3 4.3 0 1 0 8.6 0a4.3 4.3 0 1 0 -8.6 0ZM403 301.8m-4.3 0a4.3 4.3 0 1 0 8.6 0a4.3 4.3 0 1 0 -8.6 0Z" fill="#1E1B16"/>
+</g>
+<!-- address rule: airmail blue (open state), written in left → right -->
+<g data-story="beat-2" opacity="0" mask="url(#ia-rule-mask)">
+  <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.168;.172;.455;.49;1" dur="6s" repeatCount="indefinite"/>
+  <path d="M122 310.4C125.7 310.3 136.9 309.9 144.3 309.5C151.8 309.1 159.2 308.6 166.7 308.1C174.1 307.6 181.6 307.1 189 306.7C196.4 306.2 203.9 305.8 211.3 305.5C218.8 305.2 226.2 304.9 233.7 304.7C241.1 304.6 248.6 304.5 256 304.5C263.4 304.5 270.9 304.7 278.3 304.9C285.8 305.1 293.2 305.4 300.7 305.8C308.1 306.2 315.6 306.6 323 307.1C330.4 307.6 337.9 308.2 345.3 308.7C352.8 309.2 360.2 309.8 367.7 310.2C375.1 310.7 386.3 311.2 390 311.3L390 313.6C386.3 313.7 375.1 314.1 367.7 314.5C360.2 314.9 352.8 315.4 345.3 315.9C337.9 316.4 330.4 316.9 323 317.3C315.6 317.8 308.1 318.2 300.7 318.5C293.2 318.8 285.8 319.1 278.3 319.3C270.9 319.4 263.4 319.5 256 319.5C248.6 319.5 241.1 319.3 233.7 319.1C226.2 318.9 218.8 318.6 211.3 318.2C203.9 317.8 196.4 317.4 189 316.9C181.6 316.4 174.1 315.8 166.7 315.3C159.2 314.8 151.8 314.2 144.3 313.8C136.9 313.3 125.7 312.8 122 312.7Z" fill="#2F5D9E"/>
+  <path d="M127 310.8C115 310.7 108.5 314.1 107.8 319.8L110.8 319.9C111.2 315.6 116.5 312.9 127 312.7ZM385 313.2C397 313.3 403.5 309.9 404.2 304.3L401.2 304.1C400.8 308.4 395.5 311.1 385 311.3Z" fill="#2F5D9E"/>
+  <path d="M109 322.2m-4.3 0a4.3 4.3 0 1 0 8.6 0a4.3 4.3 0 1 0 -8.6 0ZM403 301.8m-4.3 0a4.3 4.3 0 1 0 8.6 0a4.3 4.3 0 1 0 -8.6 0Z" fill="#2F5D9E"/>
+</g>
+
+<!-- the pocket under the flap (hidden by the closed flap at t=0): dark mouth, the letter inside, the back-panel edge -->
+<g clip-path="url(#ia-pocket-clip)">
+  <path d="M66 126L256 256L446 126Z" fill="url(#ia-pocket)"/>
+  <rect x="66" y="148" width="380" height="130" fill="#F8F4EB"/>
+  <path d="M66 148H446" stroke="#1E1B16" stroke-opacity=".18" stroke-width="3"/>
+  <path d="M66 172H446M66 196H446" stroke="#CFC4AF" stroke-width="1.5"/>
+</g>
+<path d="M66 126L256 256L446 126" fill="none" stroke="#1E1B16" stroke-width="7" stroke-linejoin="round" clip-path="url(#ia-env-clip)"/>
+
+<!-- flap, closed face (poster): shadow on the body, paper, ink edge — swings shut/open about the hinge -->
+<g clip-path="url(#ia-env-clip)">
+  <g class="ia-flap-out">
+    <path d="M66 126L256 256L446 126" fill="none" stroke="#1E1B16" stroke-width="10" opacity=".2" transform="translate(0 6)" filter="url(#ia-paper-soft)"/>
+    <path d="M66 126L256 256L446 126Z" fill="url(#ia-flap)"/>
+    <path d="M66 126L256 256L446 126" fill="none" stroke="#1E1B16" stroke-width="12" stroke-linejoin="round"/>
+  </g>
+</g>
+<!-- flap, open (inner face with its gum band) -->
+<g clip-path="url(#ia-flapin-clip)">
+  <g class="ia-flap-in" data-story="beat-2" opacity="0">
+    <path d="M66 126L256 34L446 126Z" fill="url(#ia-flap-inner)"/>
+    <path d="M66 126L256 34L446 126" fill="none" stroke="#CFC4AF" stroke-opacity=".6" stroke-width="22"/>
+    <path d="M66 126L256 34L446 126" fill="none" stroke="#1E1B16" stroke-width="12" stroke-linejoin="round"/>
+  </g>
+</g>
+<rect x="66" y="126" width="380" height="260" rx="8" fill="none" stroke="#1E1B16" stroke-width="9"/>
+
+<!-- manila grain -->
+<rect class="ia-grain" x="1" y="1" width="510" height="510" rx="108" fill="#F3EEE3" opacity=".16" filter="url(#ia-grain)"/>
+
+<!-- beat 5: warm glow under the wax -->
+<circle data-story="beat-5" opacity="0" cx="258" cy="257" r="86" fill="#C4483C" filter="url(#ia-glow)">
+  <animate attributeName="opacity" values="0;0;.55;0;0" keyTimes="0;.8;.87;.95;1" calcMode="spline" keySplines="0 0 1 1;.4 0 .6 1;.4 0 .6 1;0 0 1 1" dur="6s" repeatCount="indefinite"/>
+</circle>
+<!-- beat 4: one ripple ring pressed out of the wax, settling into the paper -->
+<circle data-story="beat-4" opacity="0" cx="258" cy="259" r="84" fill="none" stroke="#A3261E" stroke-width="2.6">
+  <animate attributeName="opacity" values="0;0;.42;0;0" keyTimes="0;.458;.468;.64;1" dur="6s" repeatCount="indefinite"/>
+  <animate attributeName="r" values="84;84;142;142" keyTimes="0;.458;.64;1" calcMode="spline" keySplines="0 0 1 1;.15 .6 .3 1;0 0 1 1" dur="6s" repeatCount="indefinite"/>
+  <animate attributeName="stroke-width" values="2.6;2.6;.6;.6" keyTimes="0;.458;.64;1" dur="6s" repeatCount="indefinite"/>
+</circle>
+
+<!-- the wax seal: shadow and wax move separately so the shadow converges as the wax lands -->
+<g class="ia-shadow">
+  <g transform="translate(156 156)">
+    <g transform="translate(2.6 4.2)" opacity=".34" filter="url(#ia-seal-soft)"><use href="#ia-seal-shadow-src"/></g>
+    <g opacity=".3" transform="translate(.9 1.5) scale(.3)" filter="url(#ia-seal-soft)"><use href="#ia-seal-shadow-src" transform="scale(3.3333)"/></g>
+  </g>
+</g>
+<!-- beat 1–2: the poster seal lifts off and is gone -->
+<g class="ia-seal">
+  <g transform="translate(156 156)"><use href="#ia-seal-body"/></g>
+</g>
+<!-- beat 3: a fresh seal (a new seal() call) hovers over the tip, presses, and holds to the seam, where it hands
+     off to the identical poster seal in the same frame -->
+<g class="ia-seal-press" data-story="beat-3" opacity="0">
+  <g class="ia-squash">
+    <g transform="translate(156 156)"><use href="#ia-seal-body"/></g>
+  </g>
+</g>
+</svg>
