@@ -595,7 +595,9 @@ def check_docs(consts: dict[str, str], deployments: dict[str, dict], bench: dict
     has_link_to = lambda target: (lambda t: any(x.split("#")[0].removeprefix("./") == target for x in links_in(t)[0]))  # noqa: E731
     readme_reqs = [
         (f"the live app ({app})", lambda t: bool(app) and app in t),
-        ("a demo video link (YouTube, Loom or Vimeo, with a well-formed id)", lambda t: bool(VIDEO.search(t))),
+        # the event asks for two videos, a demo (≤ 3 min) and a pitch (≤ 2 min): one link alone is not the demo
+        ("a demo video and a pitch video (two distinct YouTube, Loom or Vimeo links, each with a well-formed id)",
+         lambda t: len(set(VIDEO.findall(t))) >= 2),
         (f"the mainnet directory {directory} on an explorer", lambda t: any(f"{e}/address/{directory.lower()}" in lower(t) for e in EXPLORERS)),
         ("a link to DEMO.md", has_link_to("DEMO.md")),
         ("a link to docs/SPEC.md", has_link_to("docs/SPEC.md")),
@@ -612,9 +614,6 @@ def check_docs(consts: dict[str, str], deployments: dict[str, dict], bench: dict
     texts = {n: check_doc(n, r) for n, r in (("README.md", readme_reqs), ("DEMO.md", demo_reqs))}
     readme = texts.get("README.md")
     if readme is not None:
-        videos = set(VIDEO.findall(readme))
-        if len(videos) < 2:
-            record("docs", "WARN", "README.md: demo video and pitch video", f"{len(videos)} video link(s); the event asks for a demo video (3 min) and a pitch video (2 min)")
         check_videos(readme, online)
 
     # every latency figure the docs quote must be the one bench/results.json holds for its operation and statistic
