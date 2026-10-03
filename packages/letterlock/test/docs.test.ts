@@ -13,11 +13,15 @@ describe("public docs", () => {
     expect(readme).not.toContain("not published to npm yet");
   });
 
-  it("CHANGELOG.md opens with this version, and says which rpId it pins and which one it left", () => {
+  it("CHANGELOG.md opens with this version, and its 0.1.1 entry says which rpId it pins and which one it left", () => {
     const log = read("packages/letterlock/CHANGELOG.md");
     const top = /^## (\S+) \(\d{4}-\d{2}-\d{2}\)$/m.exec(log);
     expect(top?.[1], "the newest CHANGELOG entry is not this package's version").toBe(VERSION);
-    const entry = log.slice(top!.index, log.indexOf("\n## ", top!.index + 1));
+    // the rpId moved in 0.1.1; later releases keep that entry, so a reader upgrading from 0.1.0 still finds it
+    const moved = /^## 0\.1\.1 \(\d{4}-\d{2}-\d{2}\)$/m.exec(log);
+    expect(moved, "the CHANGELOG has no 0.1.1 entry").not.toBeNull();
+    const end = log.indexOf("\n## ", moved!.index + 1);
+    const entry = log.slice(moved!.index, end === -1 ? undefined : end);
     expect(entry).toContain(`\`LETTERLOCK_RP_ID\` is now \`${LETTERLOCK_RP_ID}\``);
     expect(entry).toContain("`letterlock-app.vercel.app`");
     expect(entry).toMatch(/cannot be re-derived under the new rpId/);
