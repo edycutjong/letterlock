@@ -21,7 +21,8 @@
     "serve": "node scripts/serve.ts",
     "call": "node scripts/call.ts",
     "testnet": "node scripts/testnet-run.ts",
-    "publish-agent-key": "node scripts/publish-agent-key.ts"
+    "publish-agent-key": "node scripts/publish-agent-key.ts",
+    "test:coverage": "vitest run --coverage --coverage.provider=v8 --coverage.include=src/** --coverage.reporter=text-summary"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",
@@ -30,8 +31,9 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "^5.0.3",
     "esbuild": "^0.28.1",
     "typescript": "^5.9.0",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.3"
   }
 }
