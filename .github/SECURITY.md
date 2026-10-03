@@ -7,8 +7,8 @@ immutable; the SDK, the app and the agent are fixed by release.
 
 | Component | Supported |
 |---|---|
-| `letterlock` on npm, latest 0.1.x | ✅ |
-| `letterlock` 0.1.0 | ❌ pins the retired rpId `letterlock-app.vercel.app`: use 0.1.1 |
+| `letterlock` on npm, the latest version | ✅ |
+| `letterlock` 0.1.0 | ❌ pins the retired rpId `letterlock-app.vercel.app`: install the latest version |
 | The directory at `0xA25BBACAb3fD2e71da1Aa002e54965B488d64b7e` (mainnet, chain 143) | ✅ (immutable: a fix is a new deploy) |
 | `main` | ✅ |
 

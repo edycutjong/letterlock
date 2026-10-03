@@ -42,13 +42,22 @@ jobs:
         with:
           persist-credentials: false
 
-      # the version main names, built from its tag
+      # The version main names, built from its tag. npm provenance records $GITHUB_REF@$GITHUB_SHA
+      # (libnpmpublish/lib/provenance.js), never the checked-out commit, so a publish is allowed only when the tag's
+      # commit is the commit this run was dispatched on; otherwise publish from release.yml. Checks and deprecations
+      # are unaffected.
       - name: Check out the version's tag
         working-directory: .
+        env:
+          PUBLISH: ${{ inputs.publish }}
         run: |
           v=$(jq -r .version packages/letterlock/package.json)
           git fetch --depth=1 origin "refs/tags/v$v:refs/tags/v$v" || { echo "::error::v$v is not tagged"; exit 1; }
           git checkout -q "v$v"
+          if [ "$PUBLISH" = "true" ] && [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "::error::v$v is $(git rev-parse --short HEAD), but npm provenance would name $GITHUB_SHA: publish from release.yml, or dispatch on a ref whose HEAD is v$v"
+            exit 1
+          fi
           echo "building letterlock $v from $(git rev-parse --short HEAD) (tag v$v)"
 
       - uses: pnpm/action-setup@v6
@@ -116,4 +125,4 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm deprecate letterlock@0.1.0 "pins the retired rpId letterlock-app.vercel.app: use 0.1.1 or later"
+          npm deprecate letterlock@0.1.0 "pins the retired rpId letterlock-app.vercel.app: install the latest version"

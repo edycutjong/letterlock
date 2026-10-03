@@ -143,7 +143,7 @@ own passkey account, which a one-time gas drip funds.
 | App | <https://app.letterlock.edycu.dev>, the WebAuthn rpId every Letterlock key is derived under, on the owner's own domain since SDK 0.1.1. The rpId 0.1.0 pinned, `letterlock-app.vercel.app`, answers every request for the app, its build's files included, with a 308 there |
 | Reference agent | <https://agent.letterlock.edycu.dev>: ERC-8004 agent 10260 ([card](https://agent.letterlock.edycu.dev/.well-known/agent-card.json), `GET /health`). Its `tokenURI` still names the card at its first host, `letterlock-agent.vercel.app`, which serves the same deployment |
 | Landing page and deck | <https://letterlock.edycu.dev> and <https://letterlock.edycu.dev/pitch/> |
-| SDK and CLI | [`letterlock`](https://www.npmjs.com/package/letterlock) on npm: 0.1.0, published 2026-09-27, pins `letterlock-app.vercel.app`; 0.1.1 in this repository pins `app.letterlock.edycu.dev` ([CHANGELOG](packages/letterlock/CHANGELOG.md)) |
+| SDK and CLI | [`letterlock`](https://www.npmjs.com/package/letterlock) on npm: 0.1.0, published 2026-09-27, pins `letterlock-app.vercel.app`. 0.1.1 (tag `v0.1.1`) pins `app.letterlock.edycu.dev` and was tagged, never published to npm; the next release (`release.yml`) publishes this repository's SDK with provenance ([CHANGELOG](packages/letterlock/CHANGELOG.md)) |
 | Records | [deployments/143.json](deployments/143.json) and [deployments/10143.json](deployments/10143.json): every transaction, the verification, the gas |
 
 Transactions a judge can open:
