@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/icon.svg" alt="Letterlock icon" width="128">
+  <img src="docs/assets/icon-animated.svg" alt="Letterlock icon" width="144">
   <h1>Letterlock ✉️</h1>
   <p><em>Any app can seal data only you can open: a passkey becomes an encryption address on Monad.</em></p>
   <img src="docs/assets/readme-hero-animated.svg" alt="Letterlock: an app looks up your address in the register and seals a note to your key; a wax seal presses shut over the address line, and only your passkey breaks it." width="100%">

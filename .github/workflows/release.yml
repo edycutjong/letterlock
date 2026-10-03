@@ -131,7 +131,7 @@ jobs:
           test "$(jq -c '[keys[] | select(startswith("_"))]' dist/package.json)" = "[]"
           npm publish ./dist --provenance --access public
           # npm takes a few minutes to serve a new version ("Your package is being processed"); the site's deploy needs it
-          for i in $(seq 1 40); do npm view "letterlock@$V" version >/dev/null 2>&1 && break; sleep 15; done
+          for _ in $(seq 1 40); do npm view "letterlock@$V" version >/dev/null 2>&1 && break; sleep 15; done
           npm view "letterlock@$V" version dist.attestations.provenance.predicateType
 
       # A push made with the workflow token starts no workflow, so the deploy is started here.
