@@ -6,7 +6,7 @@
 
   <p>One passkey, one encryption address, on every device the passkey syncs to.</p>
 
-  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 27.876 ms over N = 1,000 (<code>pnpm bench</code>), and 725 tests pass in a fresh clone (<code>pnpm verify</code>).</p>
+  <p><strong>Live on Monad mainnet.</strong> The directory is Sourcify-verified, resolve + seal p50 28.199 ms over N = 1,000 (<code>pnpm bench</code>), and 725 tests pass in a fresh clone (<code>pnpm verify</code>).</p>
 
   <br/>
 
@@ -170,8 +170,8 @@ every one that emitted a directory event up to block 108,575,659 among them.
 | Metric | Value |
 |---|---|
 | Tests | `pnpm verify` in a fresh clone on 2026-10-03: 725 passed, 0 failed, 14 skipped, in 8 suites (SDK 227, contracts 111, PRF spike 27, app 102, agent 97, offline 73, scripts 37, readiness 51). Skipped: the SDK's 11 live checks, which run with `LIVE=1`, and 3 checks that no file, commit or message names one of the author's private planning notes, which run only next to that folder (there: 728 passed, 11 skipped) |
-| Latency | resolve + seal p50 27.876 ms, p95 34.928 ms, p99 166.123 ms against Monad mainnet's public RPC, N = 1,000, 0 failed calls ([bench/RESULTS.md](bench/RESULTS.md)) |
-| Sealing cost | seal alone (HPKE, local CPU) p50 6.981 ms |
+| Latency | resolve + seal p50 28.199 ms, p95 36.122 ms, p99 167.399 ms against Monad mainnet's public RPC, N = 1,000, 0 failed calls ([bench/RESULTS.md](bench/RESULTS.md)) |
+| Sealing cost | seal alone (HPKE, local CPU) p50 4.956 ms |
 | Gas, mainnet receipts | publish 70,863 · drop of 490 bytes 45,780 · `publishForAgent` 108,799 (first key) and 74,652 (rotation) |
 | Offline proof | seal and open with the network taken away by the OS (`sandbox-exec` on macOS, a network namespace in CI): 73 checks, 14 envelope fixtures replayed |
 | Contract | 111 forge tests: unit, fuzz, invariant, mainnet fork against the live registry, gas snapshots |
