@@ -38,8 +38,8 @@ const data = IBM_Plex_Mono({
 });
 
 const TITLE = "Letterlock: a passkey becomes an encryption address";
-const DESCRIPTION =
-  "Your passkey derives an encryption key and posts its public half to a register on Monad. Anyone can seal a note to your address; only your passkey opens it, on any device it syncs to.";
+// at most 125 characters: a link card on a phone cuts a longer one off
+const DESCRIPTION = "Your passkey becomes an encryption address on Monad. Anyone can seal a note to you; only your passkey opens it.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${LETTERLOCK_RP_ID}`),
@@ -49,16 +49,19 @@ export const metadata: Metadata = {
   },
   description: DESCRIPTION,
   applicationName: "Letterlock",
+  authors: [{ name: "Edy Cu", url: "https://github.com/edycutjong" }],
+  creator: "Edy Cu",
   openGraph: {
     type: "website",
     siteName: "Letterlock",
     url: "/",
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: "/og-image.png", width: 2400, height: 1260, alt: "Letterlock: a wax seal pressed over an address line on a manila envelope" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Letterlock: a wax seal pressed over an address line on a manila envelope" }],
   },
   twitter: {
     card: "summary_large_image",
+    creator: "@edycutjong",
     title: TITLE,
     description: DESCRIPTION,
     images: ["/og-image.png"],
