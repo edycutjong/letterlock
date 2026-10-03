@@ -34,7 +34,7 @@ export const stubRpc = (handlers: Record<string, RpcHandler>) => {
     const answer = (r: { id: number; method: string; params?: unknown[] }) => {
       const params = r.params ?? [];
       calls.push({ url, method: r.method, params });
-      const h = handlers[r.method];
+      const h = Object.hasOwn(handlers, r.method) ? handlers[r.method] : undefined;
       const result = h ? h(params, url) : undefined;
       return result === undefined
         ? { jsonrpc: "2.0", id: r.id, error: { code: -32000, message: h ? "missing trie node" : `no stub for ${r.method}` } }
