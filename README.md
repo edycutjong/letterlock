@@ -220,8 +220,8 @@ every one that emitted a directory event up to block 108,575,659 among them.
     Vercel firewall limits POSTs per IP for every instance, and the caps that bound spending are read from the chain.
 11. **The agent's day is bounded by its wallet.** It spends at most a quarter of its balance a day at the costliest
     drop, and anyone can use that allowance up.
-12. **Inbox scans read every `Dropped` log from the deploy block.** On mainnet the SDK reads them from
-    `rpc1.monad.xyz` a million blocks per request; with your own RPC (`rpc.monad.xyz` serves 100 blocks per request)
+12. **Inbox scans read every `Dropped` log from the deploy block.** On mainnet the SDK after 0.1.1 reads them from
+    `rpc1.monad.xyz` a million blocks per request (npm's 0.1.0 reads 100 a request unless given `--rpc`); with your own RPC (`rpc.monad.xyz` serves 100 blocks per request)
     pass `fromBlock`, or index `Dropped` yourself. The log RPC is trusted too: it can leave a letter out, or list one
     that was never dropped under a made-up transaction (it opens, since anyone can seal to a published key, and no
     letter names a sender). It cannot read one.

@@ -147,7 +147,7 @@ and the agent's HTTP errors are listed in [its README](../examples/agent-memory/
    blocks, so the drip sends one transfer at a time, with the nonce it read, and answers `DRIP_BUSY` meanwhile. The
    node's "reserve balance violation" wording maps to `INSUFFICIENT_FUNDS`.
 6. **`eth_getLogs` ranges.** `rpc.monad.xyz` serves 100 blocks per request, so a scan from the deploy block grows by
-   thousands of requests a day. With no `rpcUrl`, `inbox()` on mainnet reads logs from `rpc1.monad.xyz`, a million
+   thousands of requests a day. With no `rpcUrl` (or with that one), `inbox()` on mainnet in the SDK after 0.1.1 reads logs from `rpc1.monad.xyz`, a million
    blocks per request (`DEPLOYMENTS.monad.scanRpcUrl`); with your own `rpcUrl` it starts wide and narrows to the limit
    the error names, with 4 requests in flight.
 7. **No batches.** One of the public RPCs in Monad's docs answers any JSON-RPC batch with HTTP 403, so the client sends
