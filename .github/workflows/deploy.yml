@@ -2,7 +2,7 @@ name: deploy
 
 # Continuous deployment of the three Vercel projects from main, after ci passes (or started by release.yml or by
 # hand). Each project deploys only when a path it is built from changed since the commit its production deployment
-# came from (Vercel records it as gitCommitSha); a deployment without that record deploys. After each deploy the
+# came from (each deploy records it as the gitCommitSha meta); a deployment without that record deploys. After each deploy the
 # production domain is checked, and a failed check rolls the project back to its previous production deployment.
 # The site deploys only when npm already has the version it names (the deck says "letterlock@X on npm").
 
@@ -94,7 +94,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"; echo "production now: ${url:-none}"
       # Vercel builds it (Root Directory apps/demo, installs only the app's graph); nothing is installed here
       - name: Deploy
-        run: npx --yes "$VERCEL_CLI" deploy --prod --yes --token "$VERCEL_TOKEN"
+        run: npx --yes "$VERCEL_CLI" deploy --prod --yes --meta gitCommitSha="$(git rev-parse HEAD)" --token "$VERCEL_TOKEN"
       - name: Check the production domain
         id: smoke
         run: |
@@ -135,7 +135,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"; echo "production now: ${url:-none}"
       # a Build Output API directory built here; Vercel only serves it
       - name: Build and deploy
-        run: node scripts/build.mjs && npx --yes "$VERCEL_CLI" deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+        run: node scripts/build.mjs && npx --yes "$VERCEL_CLI" deploy --prebuilt --prod --yes --meta gitCommitSha="$(git rev-parse HEAD)" --token "$VERCEL_TOKEN"
       - name: Check the production domain
         id: smoke
         run: |
@@ -173,7 +173,7 @@ jobs:
       - name: Deploy
         if: steps.npm.outputs.ok == 'true'
         working-directory: site
-        run: npx --yes "$VERCEL_CLI" deploy --prod --yes --token "$VERCEL_TOKEN"
+        run: npx --yes "$VERCEL_CLI" deploy --prod --yes --meta gitCommitSha="$(git rev-parse HEAD)" --token "$VERCEL_TOKEN"
       - name: Check the production domain
         id: smoke
         if: steps.npm.outputs.ok == 'true'
