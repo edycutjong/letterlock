@@ -264,6 +264,10 @@ const ll = letterlock({ chain: "monad" });
 const envelope = await ll.sealTo("agent:10260", new TextEncoder().encode("only its key opens this"));
 ```
 
+Then hand it to the person: `ll.drop()` it on chain and link them to
+`https://app.letterlock.edycu.dev/open?to=<their address>`, or give them the JSON to paste on that page. They open it
+with their passkey; your app never holds a key of theirs ([docs/DX.md](docs/DX.md#hand-it-to-the-person)).
+
 The developer guide, with the CLI, every error code and what was hard on Monad, is [docs/DX.md](docs/DX.md). The app
 runs locally with `pnpm --filter letterlock-demo dev`: looking up and sealing work anywhere, while creating and
 opening an address happen on the production host, the pinned rpId (a testnet build may make passkeys for `localhost`,

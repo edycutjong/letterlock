@@ -2,16 +2,18 @@
 
 What it takes for another app or agent to use Letterlock, and what was hard to build on Monad and mera.
 
-What was run, and where: the published package, [`letterlock@0.1.0` on npm](https://www.npmjs.com/package/letterlock),
-ran the seal snippet below and the CLI's `resolve`, `seal`, `verify` and `inbox` against Monad mainnet on 2026-09-27;
-they only read the chain. `drop` (the CLI's, and `ll.drop` below) sends a transaction: the same package ran it on
-Monad testnet that day and read the envelope back from the inbox
-([tx](https://testnet.monadvision.com/tx/0xcecdaf3d786ecfd73f94c017a08369ccc9e9559b43760f47fb634d7684dc36b8)), and the
-SDK's anvil tests cover it. The mainnet drops of that day came from the deploy smoke test and the reference agent. The
-receive snippet runs in a browser on the app's origin: the app makes the same calls
-([apps/demo/lib/actions.ts](../apps/demo/lib/actions.ts)) with the SDK in this repository, end to end on testnet, and
-on mainnet at each host the rpId has had ([apps/demo/e2e-results](../apps/demo/e2e-results)). SDK 0.1.1 differs from
-0.1.0 only in the rpId it pins ([CHANGELOG](../packages/letterlock/CHANGELOG.md)).
+What was run, and where: the published package, [`letterlock@0.1.2` on npm](https://www.npmjs.com/package/letterlock),
+installed into an empty folder on 2026-10-04, ran the seal snippet below, the package README's quickstart and its CLI
+lines (`resolve`, `seal`, `verify`, and `inbox` of the demo address, which found its letter, block 110,157,545, in one
+request) against Monad mainnet, as written; they only read the chain. The quickstart and the receive snippet also
+type-check under `strict` with `module: NodeNext`, and `require("letterlock")` works from CommonJS. `drop` (the CLI's,
+and `ll.drop` below) sends a transaction: the package ran it on Monad testnet on 2026-09-27 and read the envelope back
+from the inbox ([tx](https://testnet.monadvision.com/tx/0xcecdaf3d786ecfd73f94c017a08369ccc9e9559b43760f47fb634d7684dc36b8)),
+and the SDK's anvil tests cover it. The receive snippet runs in a browser on the app's origin: the app makes the same
+calls ([apps/demo/lib/actions.ts](../apps/demo/lib/actions.ts)) with the SDK in this repository, end to end on
+testnet, and on mainnet at each host the rpId has had ([apps/demo/e2e-results](../apps/demo/e2e-results)), on real
+devices Mac → iPad included ([spikes/prf-browser/README.md](../spikes/prf-browser/README.md)). 0.1.0 pinned a
+retired rpId and is deprecated on npm ([CHANGELOG](../packages/letterlock/CHANGELOG.md)).
 
 ## Seal to anyone, in five lines
 
@@ -36,6 +38,19 @@ import { privateKeyToAccount } from "viem/accounts";
 const account = privateKeyToAccount(process.env.SENDER_KEY as `0x${string}`); // any viem account
 const { transactionHash } = await ll.drop({ account, envelope });              // a Dropped event for the recipient
 ```
+
+## Hand it to the person
+
+Your user opens the envelope on [the Letterlock app](https://app.letterlock.edycu.dev) with the passkey their address
+came from, on any device it syncs to. Two ways to get it there:
+
+| You deliver it | They open it at |
+|---|---|
+| on chain: `ll.drop({ account, envelope })` | `https://app.letterlock.edycu.dev/open?to=<their address>`: the inbox lists it, **Open with passkey** |
+| anywhere else (your database, an email, a file): the envelope JSON | the same page, **Paste an envelope** |
+
+Your app needs no passkey, key or login of theirs, and can store the envelope without being able to read it. People make their address once
+at https://app.letterlock.edycu.dev (no wallet; the first publish is paid by the app's gas drip).
 
 ## Receive: publish a key and open
 

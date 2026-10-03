@@ -7,25 +7,42 @@ only the same passkey, on any device it syncs to, opens them.
 
 ## Quickstart: seal to someone
 
+Runs as it stands (Node ≥ 20.19, `npm i letterlock`): it seals to `agent:10260`, the reference agent, which has a key
+on mainnet. Put your user's address there instead (any `0x` address that has published a key).
+
 ```ts
 import { letterlock } from "letterlock";
 
 const ll = letterlock({ chain: "monad" }); // the mainnet directory, over the public RPC
-const envelope = await ll.sealTo("0x…recipient", new TextEncoder().encode("only you can read this"));
-// store or send the envelope JSON anywhere; only the recipient's passkey opens it
+const envelope = await ll.sealTo("agent:10260", new TextEncoder().encode("only you can read this"));
+console.log(envelope.kid, envelope.epoch); // e5b30e2e52ec0dec 2
 ```
 
 No passkey, no key material and no transaction: `sealTo` is one contract read and one HPKE seal. It throws
-`NO_KEY_PUBLISHED` when the recipient has no key.
+`NO_KEY_PUBLISHED` when the recipient has no key, and `INPUT_INVALID` for anything that is not `0x<40 hex>` or
+`agent:<id>`.
+
+### Hand it to the person
+
+The envelope is plain JSON. Your user opens it on [the Letterlock app](https://app.letterlock.edycu.dev), with the
+passkey their address came from, on any device it syncs to. Deliver it either way:
+
+- **On chain:** `await ll.drop({ account, envelope })` (`account` is any viem account with MON for gas), then link
+  them to `https://app.letterlock.edycu.dev/open?to=<their address>`: their inbox lists it under **Open with passkey**.
+- **Anywhere else** (your database, an email, a file): give them the JSON; they paste it into **Paste an envelope** on
+  the same page.
+
+Your app never needs a passkey, a key or a login of theirs. People make their address once at
+https://app.letterlock.edycu.dev (no wallet).
 
 From a terminal (`npm i letterlock` installs the SDK and this CLI):
 
 ```sh
-npm i -g letterlock                       # or prefix any command below with npx
-letterlock resolve agent:10260            # the key an address or an ERC-8004 agent published
-letterlock seal 0x…recipient note.txt --out envelope.json
-letterlock verify 0x…recipient            # seal a random nonce: whoever reads it back holds the passkey
-letterlock inbox 0x…recipient --from-block 108289180
+npm i -g letterlock                                    # or prefix any command below with npx
+letterlock resolve agent:10260                         # the key an address or an ERC-8004 agent published
+letterlock seal agent:10260 note.txt --out envelope.json
+letterlock verify agent:10260                          # seal a random nonce: whoever reads it back holds the key
+letterlock inbox 0xe5AeA9f323f7FfA74703FfDcc2732911aeF4DCDa --from-block 110157000   # the demo address's inbox
 ```
 
 ## Receive: publish a key and open (browser)
