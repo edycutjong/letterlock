@@ -1,0 +1,28 @@
+version: 2
+# Monthly and grouped, without major versions: a major bump is a migration to do on purpose, not a background PR.
+# Security alerts are separate from these updates and stay on.
+updates:
+  - package-ecosystem: npm          # the pnpm workspace: the SDK, the app, the agent, the spike, the scripts
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: gitsubmodules  # contracts/lib/forge-std
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1

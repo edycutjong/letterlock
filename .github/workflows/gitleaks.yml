@@ -1,0 +1,40 @@
+name: gitleaks
+
+# The same two scans pnpm readiness runs, on every push: every patch of every commit on every branch, and every commit
+# message, both with .gitleaks.toml (gitleaks' default rules plus one allowlist for the published X25519 keys in
+# deployments/). The binary is pinned by version and checksum.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$f"
+          echo "${GITLEAKS_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" gitleaks && sudo mv gitleaks /usr/local/bin/
+
+      - name: Every patch in the history
+        run: gitleaks git --no-banner --redact --log-opts="--all" .
+
+      - name: Every commit message
+        run: git log --all --format=%B | gitleaks stdin --no-banner --redact

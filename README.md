@@ -261,7 +261,10 @@ pnpm --filter letterlock test:live     # the SDK's read-only checks against Mona
 
 [CI](.github/workflows/ci.yml) runs `pnpm typecheck` and `pnpm verify` on every push, with Foundry installed and the
 offline proof inside a network namespace; [a second workflow](.github/workflows/contracts.yml) checks the contract's
-format, gas snapshots, ABI exports and deployment records.
+format, gas snapshots, ABI exports and deployment records. [gitleaks](.github/workflows/gitleaks.yml) scans every
+patch and every commit message in the history on each push, [CodeQL](.github/workflows/codeql.yml) analyzes the
+TypeScript and the workflows, and [Dependabot](.github/dependabot.yml) proposes grouped monthly updates (no major
+versions). Security reports: [SECURITY.md](.github/SECURITY.md).
 
 ## 📁 Project Structure
 
