@@ -261,7 +261,8 @@ export const createApp = (deps: AppDeps): App => {
     const c = chain();
     // Up to the open(), every answer depends only on what the request shows in the clear (`from`, the envelope's
     // header) and on public state, never on what is sealed in the task.
-    if (envelope.chainId !== c.chainId || envelope.directory !== c.directory.toLowerCase())
+    // SPEC §3 lets the directory be spelled in any case (info binds its 20 bytes), as the SDK and the app compare it
+    if (envelope.chainId !== c.chainId || envelope.directory.toLowerCase() !== c.directory.toLowerCase())
       throw new HttpError(422, "WRONG_DIRECTORY", `the task is sealed for chain ${envelope.chainId}, directory ${envelope.directory}; this agent reads chain ${c.chainId}, directory ${c.directory}`);
     if (envelope.recipient !== agent)
       throw new HttpError(422, "NOT_FOR_THIS_AGENT", `the task is sealed to ${envelope.recipient}; this agent is ${agent}`);

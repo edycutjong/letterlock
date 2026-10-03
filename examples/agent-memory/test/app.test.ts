@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { deriveAgentKeyPair, deriveKeyPair, encodeEnvelope, fingerprint, open, seal, toHex, type Envelope, type Recipient } from "letterlock";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { getAddress } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { agentPublicKey } from "../src/agent-key.ts";
 import { createApp, createAppFromEnv, type LogEntry } from "../src/app.ts";
@@ -387,6 +388,15 @@ describe("POST /task", () => {
       expect([r.status, r.body.error.code], code).toEqual([status, code]);
     }
     expect(s.chain.dropped).toHaveLength(0);
+  });
+
+  it("takes a task whose directory is spelled with its EIP-55 checksum: the case is not part of what info binds", async () => {
+    const s = setup();
+    const envelope = await s.sealTask();
+    const checksummed = { ...envelope, directory: getAddress(envelope.directory) };
+    expect(checksummed.directory).not.toBe(envelope.directory);
+    const r = await s.post("/task", { from: s.maya.address, envelope: checksummed });
+    expect(r.status).toBe(200);
   });
 
   it("refuses a missing or malformed envelope, and answers 503 without a key seed", async () => {
