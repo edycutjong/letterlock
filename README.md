@@ -22,6 +22,9 @@
 
   <br/>
 
+  <a href="https://youtu.be/2tx9jVs7tbY"><img src="docs/assets/letterlock-in-action.gif" alt="The live app on Monad mainnet, recorded in Safari on a Mac: Create my encryption address and the passkey prompt; the key posted to the register; agent 10260 seals a note to the new address and drops it; Open with passkey, and the wax seal breaks as the note rises. Sped-up stretches are labelled on screen." width="100%"></a>
+  <p><sub>The live app on Monad mainnet with a real passkey, 18 s, silent; sped-up stretches say so on screen. Click for the full 2:32 demo.</sub></p>
+
   ![Monad](https://img.shields.io/badge/Monad-mainnet_143-836EF9?style=flat)
   ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
   ![Solidity](https://img.shields.io/badge/Solidity-0.8.33-363636?style=flat&logo=solidity)
@@ -322,6 +325,7 @@ site/                 the landing page and the pitch deck, at letterlock.edycu.d
 
 - **Demo video (2:32):** <https://youtu.be/2tx9jVs7tbY>: a real passkey on a Mac creates the address, agent 10260 seals a note to it, one passkey tap opens it, and again in a private window
 - **Pitch video (1:53):** <https://youtu.be/gSGjlJyhs2M>
+- **Product ad (0:24):** <https://youtu.be/fbd-ot-X80E>: the animated promo, made in code; its figures (28.199 ms, N = 1,000, agent 10260) are the ones above
 - **Landing page:** <https://letterlock.edycu.dev>, and the pitch deck at <https://letterlock.edycu.dev/pitch/> (both in [site/](site))
 - **Live app:** <https://app.letterlock.edycu.dev>, and the judges' route at <https://app.letterlock.edycu.dev/judge>
 - **The judge's script:** [DEMO.md](DEMO.md): two paths, the mainnet transactions behind each claim (every directory event among them), and how to reproduce the numbers
