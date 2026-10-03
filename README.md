@@ -35,6 +35,9 @@
   [![npm version](https://img.shields.io/npm/v/letterlock?style=flat)](https://www.npmjs.com/package/letterlock)
   [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
   [![CI](https://github.com/edycutjong/letterlock/actions/workflows/ci.yml/badge.svg)](https://github.com/edycutjong/letterlock/actions/workflows/ci.yml)
+  [![Contracts](https://github.com/edycutjong/letterlock/actions/workflows/contracts.yml/badge.svg)](https://github.com/edycutjong/letterlock/actions/workflows/contracts.yml)
+  [![CodeQL](https://github.com/edycutjong/letterlock/actions/workflows/codeql.yml/badge.svg)](https://github.com/edycutjong/letterlock/actions/workflows/codeql.yml)
+  [![gitleaks](https://github.com/edycutjong/letterlock/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/edycutjong/letterlock/actions/workflows/gitleaks.yml)
   [![Release](https://img.shields.io/github/v/release/edycutjong/letterlock?style=flat)](https://github.com/edycutjong/letterlock/releases)
 
 </div>
@@ -276,7 +279,9 @@ pnpm --filter letterlock test:live     # the SDK's read-only checks against Mona
 ```
 
 [CI](.github/workflows/ci.yml) runs `pnpm typecheck` and `pnpm verify` on every push, with Foundry installed and the
-offline proof inside a network namespace; [a second workflow](.github/workflows/contracts.yml) checks the contract's
+offline proof inside a network namespace, and in a parallel job builds every deployable thing as its deploy does (the
+npm package, the app's `next build`, the agent's Vercel output, the site's CSP hashes and files:
+`node scripts/check-site.ts`), so a broken build fails the push, not the deploy; [a second workflow](.github/workflows/contracts.yml) checks the contract's
 format, gas snapshots, ABI exports and deployment records. [gitleaks](.github/workflows/gitleaks.yml) scans every
 patch and every commit message in the history on each push, [CodeQL](.github/workflows/codeql.yml) analyzes the
 TypeScript and the workflows, and [Dependabot](.github/dependabot.yml) proposes grouped monthly updates (no major

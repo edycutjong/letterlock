@@ -1,9 +1,9 @@
 name: ci
 
-# pnpm typecheck, then pnpm verify: the SDK (with its anvil chain tests), the contracts, the PRF spike's unit tests, the
+# Two jobs. verify — pnpm typecheck, then pnpm verify: the SDK (with its anvil chain tests), the contracts, the PRF spike's unit tests, the
 # demo app's tests, the reference agent, the offline seal/open with the envelope fixture replay (in a network namespace),
 # the scripts' own tests (the seed script on anvil among them) and the readiness checks' tests; one screen of exact
-# counts at the end. No secret is used or needed.
+# counts at the end. build — every deployable thing built as its deploy builds it. No secret is used or needed.
 
 on:
   push:
@@ -75,3 +75,38 @@ jobs:
 
       - name: Verify
         run: pnpm verify --markdown "$GITHUB_STEP_SUMMARY"
+
+  # Every deployable thing built as its deploy builds it, so a broken build fails here and not at deploy.yml (which
+  # runs only when this whole workflow passes): the SDK's npm package, the app's production build, the agent's
+  # Vercel output, and the static site's CSP hashes and local files. No secret is used or needed.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: SDK package (what npm-publish uploads)
+        run: pnpm --filter letterlock build
+
+      - name: App production build (next build)
+        run: pnpm --filter letterlock-demo build
+
+      - name: Agent build (the Vercel output deploy.yml uploads)
+        run: pnpm --filter letterlock-agent-memory build
+
+      - name: Site (CSP hashes, local files)
+        run: node scripts/check-site.ts
