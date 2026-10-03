@@ -66,7 +66,7 @@ nobody can encrypt to it, and it does not follow you from your laptop to the pho
 Letterlock turns the passkey you already have into an **encryption address**. Your device derives an X25519 key from
 the passkey's WebAuthn PRF output and publishes only the public half to a directory contract on Monad. Anyone (an
 app, a server, an AI agent) looks your address up with one `keyOf` read and seals data to it with HPKE (RFC 9180).
-Only your passkey opens it, on any device the passkey syncs to. Nothing secret is stored anywhere, the sender needs no
+Only your passkey opens it, on any device the passkey syncs to. No secret of yours is stored anywhere (a server-hosted agent keeps its own seed, as any server keeps its own key), the sender needs no
 key exchange with you, and ERC-8004 agents get addresses of their own (`agent:<id>`).
 
 ## 🏗️ Architecture & Tech Stack
@@ -113,7 +113,10 @@ What runs on Monad, in the code:
   card.
 - **mera's passkeys**: the same passkey derives the encryption key and, with mera's own salt, the EVM account that
   signs the publish, so `msg.sender` of a key is the passkey itself. The SDK calls `createPasskeyWithPrfOutput`,
-  `getPasskeyPrfOutput`, `createSecp256k1SigningSession` and `toViemAccount`.
+  `getPasskeyPrfOutput`, `createSecp256k1SigningSession` and `toViemAccount`. mera already encrypts to yourself:
+  its secret vault seals with an AES-256-GCM key derived from the passkey's PRF output, so sealing needs the
+  passkey. Letterlock is the other direction: it publishes an X25519 public key, so any app, server or agent seals to
+  you without your passkey, and you open with one tap.
 - **The SDK's chain client** ([packages/letterlock/src/client.ts](packages/letterlock/src/client.ts)): `resolve`,
   `sealTo`, `publish`, `rotate`, `publishForAgent`, `drop` and `inbox`, over viem, with the mainnet and testnet
   directories built in.
@@ -195,7 +198,7 @@ every one that emitted a directory event up to block 108,575,659 among them.
 | Replay a task sealed to the agent with your own reply address | the reply address, a nonce and a time are sealed inside the task | [app.test.ts:289](examples/agent-memory/test/app.test.ts#L289) |
 | Pass the offline proof with the network still reachable | an OS-level block, and a guard that counts every way out | [no-network.test.ts:78](scripts/test/no-network.test.ts#L78), [os-sandbox.test.ts:92](scripts/test/os-sandbox.test.ts#L92) |
 
-### Honest limits (13)
+### Honest limits (14)
 
 1. **Anyone can seal to anyone.** HPKE base mode is anonymous, and a copied envelope can be dropped again. The app
    never shows a sender; the agent seals a nonce and a time inside each task.
@@ -223,6 +226,9 @@ every one that emitted a directory event up to block 108,575,659 among them.
 13. **The first keys in the directory are this project's own**: demo keys from the deploy smoke test (random bytes
     in place of a passkey) and test keys from the app's live checks (virtual passkeys, deleted after each run). The
     register labels each; do not seal real notes to them.
+14. **Agent keys trust the ERC-8004 registry's upgrader.** The IdentityRegistry is an upgradeable (UUPS) proxy whose
+    `owner()` was `0x547289319C3e6aedB179C0b8e8aF0B5ACd062603` on 2026-10-03. Whoever can upgrade it can rewrite `ownerOf`, and so publish a key for any agent
+    or make every agent key stop resolving. Address keys never read the registry.
 
 ## 🚀 Getting Started
 

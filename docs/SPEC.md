@@ -160,6 +160,9 @@ recipient, epoch, directory or chain.
   `deriveForAgent` record theirs, and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it
   could come from any passkey. `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another
   rpId. Reads and seals are not pinned: sealing needs no passkey.
+- **The ERC-8004 registry's upgrader.** The IdentityRegistry on Monad mainnet is an upgradeable (UUPS) proxy
+  (`owner()` was `0x547289319C3e6aedB179C0b8e8aF0B5ACd062603` on 2026-10-03). Whoever can upgrade it can rewrite `ownerOf`, and so publish a key for any agent
+  or make every agent key stop resolving. Address keys never read the registry.
 - **Whoever serves the rpId's host** can run passkey ceremonies for it, and so gets the PRF output of every
   Letterlock passkey: every encryption key (§2) and the passkey account's key (§7). A page on a subdomain of the
   host may name it as its rpId too, and the host may name other origins in `/.well-known/webauthn`. The host must

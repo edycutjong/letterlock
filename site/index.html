@@ -823,18 +823,18 @@ pre.tty .ln{display:block}
     <div class="quotes">
       <blockquote class="quote">
         <p><b>Anyone can seal to anyone.</b> HPKE base mode is anonymous, and a copied envelope can be dropped again. The app never shows a sender; the agent seals a nonce and a time inside each task.</p>
-        <cite><a href="https://github.com/edycutjong/letterlock#honest-limits-13">README · Honest limits, 1</a></cite>
+        <cite><a href="https://github.com/edycutjong/letterlock#honest-limits-14">README · Honest limits, 1</a></cite>
       </blockquote>
       <blockquote class="quote">
         <p><b>The rpId's host can derive every key.</b> Whoever serves app.letterlock.edycu.dev, or a subdomain of it, can run passkey ceremonies for it. It is on the owner's own domain, which must stay registered and pointed at the app for as long as keys derived under it are in use; moving again takes an SDK release, as 0.1.1's move from letterlock-app.vercel.app, a Vercel project name, did.</p>
-        <cite><a href="https://github.com/edycutjong/letterlock#honest-limits-13">README · Honest limits, 4</a></cite>
+        <cite><a href="https://github.com/edycutjong/letterlock#honest-limits-14">README · Honest limits, 4</a></cite>
       </blockquote>
       <blockquote class="quote">
         <p><b>No recovery.</b> If every synced copy of the passkey is lost, so is the key.</p>
-        <cite><a href="https://github.com/edycutjong/letterlock#honest-limits-13">README · Honest limits, 3</a></cite>
+        <cite><a href="https://github.com/edycutjong/letterlock#honest-limits-14">README · Honest limits, 3</a></cite>
       </blockquote>
     </div>
-    <p class="all-limits"><a href="https://github.com/edycutjong/letterlock#honest-limits-13">All thirteen limits, and the thirteen attacks with the test that defeats each</a></p>
+    <p class="all-limits"><a href="https://github.com/edycutjong/letterlock#honest-limits-14">All fourteen limits, and the thirteen attacks with the test that defeats each</a></p>
   </section>
 
   <section class="sec" id="faq" aria-labelledby="faq-h">
@@ -847,7 +847,7 @@ pre.tty .ln{display:block}
       </details>
       <details>
         <summary>Does it open on my other devices?<span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>By construction: the same synced passkey gives the same PRF output, so the same key. Verified on mainnet: a browser with its storage cleared re-derived the key and opened the note (the live check, 27 Sep, above).</p><p>Not yet verified: Mac to iPad on real hardware. The demo video will show it; until then this page does not claim it.</p></div>
+        <div class="ans"><p>By the WebAuthn spec, the same synced passkey gives the same PRF output for the same salt, so the same key; developers have reported Apple devices where it differs between some OS versions (spikes/prf-browser/README.md). Verified on mainnet: a browser with its storage cleared re-derived the key and opened the note (the live check, 27 Sep, above).</p><p>Not yet verified: Mac to iPad on real hardware. The demo video will show it; until then this page does not claim it.</p></div>
       </details>
       <details>
         <summary>What is on chain?<span class="pm" aria-hidden="true"></span></summary>

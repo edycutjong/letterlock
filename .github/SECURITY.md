@@ -25,7 +25,7 @@ before disclosure.
 
 ## Known limits (not vulnerabilities)
 
-The README's [Honest limits](README.md#honest-limits-13) are part of the design and are stated there in full: among
+The README's [Honest limits](../README.md#honest-limits-14) are part of the design and are stated there in full: among
 them, HPKE base mode is anonymous (anyone can seal to anyone), drop metadata is public, there is no recovery if every
 copy of a passkey is lost, whoever serves the rpId `app.letterlock.edycu.dev` can derive every key, and `keyOf` reads
 trust the RPC. A report that one of these can be broken further than stated there is in scope.
