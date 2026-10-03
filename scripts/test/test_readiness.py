@@ -11,6 +11,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -661,6 +662,34 @@ class SdkRuntimeCommit(TempRepo):
         self.assertNotEqual(second, first)
         self.commit("packages/letterlock/src/index.ts", "export const x = 1;\n")
         self.assertNotEqual(R.last_sdk_runtime_commit().split("\t")[0], second)
+
+
+class NpmAndDevices(TempRepo):
+    def test_npm_must_have_the_package_version_as_latest(self):
+        self.commit("packages/letterlock/package.json", json.dumps({"name": "letterlock", "version": "0.1.1"}))
+        R.check_npm_online(lambda _: {"versions": {"0.1.0": {}}, "dist-tags": {"latest": "0.1.0"}})
+        status, detail = self.found("npm: letterlock@0.1.1 is published and is latest")
+        self.assertEqual(status, "FAIL")
+        self.assertIn("npm has 0.1.0", detail)
+        R.results.clear()
+        R.check_npm_online(lambda _: {"versions": {"0.1.0": {}, "0.1.1": {}}, "dist-tags": {"latest": "0.1.1"}})
+        self.assertEqual(self.found("npm: letterlock@0.1.1 is published and is latest")[0], "PASS")
+
+    def test_an_unreachable_registry_warns(self):
+        self.commit("packages/letterlock/package.json", json.dumps({"name": "letterlock", "version": "0.1.1"}))
+        def down(_):
+            raise urllib.error.URLError("offline")
+        R.check_npm_online(down)
+        self.assertEqual(self.found("npm: the registry answers")[0], "WARN")
+
+    def test_the_real_device_run_is_required(self):
+        self.commit("spikes/prf-browser/README.md", "Status: **waiting for the first human run.**\n")
+        R.check_cross_device()
+        self.assertEqual(self.found("the cross-device run on real devices is recorded")[0], "FAIL")
+        R.results.clear()
+        self.commit("spikes/prf-browser/README.md", "Status: ran 2026-10-04, Mac to iPad: the same key.\n")
+        R.check_cross_device()
+        self.assertEqual(self.found("the cross-device run on real devices is recorded")[0], "PASS")
 
 
 class Bench(TempRepo):

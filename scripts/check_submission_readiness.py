@@ -1089,6 +1089,36 @@ def check_gitleaks(run=subprocess.run, which=shutil.which) -> None:
            else f"{len(messages)} commits: every patch (gitleaks git --log-opts=--all) and every message (gitleaks stdin), with .gitleaks.toml")
 
 
+# ------------------------------------------------------------------------------------------------- npm, devices
+def npm_registry(name: str) -> dict:
+    req = urllib.request.Request(f"https://registry.npmjs.org/{name}",
+                                 headers={"accept": "application/vnd.npm.install-v1+json", "user-agent": "letterlock-readiness"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def check_npm_online(fetch=npm_registry) -> None:
+    """The SDK's package version is on npm, as its latest: the deck and the landing name it as published."""
+    want = json.loads(read_text("packages/letterlock/package.json") or "{}").get("version")
+    try:
+        meta = fetch("letterlock")
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        record("npm", "WARN", "npm: the registry answers", str(e))
+        return
+    versions, latest = meta.get("versions", {}), meta.get("dist-tags", {}).get("latest")
+    ok = want in versions and latest == want
+    record("npm", "PASS" if ok else "FAIL", f"npm: letterlock@{want} is published and is latest",
+           f"latest {latest}" if ok else f"npm has {', '.join(sorted(versions)) or 'nothing'}, latest {latest}: run the npm-publish workflow")
+
+
+def check_cross_device() -> None:
+    """The same passkey on a second real device opened a note: the claim the Mera bounty judges live."""
+    text = read_text("spikes/prf-browser/README.md") or ""
+    waiting = "waiting for the first human run" in text
+    record("docs", "FAIL" if waiting else "PASS", "the cross-device run on real devices is recorded",
+           "spikes/prf-browser/README.md still says it waits for the first human run" if waiting else "spikes/prf-browser/README.md records it")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--online", action="store_true", help="also fetch the live app, the docs' external links, each video's oEmbed record, "
@@ -1103,6 +1133,9 @@ def main() -> int:
         check_deployments_online(deployments)
     bench = check_bench()
     check_docs(consts, deployments, bench, args.online)
+    check_cross_device()
+    if args.online:
+        check_npm_online()
     check_placeholders(files)
     check_fixtures(deployments)
     if args.online:

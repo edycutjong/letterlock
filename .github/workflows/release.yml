@@ -76,6 +76,16 @@ jobs:
           if git rev-parse -q --verify "refs/tags/v$next" >/dev/null; then echo "::error::v$next is already tagged"; exit 1; fi
           echo "next=$next" >> "$GITHUB_OUTPUT"
 
+      # Nothing is committed, tagged or released unless npm will take the package: a release on GitHub with no
+      # package on npm is the drift version-sync exists to prevent.
+      - name: npm token authenticates
+        if: steps.plan.outputs.next
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          user=$(npm whoami) || { echo "::error::npm rejected NPM_TOKEN: nothing was committed, tagged or released"; exit 1; }
+          echo "npm user: $user"
+
       - name: Write the version, the CHANGELOG and the stamps; test the SDK
         if: steps.plan.outputs.next
         run: |

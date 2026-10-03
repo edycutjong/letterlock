@@ -1,7 +1,8 @@
 name: npm-publish
 
 # Publishes the SDK and CLI (packages/letterlock) to npm from CI, with provenance: the registry links each version to
-# the commit and the run that built it. Run by hand. With publish unticked it only checks: the tokens authenticate,
+# the commit and the run that built it. It builds the code of the version's own tag (v<package.json version>), not
+# main: SDK commits after a tag belong to the next release (release.yml). Run by hand. With publish unticked it only checks: the tokens authenticate,
 # the staged package is the version in package.json with no "_" field and the pinned rpId, and what would be packed.
 # It publishes the staged folder, never a .tgz (a tarball's local path would be recorded in the manifest), and skips a
 # version npm already has.
@@ -40,6 +41,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      # the version main names, built from its tag
+      - name: Check out the version's tag
+        working-directory: .
+        run: |
+          v=$(jq -r .version packages/letterlock/package.json)
+          git fetch --depth=1 origin "refs/tags/v$v:refs/tags/v$v" || { echo "::error::v$v is not tagged"; exit 1; }
+          git checkout -q "v$v"
+          echo "building letterlock $v from $(git rev-parse --short HEAD) (tag v$v)"
 
       - uses: pnpm/action-setup@v6
 
