@@ -32,5 +32,11 @@
     "letterlock": "workspace:*",
     "typescript": "^5.9.3",
     "viem": "^2.56.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss@<8.5.23": "^8.5.28",
+      "esbuild@<0.28.1": "^0.28.1"
+    }
   }
 }

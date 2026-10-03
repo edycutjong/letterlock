@@ -267,7 +267,7 @@ export function InboxDesk({ initialTo }: { initialTo?: string }) {
           </p>
           {who && box.readAt !== undefined && box.envelopes.length === 0 && !box.noKey && (
             <div className={styles.emptyActions}>
-              <ButtonLink href={`/seal?to=${who}`} size="md" icon={<ArrowRightIcon />}>
+              <ButtonLink href={`/seal?to=${encodeURIComponent(who)}`} size="md" icon={<ArrowRightIcon />}>
                 Seal a note
               </ButtonLink>
               <ButtonLink href="/judge" size="md" icon={<ArrowRightIcon />}>
