@@ -777,7 +777,7 @@ pre.tty .ln{display:block}
       <article class="card w4">
         <svg class="ic" viewBox="0 0 44 44" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M22 7c-8 0-13.5 6-13.5 13.5 0 4 .8 7 2.2 9.6"/><path d="M15 31c-1.3-3-1.9-6.3-1.9-10 0-5 3.9-8.8 8.9-8.8s8.9 3.8 8.9 8.8c0 2.6-.3 5-.9 7.2"/><path d="M18.5 35.5c-.9-4.3-1.4-8.7-1.4-13.2 0-2.8 2.2-5 4.9-5s4.9 2.2 4.9 5c0 5.5-.9 10.6-2.8 15.3"/><path d="M22 22v5.5c0 3.7-.5 7.2-1.6 10.5"/><path d="M33.2 25.8l3.3 3.3m-1.6-1.6l2.2-2.2m-6.4 6.4a3.2 3.2 0 104.5-4.5 3.2 3.2 0 00-4.5 4.5z"/></svg>
         <h3>Derive</h3>
-        <p>Your passkey's PRF output, under Letterlock's own salt, becomes an X25519 key. Nothing is stored: by construction a synced copy of the passkey gives the same key. Verified in a browser with its storage cleared; Mac to iPad on real hardware is still pending (<a href="#faq">see Questions</a>).</p>
+        <p>Your passkey's PRF output, under Letterlock's own salt, becomes an X25519 key. Nothing is stored: by construction a synced copy of the passkey gives the same key. Verified in a browser with its storage cleared, and Mac to iPad on real hardware (<a href="#faq">see Questions</a>).</p>
         <span class="chip">WebAuthn PRF · mera 0.2.0 · HKDF-SHA256</span>
       </article>
       <article class="card w2">
@@ -867,7 +867,7 @@ pre.tty .ln{display:block}
       </details>
       <details>
         <summary>Does it open on my other devices?<span class="pm" aria-hidden="true"></span></summary>
-        <div class="ans"><p>By the WebAuthn spec, the same synced passkey gives the same PRF output for the same salt, so the same key. Apple developers have reported otherwise in one direction, iPhone to Mac, and across some OS versions (<a href="https://developer.apple.com/forums/thread/822523">Apple Developer Forums</a>). Verified on mainnet: a browser with its storage cleared re-derived the key and opened the note (the live check, 27 Sep, above).</p><p>Not yet verified: Mac to iPad on real hardware. The demo video will show it; until then this page does not claim it.</p></div>
+        <div class="ans"><p>By the WebAuthn spec, the same synced passkey gives the same PRF output for the same salt, so the same key. Apple developers have reported otherwise in one direction, iPhone to Mac, and across some OS versions (<a href="https://developer.apple.com/forums/thread/822523">Apple Developer Forums</a>). Verified on mainnet: a browser with its storage cleared re-derived the key and opened the note (the live check, 27 Sep, above).</p><p>Verified on real hardware, 4 Oct: a passkey made on a Mac, synced to an iPad by iCloud Keychain, opened there the letter agent 10260 had sealed to the Mac&rsquo;s address (<a href="https://github.com/edycutjong/letterlock/blob/main/spikes/prf-browser/README.md">the record</a>). Not verified: iPad to Mac, the direction those reports concern.</p></div>
       </details>
       <details>
         <summary>What is on chain?<span class="pm" aria-hidden="true"></span></summary>
