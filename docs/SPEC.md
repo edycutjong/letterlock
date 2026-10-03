@@ -160,8 +160,12 @@ recipient, epoch, directory or chain.
   `deriveForAgent` record theirs, and a key rebuilt from its fields (`{ publicKey, epoch }`) is refused, because it
   could come from any passkey. `unsafeAllowAnyRpId` also takes a key without an rpId, never one that names another
   rpId. Reads and seals are not pinned: sealing needs no passkey.
+- **The log RPC.** `inbox()` lists `Dropped` logs as the RPC returns them, checked against no block or receipt: an
+  RPC can leave letters out, or list letters that were never dropped (sealed to the recipient's public key, as anyone
+  can) under invented transaction hashes. It cannot read any. With no `rpcUrl`, mainnet's log RPC is `rpc1.monad.xyz`.
 - **The ERC-8004 registry's upgrader.** The IdentityRegistry on Monad mainnet is an upgradeable (UUPS) proxy
-  (`owner()` was `0x547289319C3e6aedB179C0b8e8aF0B5ACd062603` on 2026-10-03). Whoever can upgrade it can rewrite `ownerOf`, and so publish a key for any agent
+  (`owner()` was `0x547289319C3e6aedB179C0b8e8aF0B5ACd062603` on 2026-10-03, a single key: an account with no contract
+  code, so no multisig). Whoever can upgrade it can rewrite `ownerOf`, and so publish a key for any agent
   or make every agent key stop resolving. Address keys never read the registry.
 - **Whoever serves the rpId's host** can run passkey ceremonies for it, and so gets the PRF output of every
   Letterlock passkey: every encryption key (§2) and the passkey account's key (§7). A page on a subdomain of the

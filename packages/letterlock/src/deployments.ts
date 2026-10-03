@@ -19,8 +19,8 @@ export type Deployment = {
   /**
    * Where inbox() reads Dropped logs when the client got no rpcUrl, and the blocks per eth_getLogs it starts at.
    * rpc.monad.xyz serves 100 blocks per request, so a scan from the deploy block grows by thousands of requests a day;
-   * rpc1.monad.xyz answers wide ranges (docs/DX.md, hard part 6). A log RPC can hide letters from a reader, not forge
-   * them (docs/SPEC.md §6).
+   * rpc1.monad.xyz answers wide ranges (docs/DX.md, hard part 6). A log RPC can leave letters out or list letters that
+   * were never dropped; it cannot read any (docs/SPEC.md §6).
    */
   readonly scanRpcUrl: string;
   readonly scanBlockRange: number;

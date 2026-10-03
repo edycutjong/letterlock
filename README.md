@@ -222,12 +222,15 @@ every one that emitted a directory event up to block 108,575,659 among them.
     drop, and anyone can use that allowance up.
 12. **Inbox scans read every `Dropped` log from the deploy block.** On mainnet the SDK reads them from
     `rpc1.monad.xyz` a million blocks per request; with your own RPC (`rpc.monad.xyz` serves 100 blocks per request)
-    pass `fromBlock`, or index `Dropped` yourself. The log RPC can hide a letter from a reader, not forge one.
+    pass `fromBlock`, or index `Dropped` yourself. The log RPC is trusted too: it can leave a letter out, or list one
+    that was never dropped under a made-up transaction (it opens, since anyone can seal to a published key, and no
+    letter names a sender). It cannot read one.
 13. **The first keys in the directory are this project's own**: demo keys from the deploy smoke test (random bytes
     in place of a passkey) and test keys from the app's live checks (virtual passkeys, deleted after each run). The
     register labels each; do not seal real notes to them.
 14. **Agent keys trust the ERC-8004 registry's upgrader.** The IdentityRegistry is an upgradeable (UUPS) proxy whose
-    `owner()` was `0x547289319C3e6aedB179C0b8e8aF0B5ACd062603` on 2026-10-03. Whoever can upgrade it can rewrite `ownerOf`, and so publish a key for any agent
+    `owner()` was `0x547289319C3e6aedB179C0b8e8aF0B5ACd062603` on 2026-10-03, a single key (an account with no contract
+    code: `cast code` returns `0x`, so no multisig). Whoever can upgrade it can rewrite `ownerOf`, and so publish a key for any agent
     or make every agent key stop resolving. Address keys never read the registry.
 
 ## 🚀 Getting Started
