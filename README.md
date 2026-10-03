@@ -217,8 +217,9 @@ every one that emitted a directory event up to block 108,575,659 among them.
     Vercel firewall limits POSTs per IP for every instance, and the caps that bound spending are read from the chain.
 11. **The agent's day is bounded by its wallet.** It spends at most a quarter of its balance a day at the costliest
     drop, and anyone can use that allowance up.
-12. **Inbox scans are slow on the default RPC**, 100 blocks per request from the deploy block. Pass `fromBlock`, use
-    `rpc1.monad.xyz`, or index `Dropped` yourself.
+12. **Inbox scans read every `Dropped` log from the deploy block.** On mainnet the SDK reads them from
+    `rpc1.monad.xyz` a million blocks per request; with your own RPC (`rpc.monad.xyz` serves 100 blocks per request)
+    pass `fromBlock`, or index `Dropped` yourself. The log RPC can hide a letter from a reader, not forge one.
 13. **The first keys in the directory are this project's own**: demo keys from the deploy smoke test (random bytes
     in place of a passkey) and test keys from the app's live checks (virtual passkeys, deleted after each run). The
     register labels each; do not seal real notes to them.

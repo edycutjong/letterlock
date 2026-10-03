@@ -40,6 +40,14 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
     expect(box.envelopes.map((e) => [e.transactionHash, e.bytes, e.envelope.kid])).toEqual([[r.dropTx, r.smokeTest.envelopeBytes, r.smokeTest.kid]]);
   });
 
+  it("inbox(deployer) on the defaults scans from the deploy block to finality over the scan RPC, in a few requests", async () => {
+    let requests = 0;
+    const box = await ll.inbox(r.deployer, { onProgress: () => { requests++; } });
+    expect(box.envelopes.map((e) => e.transactionHash)).toContain(r.dropTx);
+    // from the deploy block at 100 blocks a request this was over 10,000 requests; at 1,000,000 it is a handful
+    expect(requests).toBeLessThan(100);
+  }, 120_000);
+
   it("the testnet directory's address on mainnet (no code there) → INPUT_INVALID, not an empty inbox", async () => {
     const other = letterlock({ chain: "monad", directory: DEPLOYMENTS["monad-testnet"].directory });
     const e = await other.inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock }).then(() => null, (x: unknown) => x);

@@ -145,6 +145,12 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
     transport,
     ...(config.pollingInterval !== undefined ? { pollingInterval: config.pollingInterval } : {}),
   });
+  // inbox() reads logs where they come cheapest: with no rpcUrl, over the deployment's scan RPC and range (deployments.ts);
+  // a caller's own rpcUrl is never overridden. Reads of keys and every transaction stay on the client's RPC.
+  const scanDefaults = config.rpcUrl === undefined;
+  const scanClient = scanDefaults && deployment.scanRpcUrl !== deployment.rpcUrl
+    ? createPublicClient({ chain: viemChain, transport: http(deployment.scanRpcUrl) })
+    : publicClient;
 
   // One eth_chainId per client: a key read from another chain must never be sealed under this chain's id.
   // The RPC URL is left out of messages: it may carry an API key.
@@ -390,7 +396,11 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
       return { ...written(r), recipient, bytes: bytes.length };
     },
 
-    inbox: (to, o) => readInbox(publicClient, { chainId, directory, ...(deployBlock !== undefined ? { deployBlock } : {}), ready }, to, o),
+    inbox: (to, o = {}) => {
+      const blockRange = o.blockRange ?? (scanDefaults ? deployment.scanBlockRange : undefined);
+      return readInbox(scanClient as typeof publicClient, { chainId, directory, ...(deployBlock !== undefined ? { deployBlock } : {}), ready }, to,
+        { ...o, ...(blockRange !== undefined ? { blockRange } : {}) });
+    },
   };
   return client;
 };

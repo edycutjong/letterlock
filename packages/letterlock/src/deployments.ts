@@ -16,6 +16,14 @@ export type Deployment = {
   readonly identityRegistry: `0x${string}`;
   /** The default JSON-RPC endpoint. */
   readonly rpcUrl: string;
+  /**
+   * Where inbox() reads Dropped logs when the client got no rpcUrl, and the blocks per eth_getLogs it starts at.
+   * rpc.monad.xyz serves 100 blocks per request, so a scan from the deploy block grows by thousands of requests a day;
+   * rpc1.monad.xyz answers wide ranges (docs/DX.md, hard part 6). A log RPC can hide letters from a reader, not forge
+   * them (docs/SPEC.md §6).
+   */
+  readonly scanRpcUrl: string;
+  readonly scanBlockRange: number;
   /** Block explorer, for links. */
   readonly explorer: string;
 };
@@ -28,6 +36,8 @@ export const DEPLOYMENTS = {
     deployBlock: 108289180n,
     identityRegistry: "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
     rpcUrl: "https://rpc.monad.xyz",
+    scanRpcUrl: "https://rpc1.monad.xyz",
+    scanBlockRange: 1_000_000,
     explorer: "https://monadvision.com",
   },
   "monad-testnet": {
@@ -37,6 +47,8 @@ export const DEPLOYMENTS = {
     deployBlock: 65956688n,
     identityRegistry: "0x0000000000000000000000000000000000000000",
     rpcUrl: "https://testnet-rpc.monad.xyz",
+    scanRpcUrl: "https://testnet-rpc.monad.xyz",
+    scanBlockRange: 100,
     explorer: "https://testnet.monadvision.com",
   },
 } as const satisfies Record<LetterlockChain, Deployment>;
