@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/Button";
 import { FailureNotice } from "@/components/FailureNotice";
 import { NoteField } from "@/components/Field";
@@ -113,15 +113,25 @@ export function JudgeRoute() {
   };
 
   // ---- step 3: the inbox, read live, so the letter shows here as soon as its block is final ----
+  // One scan from the address's first key (no drop can precede it: Letterlock.sol's drop reverts NoKeyPublished), then
+  // each poll reads only the blocks finalized since, as the inbox page does; never the whole chain every 5 s.
   const [waiting, setWaiting] = useState<{ count: number; finalized: bigint } | undefined>(undefined);
+  const scan = useRef<{ who?: string; next?: bigint; count: number }>({ count: 0 });
+  const lineKnown = onchain.status === "found" && onchain.lineStatus !== "loading";
+  const firstKeyAt = onchain.status === "found" && onchain.key.epoch === 1 && onchain.line ? BigInt(onchain.line.block) : undefined;
   usePoll(
     async () => {
       if (!address) return;
-      const r = await scanClient().inbox(address, { fromBlock: BigInt(DIRECTORY.deployBlock), blockRange: SCAN_RANGE });
-      setWaiting({ count: r.envelopes.length, finalized: r.finalizedBlock });
+      if (scan.current.who !== address) scan.current = { who: address, count: 0 };
+      const s = scan.current;
+      const r = await scanClient().inbox(address, { fromBlock: s.next ?? firstKeyAt ?? BigInt(DIRECTORY.deployBlock), blockRange: SCAN_RANGE });
+      if (scan.current !== s) return; // the address changed while this scan ran
+      s.count += r.envelopes.length;
+      s.next = (r.toBlock < r.finalizedBlock ? r.toBlock : r.finalizedBlock) + 1n;
+      setWaiting({ count: s.count, finalized: r.finalizedBlock });
     },
     5_000,
-    hasKey && SCAN_RANGE >= 1_000_000,
+    hasKey && lineKnown && SCAN_RANGE >= 1_000_000,
   );
 
   const s1: Status = hasKey ? "done" : "next";
