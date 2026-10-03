@@ -145,12 +145,14 @@ export const letterlock = (config: LetterlockConfig): LetterlockClient => {
     transport,
     ...(config.pollingInterval !== undefined ? { pollingInterval: config.pollingInterval } : {}),
   });
-  // inbox() reads logs where they come cheapest: with no rpcUrl, over the deployment's scan RPC and range (deployments.ts);
-  // a caller's own rpcUrl is never overridden. Reads of keys and every transaction stay on the client's RPC.
-  const scanDefaults = config.rpcUrl === undefined;
-  const scanClient = scanDefaults && deployment.scanRpcUrl !== deployment.rpcUrl
-    ? createPublicClient({ chain: viemChain, transport: http(deployment.scanRpcUrl) })
-    : publicClient;
+  // inbox() reads logs where they come cheapest: over the deployment's scan RPC and range (deployments.ts) when the
+  // caller named no RPC, or named that same one (DEMO.md passes --rpc https://rpc1.monad.xyz); any other rpcUrl is used
+  // as given, never overridden. Reads of keys and every transaction stay on the client's RPC.
+  const scanUrl = config.rpcUrl ?? deployment.scanRpcUrl;
+  const scanDefaults = scanUrl === deployment.scanRpcUrl;
+  const scanClient = scanUrl === (config.rpcUrl ?? deployment.rpcUrl)
+    ? publicClient
+    : createPublicClient({ chain: viemChain, transport: http(scanUrl) });
 
   // One eth_chainId per client: a key read from another chain must never be sealed under this chain's id.
   // The RPC URL is left out of messages: it may carry an API key.

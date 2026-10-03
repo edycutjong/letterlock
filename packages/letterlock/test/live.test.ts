@@ -48,6 +48,13 @@ describe.skipIf(!live)("live Monad mainnet (LIVE=1, read-only)", () => {
     expect(requests).toBeLessThan(100);
   }, 120_000);
 
+  it("an rpcUrl that names the scan RPC gets its block range too; any other rpcUrl keeps the default", async () => {
+    const named = await letterlock({ chain: "monad", rpcUrl: DEPLOYMENTS.monad.scanRpcUrl }).inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock });
+    expect(named.blockRange).toBe(DEPLOYMENTS.monad.scanBlockRange);
+    const other = await letterlock({ chain: "monad", rpcUrl: DEPLOYMENTS.monad.rpcUrl }).inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock });
+    expect(other.blockRange).toBe(10_000);
+  }, 60_000);
+
   it("the testnet directory's address on mainnet (no code there) → INPUT_INVALID, not an empty inbox", async () => {
     const other = letterlock({ chain: "monad", directory: DEPLOYMENTS["monad-testnet"].directory });
     const e = await other.inbox(r.deployer, { fromBlock: r.smokeTest.dropBlock, toBlock: r.smokeTest.dropBlock }).then(() => null, (x: unknown) => x);
