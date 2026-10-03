@@ -46,7 +46,7 @@ jobs:
           version: v1.8.3
 
       # the version comes from package.json's packageManager field
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
         with:

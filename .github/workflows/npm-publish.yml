@@ -32,6 +32,7 @@ jobs:
     permissions:
       contents: read
       id-token: write   # npm provenance
+      actions: write    # start the site's deploy, which waits for npm
     defaults:
       run:
         working-directory: packages/letterlock
@@ -40,7 +41,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
         with:
@@ -88,6 +89,13 @@ jobs:
           npm publish ./dist --provenance --access public
           sleep 10
           npm view "letterlock@${{ steps.pkg.outputs.version }}" version dist.attestations.provenance.predicateType
+
+      # the site names the version on npm, so its deploy waits for it (deploy.yml): start it now
+      - name: Deploy the site
+        if: inputs.publish && steps.pkg.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main
 
       - name: Already on npm
         if: inputs.publish && steps.pkg.outputs.exists == 'true'
