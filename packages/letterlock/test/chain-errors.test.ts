@@ -4,7 +4,7 @@ import { HttpRequestError, parseAbi, toHex, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { LetterlockError, NO_AGENT, deriveKeyPair, letterlockAbi, toLetterlockError, type ChainErrorCode, type LetterlockErrorCode } from "../src/index.ts";
-import { Fault, anvil, ctx, faultyAbi, fundedAccount, newAgentId, noChain, publicClient, sendAs, agentStandIn } from "./anvil/context.ts";
+import { ctx, newAgentId, noChain, publicClient } from "./anvil/context.ts";
 
 const pub = (b: Uint8Array) => toHex(b);
 const valid = pub(deriveKeyPair(new Uint8Array(32).fill(42), 1).publicKey);
@@ -43,23 +43,6 @@ describe.skipIf(noChain)("directory errors → LetterlockError codes", () => {
     const r = await mapped(simulate(ctx.directoryNoAgents, "publishForAgent", [1n, valid, 1]));
     expect(r).toMatchObject({ code: "INPUT_INVALID" });
     expect(r.message).toContain("(AgentPathDisabled)");
-  });
-
-  it("RegistryCallFailed on a read → CHAIN_UNAVAILABLE (unknown, not 'no key')", async () => {
-    if (!ctx.ok) return;
-    const owner = await fundedAccount("1");
-    const id = newAgentId();
-    await sendAs(ctx.faultyRegistry, faultyAbi, "mint", [owner.address, id]);
-    await (await import("./anvil/context.ts")).client({ directory: ctx.directoryFaulty })
-      .publishForAgent({ account: owner, agentId: id, keys: agentStandIn(43, id, 1) });
-    await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [Fault.OtherCustomError]);
-    try {
-      const r = await mapped(() => publicClient().readContract({ address: anvil().directoryFaulty, abi: letterlockAbi, functionName: "keyOfAgent", args: [id] }));
-      expect(r.code).toBe("CHAIN_UNAVAILABLE");
-      expect(r.message).toContain("(RegistryCallFailed)");
-    } finally {
-      await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [Fault.None]);
-    }
   });
 
   it("a revert without data → CHAIN_UNAVAILABLE", async () => {

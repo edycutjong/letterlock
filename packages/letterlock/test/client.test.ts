@@ -639,6 +639,26 @@ describe.skipIf(noChain)("an agent's key is its own, never its owner's (the agen
 });
 
 describe.skipIf(noChain)("a registry that cannot answer (RegistryCallFailed): unknown, never 'no key'", () => {
+  // Every test that sets the shared faulty registry's fault lives in this file: vitest runs files in parallel, and a
+  // fault set by one file while another file's test runs made that test fail (CI on main, 2026-10-03).
+  it("RegistryCallFailed on a read → CHAIN_UNAVAILABLE (unknown, not 'no key')", async () => {
+    if (!ctx.ok) return;
+    const owner = await fundedAccount();
+    const id = newAgentId();
+    await sendAs(ctx.faultyRegistry, faultyAbi, "mint", [owner.address, id]);
+    await client({ directory: ctx.directoryFaulty }).publishForAgent({ account: owner, agentId: id, keys: agentStandIn(43, id, 1) });
+    await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [Fault.OtherCustomError]);
+    try {
+      const e = await publicClient()
+        .readContract({ address: ctx.directoryFaulty, abi: sdk.letterlockAbi, functionName: "keyOfAgent", args: [id] })
+        .then(() => undefined, (x: unknown) => sdk.toLetterlockError(x, "call"));
+      expect(e?.code).toBe("CHAIN_UNAVAILABLE");
+      expect(e?.message).toContain("(RegistryCallFailed)");
+    } finally {
+      await sendAs(ctx.faultyRegistry, faultyAbi, "setFault", [Fault.None]);
+    }
+  });
+
   it.each([["EmptyRevert", Fault.EmptyRevert], ["OutOfGas", Fault.OutOfGas], ["ErrorString", Fault.ErrorString], ["Panic", Fault.Panic]])(
     "ownerOf fails with %s → resolve, sealTo, drop and publishForAgent throw CHAIN_UNAVAILABLE", async (_, fault) => {
       if (!ctx.ok) return;
