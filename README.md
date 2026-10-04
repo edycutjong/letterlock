@@ -74,7 +74,7 @@ nobody can encrypt to it, and it does not follow you from your laptop to the pho
 Letterlock turns the passkey you already have into an **encryption address**. Your device derives an X25519 key from
 the passkey's WebAuthn PRF output and publishes only the public half to a directory contract on Monad. Anyone (an
 app, a server, an AI agent) looks your address up with one `keyOf` read and seals data to it with HPKE (RFC 9180).
-Only your passkey opens it, on any device the passkey syncs to ([Mac → iPad, recorded](spikes/prf-browser/README.md)). No secret of yours is stored anywhere (a server-hosted agent keeps its own seed, as any server keeps its own key), the sender needs no
+Only your passkey opens it, on any device the passkey syncs to ([Mac ↔ iPad, both ways, recorded](spikes/prf-browser/README.md)). No secret of yours is stored anywhere (a server-hosted agent keeps its own seed, as any server keeps its own key), the sender needs no
 key exchange with you, and ERC-8004 agents get addresses of their own (`agent:<id>`).
 
 ## 🏗️ Architecture & Tech Stack

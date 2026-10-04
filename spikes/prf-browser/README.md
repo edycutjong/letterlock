@@ -8,7 +8,7 @@ first device sealed. Automation cannot test this. Chrome's DevTools virtual auth
 passkey's `hmac-secret` between devices, so `run-spike.mjs` has to SKIP that check. It needs one person with a
 Mac and an iPad, which takes about five minutes.
 
-Status: **Mac → iPad passed on real devices, 2026-10-04**, in the production app rather than this page.
+Status: **passed both ways on real devices, 2026-10-04: Mac → iPad and iPad → Mac**, in the production app rather than this page.
 
 ![The iPad: the passkey sheet with "Letterlock · 3 Oct 2026 17:25" selected (the passkey made on the Mac), and the inbox of 0xe5ae…dcda with the Mac's letter opened](../../docs/assets/screens/cross-device-ipad.webp)
 
@@ -21,8 +21,17 @@ Status: **Mac → iPad passed on real devices, 2026-10-04**, in the production a
   passkeys and the Mac's (17:25) was chosen, Face ID, and the same letter opened: "Remember for me: the dentist moved
   to Thursday at 10:10." Opening it needs the X25519 key the PRF output derives, so the iPad derived the Mac's key from
   the synced passkey. Nothing from the Mac was stored on the iPad; the passkey came through iCloud Keychain.
-- **Not covered:** the reverse direction (iPad → Mac), hybrid use over a QR code, and a non-Apple provider. The
-  iPadOS version was not recorded. Thread 822523 below reports that the reverse direction can differ.
+- **iPad → Mac, the reverse:** the iPad's own passkey "Letterlock · 3 Oct 2026 18:22" made the address
+  `0x49077c300A239fc289c7B86a6a7B918306938D5f` on the iPad (publish tx `0xf26f7705…eed027d4`); a letter was dropped to
+  it (tx `0x5c2a07654283f354c078e337b2a097c04d9e4dc6077fddf728663ba351d8c402`, block 110,167,421). On the Mac,
+  2026-10-04 08:22 (its screen recording, 25 s), Safari at `app.letterlock.edycu.dev/open?to=0x4907…8D5f`,
+  **Open with passkey**, the iPad's passkey (18:22) chosen in the sheet, and the same letter opened. This is the kind of
+  direction thread 822523 below reports failing (iPhone → Mac there); on these devices it did not.
+
+  ![The Mac: the passkey sheet with "Letterlock · 3 Oct 2026 18:22" selected (the passkey made on the iPad), and the inbox of 0x4907…8d5f with the letter opened](../../docs/assets/screens/cross-device-mac.webp)
+
+- **Not covered:** an iPhone, hybrid use over a QR code, and a non-Apple provider. The iPadOS version was not
+  recorded.
 
 The steps below remain the way to repeat it on this page, with its own rpId.
 
