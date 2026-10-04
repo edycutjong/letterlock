@@ -330,6 +330,17 @@ site/                 the landing page and the pitch deck, at letterlock.edycu.d
 - [ ] An indexer for `Dropped`, so an inbox is one request
 - [ ] Sender authentication for apps that need it (HPKE auth mode)
 
+### First integrations we're asking for
+
+Named, with why each would take this over building its own. None has committed yet, and none is counted as an
+integration until it ships.
+
+| Who | What they build | Why Letterlock fits |
+|---|---|---|
+| [attest8004](https://github.com/AmitChowdary122/attest8004) | an ERC-8004 validation layer on Monad (Track 04) | its findings already go to "the operator's encrypted inbox" keyed by the operator's passkey; Letterlock is that key in a public directory, so any validator seals to it with one `keyOf` read |
+| [MNEME](https://github.com/h55n/MNEME) | agent memory on Monad, with on-chain deletion proofs | its operator "decrypts memories locally" with no key named; sealed to the user's passkey address, a memory opens only for that user |
+| [an ERC-8004 indexer](https://github.com/enviodev/hyperindex/issues/1659) | an Envio recipe over 366,903 agents on Monad and BSC | adding `KeyPublished` and `Dropped` makes an inbox one request: the roadmap's indexer |
+
 ## 📽️ Demo Materials
 
 - **Demo video (2:32):** <https://youtu.be/2tx9jVs7tbY>: a real passkey on a Mac creates the address, agent 10260 seals a note to it, one passkey tap opens it, and again in a private window
